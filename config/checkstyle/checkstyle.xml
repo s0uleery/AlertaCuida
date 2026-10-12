@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE module PUBLIC
+	"-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+	"https://checkstyle.org/dtds/configuration_1_3.dtd">
+
+<!--
+	Reglas de estilo de AlertaCuida (ver CONTRIBUTING.md).
+	Conjunto moderado: nombres, imports, llaves y errores comunes.
+	Se indenta con tabs (ancho 4).
+-->
+<module name="Checker">
+	<property name="charset" value="UTF-8"/>
+	<property name="severity" value="error"/>
+	<property name="tabWidth" value="4"/>
+	<property name="fileExtensions" value="java"/>
+
+	<!-- Permite desactivar una regla puntual con @SuppressWarnings("checkstyle:<regla>") -->
+	<module name="SuppressWarningsFilter"/>
+
+	<module name="NewlineAtEndOfFile"/>
+
+	<module name="LineLength">
+		<property name="max" value="120"/>
+		<property name="ignorePattern" value="^(package|import) .*$"/>
+	</module>
+
+	<module name="TreeWalker">
+		<module name="SuppressWarningsHolder"/>
+
+		<!-- Nombres: sin tildes ni ñ -->
+		<module name="PackageName">
+			<property name="format" value="^cl\.ucn\.alertacuida(\.[a-z][a-z0-9]*)*$"/>
+		</module>
+		<module name="TypeName"/>
+		<module name="MethodName"/>
+		<module name="MemberName"/>
+		<module name="ParameterName"/>
+		<module name="LocalVariableName"/>
+		<module name="LocalFinalVariableName"/>
+		<module name="StaticVariableName"/>
+		<module name="ConstantName"/>
+
+		<!-- Imports -->
+		<module name="AvoidStarImport"/>
+		<module name="RedundantImport"/>
+		<module name="UnusedImports"/>
+
+		<!-- Llaves -->
+		<module name="NeedBraces"/>
+		<module name="LeftCurly"/>
+		<module name="RightCurly"/>
+
+		<!-- Errores comunes -->
+		<module name="EmptyCatchBlock"/>
+		<module name="EqualsHashCode"/>
+		<module name="SimplifyBooleanExpression"/>
+		<module name="SimplifyBooleanReturn"/>
+		<module name="OneStatementPerLine"/>
+		<module name="MultipleVariableDeclarations"/>
+		<module name="ModifierOrder"/>
+		<module name="UpperEll"/>
+		<module name="ArrayTypeStyle"/>
+	</module>
+</module>
