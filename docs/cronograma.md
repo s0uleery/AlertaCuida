@@ -10,7 +10,7 @@ Archivo relacionado: `tecnologias_plataforma_prlac_v3.md`. El diagrama de secuen
 |---|---|
 | Tareas | 49 tareas activas y sus subtareas, en 6 fases (2 eliminadas respecto de la v5) |
 | Esfuerzo total | 780 horas-persona (unas 1.014 con 30 % de margen) |
-| Ya hecho | 18 horas (0.1, 0.2, 0.3.1, 0.3.2, 0.3.3 y 0.3.5) |
+| Ya hecho | 22 horas (0.1, 0.2 y 0.3) |
 | Capacidad del equipo | 60 a 90 horas por semana (3 personas, 20 a 30 h cada una) |
 | Duración estimada | 7 sprints de 2 semanas, unas 14 semanas |
 | Fuera de alcance | App del reloj (ver la sección correspondiente) |
@@ -86,7 +86,7 @@ Depende de: —. Listo cuando: el lugar de alojamiento está decidido.
 | [x] | 0.2.1 | Comparar nube y servidor municipal (costo, datos en Chile, control) | 1 |
 | [x] | 0.2.2 | Decidir el servidor interno de la municipalidad | 1 |
 
-### 0.3 Repositorio y estructura del proyecto (12 h)
+### 0.3 Repositorio y estructura del proyecto (12 h). Hecha.
 Crear el repositorio de código y el esqueleto del proyecto Maven con su estructura en capas, las reglas de trabajo del equipo y la integración continua.
 
 Depende de: 0.1. Listo cuando: cualquier integrante clona el repositorio, compila con una orden y las pruebas corren solas en cada envío de código.
@@ -96,9 +96,9 @@ Depende de: 0.1. Listo cuando: cualquier integrante clona el repositorio, compil
 | [x] | 0.3.1 | Crear el repositorio (AlertaCuida), definir ramas (`main` y `develop`) y reglas de protección | 2 |
 | [x] | 0.3.2 | Instalar herramientas en Windows (JDK, Maven, Git, IDE, Node.js) y anotar las versiones usadas | 2 |
 | [x] | 0.3.3 | Crear el proyecto Maven con Spring Initializr y confirmar la estructura multi-módulo (domain, application, adapters, app) | 3 |
-| [ ] | 0.3.4 | Convenciones: estilo de código (Checkstyle), nombres, formato de mensajes de commit, plantilla de revisión de código y README | 2 |
+| [x] | 0.3.4 | Convenciones: estilo de código (Checkstyle), nombres, formato de mensajes de commit, plantilla de revisión de código y README | 2 |
 | [x] | 0.3.5 | Prueba de arranque del backend con JUnit | 1 |
-| [ ] | 0.3.6 | GitHub Actions: compilar y correr pruebas en cada envío de código | 2 |
+| [x] | 0.3.6 | GitHub Actions: compilar y correr pruebas en cada envío de código | 2 |
 
 ### 0.4 Modelo de datos y contrato de la API (20 h). Cambia.
 Definir qué datos guarda el sistema y escribir el contrato de la API entre el reloj y la plataforma, y el del webhook de WhatsApp. Es lo primero que necesita quien desarrolla el reloj.
@@ -749,18 +749,18 @@ Capacidad del equipo: 3 personas x 20 a 30 h = 60 a 90 h por semana.
 
 ## Propuesta de sprints
 
-Sprints de 2 semanas (como define el charter), respetando las dependencias. Cada sprint suma entre 70 y 132 horas, por debajo de la capacidad del equipo (120 a 180 h por sprint) para dejar espacio al margen de error, reuniones y Discovery. Ya están hechas 0.1, 0.2, 0.3.1, 0.3.2, 0.3.3 y 0.3.5.
+Sprints de 2 semanas (como define el charter), respetando las dependencias. Cada sprint suma entre 70 y 132 horas, por debajo de la capacidad del equipo (120 a 180 h por sprint) para dejar espacio al margen de error, reuniones y Discovery. Ya están hechas 0.1, 0.2 y 0.3.
 
 | Sprint | Objetivo | Tareas | Horas |
 |---|---|---|---|
-| 1 | Base del proyecto, modelo de datos y trámites externos | 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 1.1, 1.2, 3.1 | 110 |
+| 1 | Base del proyecto, modelo de datos y trámites externos | 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 1.1, 1.2, 3.1 | 106 |
 | 2 | Núcleo del backend y configuración del reloj | 0.9, 1.3, 1.4, 1.5, 1.6, 1.7, 1.9, 3.2 | 132 |
 | 3 | Alertas, canales de aviso y gestión de pacientes | 2.1, 2.2, 2.3, 2.4, 2.9, 3.3 | 126 |
 | 4 | Escalamiento y panel de alertas | 2.5, 2.7, 2.10, 3.4, 3.5, 3.8, 4.0 | 122 |
 | 5 | Flujo completo probado y desplegado en el servidor municipal | 2.6, 2.8, 3.6, 3.7, 4.1, 4.2, 4.3 | 112 |
 | 6 | Seguridad, métricas y manuales | 4.4, 4.5, 4.6, 4.7, 5.2, 5.3 | 90 |
 | 7 | Reloj real e instalación del piloto | 5.1, 5.4, 5.5, 5.6 | 70 |
-| | | Total (más 18 h ya hechas) | 762 |
+| | | Total (más 22 h ya hechas) | 758 |
 
 Dentro de un sprint, las tareas con dependencia entre sí se hacen en orden (por ejemplo, 2.5 antes que 3.4, y 4.2 antes que 4.3). La tarea 0.7 debe empezar el primer día del sprint 1, porque la aprobación de Meta puede tardar. El sprint 7 depende de que el reloj real esté disponible y haya pasado su prueba de factibilidad. Si el charter exige 6 sprints, los sprints 6 y 7 pueden unirse (160 h) solo si el equipo trabaja cerca de 30 h semanales cada uno.
 
