@@ -11,6 +11,8 @@ Sistema operativo: Windows 11 (64 bits)
 | npm | 11.12.1 | Incluido con Node.js | `npm -v` |
 | IDE | IntelliJ IDEA 2026.2 | JetBrains | Help → About |
 | Docker | 29.0.1 | Docker Desktop | `docker --version` |
+| Docker Compose | 2.x | Incluido en Docker Desktop | `docker compose version` |
+| PostgreSQL | 18 (`postgres:18-alpine`) | Imagen de Docker, no se instala | `docker compose ps` |
 
 
 ### Codificación

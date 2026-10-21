@@ -1,0 +1,13 @@
+{
+  "name": "pruebas-modelo-datos",
+  "private": true,
+  "description": "Pruebas del modelo de datos de AlertaCuida (tarea 0.4) en PostgreSQL embebido",
+  "type": "module",
+  "scripts": {
+    "test": "node prueba-modelo.mjs"
+  },
+  "dependencies": {
+    "@dbml/core": "3.14.1",
+    "@electric-sql/pglite": "0.2.17"
+  }
+}

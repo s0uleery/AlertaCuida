@@ -1,0 +1,36 @@
+# Base de datos para desarrollo local (tarea 0.6.2). Requisitos y versiones: Versiones.md.
+#
+# Primera vez: copiar .env.example como .env (credenciales locales, no se sube al repositorio).
+# Levantar:            docker compose up -d
+# Ver si está lista:   docker compose ps          (estado "healthy")
+# Detener:             docker compose down        (los datos se conservan en el volumen)
+# Empezar de cero:     docker compose down -v     (borra los datos; Flyway recrea todo al arrancar el backend)
+
+# Nombre fijo: el contenedor y el volumen se llaman igual en cualquier computador, sin importar la carpeta
+name: alertacuida
+
+services:
+  postgres:
+    # Misma versión que el servidor y que las pruebas (PostgresDePrueba.java)
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NOMBRE:-alertacuida}
+      POSTGRES_USER: ${DB_USUARIO:-alertacuida}
+      POSTGRES_PASSWORD: "${DB_CLAVE:?Falta DB_CLAVE, copiar .env.example como .env}"
+      # UTF-8 para los nombres con tildes y ñ, sin depender del idioma del computador
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C.UTF-8
+    ports:
+      # Si el 5432 ya está ocupado (otro PostgreSQL instalado), cambiar DB_PUERTO en .env
+      - "${DB_PUERTO:-5432}:5432"
+    volumes:
+      # Desde PostgreSQL 18 los datos van en una subcarpeta por versión: se monta la carpeta de arriba
+      - datos-postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  datos-postgres:

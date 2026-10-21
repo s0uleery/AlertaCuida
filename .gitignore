@@ -57,3 +57,16 @@ build/
 ### VS Code ###
 .vscode/
 
+
+### Node (pruebas del modelo de datos y frontend) ###
+node_modules/
+frontend/dist/
+
+### Credenciales locales (plantilla en .env.example) ###
+.env
+
+### Claude Code (configuración local del asistente) ###
+.claude/
+CLAUDE.md
+CLAUDE.local.md
+.mcp.json
