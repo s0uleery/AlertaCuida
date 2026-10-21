@@ -18,6 +18,28 @@ Para ejecutar el backend:
 java -jar app/target/alertacuida-app-0.0.1-SNAPSHOT.jar
 ```
 
+## Probar en local
+
+Necesita Docker Desktop abierto. La primera vez, copiar `.env.example` como `.env` (credenciales de la base local, no se sube al repositorio): `Copy-Item .env.example .env` en PowerShell o `cp .env.example .env` en Mac y Linux.
+
+1. **Base de datos** (PostgreSQL 18 en Docker). Esperar a que `docker compose ps` diga `healthy`:
+   ```
+   docker compose up -d
+   ```
+2. **Backend** en `http://localhost:8080`, con el perfil `dev` (claves de desarrollo y datos de ejemplo):
+   ```
+   ./mvnw install -DskipTests
+   ./mvnw -pl app spring-boot:run -Dspring-boot.run.profiles=dev
+   ```
+3. **Dashboard** en `http://localhost:5173` (reenvía `/api` al backend):
+   ```
+   cd frontend
+   npm install
+   npm run dev
+   ```
+
+Usuario de prueba (solo perfil `dev`, en `db/ejemplo/R__datos_de_ejemplo.sql`): RUN `11.111.111-1`, contraseña `Admin1234!`, rol ADMINISTRADOR.
+
 ## Estructura
 
 | Módulo | Contiene | Depende de |
@@ -26,6 +48,7 @@ java -jar app/target/alertacuida-app-0.0.1-SNAPSHOT.jar
 | `application` | Casos de uso y puertos (interfaces) | `domain` |
 | `adapters` | API REST, base de datos, correo, FCM | `application` |
 | `app` | Arranque de Spring Boot y configuración | `adapters` |
+| `frontend` | Dashboard en React, TypeScript, Vite y Tailwind | API del backend |
 
 ## Convenciones
 
