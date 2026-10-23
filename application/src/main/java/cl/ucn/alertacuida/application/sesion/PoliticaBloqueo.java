@@ -15,11 +15,18 @@ public record PoliticaBloqueo(int intentos, Duration ventana) {
 		}
 	}
 
-	/** Desde cuándo cuentan los fallos. */
+	/**
+	 * @param ahora hora del intento
+	 * @return desde cuándo cuentan los fallos
+	 */
 	public Instant inicioVentana(Instant ahora) {
 		return ahora.minus(ventana);
 	}
 
+	/**
+	 * @param fallidosRecientes intentos fallidos dentro de la ventana
+	 * @return si la cuenta queda bloqueada
+	 */
 	public boolean bloquea(long fallidosRecientes) {
 		return fallidosRecientes >= intentos;
 	}

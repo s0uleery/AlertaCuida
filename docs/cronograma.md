@@ -142,10 +142,10 @@ Depende de: 0.3. Listo cuando: un integrante nuevo levanta base de datos y backe
 
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
-| [ ] | 0.6.1 | Instalar Docker en Windows (Docker Desktop o WSL2) y verificar que funciona | 2 |
-| [ ] | 0.6.2 | `docker-compose` con PostgreSQL (versión objetivo, volumen, credenciales por `.env`) | 2 |
+| [x] | 0.6.1 | Instalar Docker en Windows (Docker Desktop o WSL2) y verificar que funciona | 2 |
+| [x] | 0.6.2 | `docker-compose` con PostgreSQL (versión objetivo, volumen, credenciales por `.env`) | 2 |
 | [ ] | 0.6.3 | Perfiles de Spring (local, prueba y piloto) y configuración por variables de entorno | 2 |
-| [ ] | 0.6.4 | `.env` de ejemplo sin secretos, `.gitignore` y README de arranque | 2 |
+| [x] | 0.6.4 | `.env` de ejemplo sin secretos, `.gitignore` y README de arranque | 2 |
 
 ### 0.7 Trámites de WhatsApp Business Platform (8 h). Nueva.
 Abrir la cuenta de Meta Business, registrar el número y conseguir la aprobación de las plantillas. Tiene días de espera ajenos al equipo: empezar en el sprint 1.
@@ -192,11 +192,11 @@ Depende de: 0.4, 0.6. Listo cuando: las migraciones crean toda la base desde cer
 
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
-| [ ] | 1.1.1 | Migración inicial: tablas de identidad (paciente, contactos con WhatsApp, correo, opt-in, prioridad y horario) | 3 |
-| [ ] | 1.1.2 | Tablas de dispositivos y vínculo reloj-paciente, con historial de vínculos | 3 |
-| [ ] | 1.1.3 | Tablas de telemetría (mediciones, alertas del reloj y sincronizaciones) con índices por paciente y tiempo | 3 |
-| [ ] | 1.1.4 | Tablas de perfil clínico (umbrales, reglas de tendencia en `JSONB`, GPS sí o no) y versión de configuración | 3 |
-| [ ] | 1.1.5 | Tablas de alertas (con su seguimiento), mensajes enviados, avisos FCM y auditoría | 2 |
+| [x] | 1.1.1 | Migración inicial: tablas de identidad (paciente, contactos con WhatsApp, correo, opt-in, prioridad y horario) | 3 |
+| [x] | 1.1.2 | Tablas de dispositivos y vínculo reloj-paciente, con historial de vínculos | 3 |
+| [x] | 1.1.3 | Tablas de telemetría (mediciones, alertas del reloj y sincronizaciones) con índices por paciente y tiempo | 3 |
+| [x] | 1.1.4 | Tablas de perfil clínico (umbrales, reglas de tendencia en `JSONB`, GPS sí o no) y versión de configuración | 3 |
+| [x] | 1.1.5 | Tablas de alertas (con su seguimiento), mensajes enviados, avisos FCM y auditoría | 2 |
 | [ ] | 1.1.6 | Datos de ejemplo inventados y pruebas de migración con Testcontainers | 2 |
 
 ### 1.2 Pacientes y relojes (20 h)
@@ -220,12 +220,12 @@ Depende de: 0.3. Listo cuando: un usuario inicia sesión con contraseña y segun
 
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
-| [ ] | 1.3.1 | Modelo de usuarios del sistema y roles (administrador, coordinador, personal) | 3 |
+| [x] | 1.3.1 | Modelo de usuarios del sistema y roles (administrador, coordinador, personal) | 3 |
 | [ ] | 1.3.2 | Alta de usuarios, hash de contraseñas (BCrypt o Argon2) y política de contraseñas | 3 |
-| [ ] | 1.3.3 | Endpoint de login y token de acceso de vida corta | 4 |
+| [x] | 1.3.3 | Endpoint de login y token de acceso de vida corta | 4 |
 | [ ] | 1.3.4 | Token de renovación guardado con hash, revocación y cierre de sesión | 4 |
 | [ ] | 1.3.5 | Segundo factor TOTP (alta, verificación y códigos de respaldo) | 5 |
-| [ ] | 1.3.6 | Bloqueo por intentos fallidos y mensajes de error uniformes | 2 |
+| [x] | 1.3.6 | Bloqueo por intentos fallidos y mensajes de error uniformes | 2 |
 | [ ] | 1.3.7 | Autorización por rol en los endpoints y pruebas de acceso | 3 |
 
 ### 1.4 API del reloj: sincronización y alertas (26 h). Cambia.
@@ -455,11 +455,11 @@ Depende de: 0.1, 1.3. Listo cuando: se puede iniciar sesión y navegar según el
 
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
-| [ ] | 3.2.1 | Crear el proyecto con React, TypeScript, Vite y Tailwind | 3 |
-| [ ] | 3.2.2 | Estructura por funcionalidades y componentes base | 3 |
+| [x] | 3.2.1 | Crear el proyecto con React, TypeScript, Vite y Tailwind | 3 |
+| [x] | 3.2.2 | Estructura por funcionalidades y componentes base | 3 |
 | [ ] | 3.2.3 | Generar los tipos desde OpenAPI y el cliente de la API | 3 |
 | [ ] | 3.2.4 | Pantalla de login y manejo de sesión (renovación de token con cookie) | 4 |
-| [ ] | 3.2.5 | Navegación y rutas protegidas por rol | 3 |
+| [x] | 3.2.5 | Navegación y rutas protegidas por rol | 3 |
 
 ### 3.3 Gestión de pacientes, relojes y contactos (32 h). Cambia.
 Pantallas para administrar pacientes, relojes, contactos y umbrales sin tocar la base de datos.

@@ -11,7 +11,6 @@ import java.sql.DriverManager;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Stream;
-
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;

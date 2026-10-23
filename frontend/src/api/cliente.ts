@@ -1,6 +1,8 @@
 // Único punto de salida hacia el backend: agrega el token y traduce los errores.
 
+/** Respuesta de error del backend. El mensaje es el "detail" del ProblemDetail, listo para mostrar. */
 export class ErrorApi extends Error {
+  /** Código HTTP: 400 dato inválido, 401 sin sesión, 403 sin permiso, 409 duplicado… */
   readonly estado: number;
 
   constructor(estado: number, mensaje: string) {
@@ -21,6 +23,14 @@ export function configurarCliente(token: ProveedorToken, expirada: AlSalir) {
   alExpirar = expirada;
 }
 
+/**
+ * Llama al backend y devuelve la respuesta ya convertida desde JSON.
+ *
+ * @param ruta     sin el prefijo /api (ej. "/auth/login")
+ * @param opciones las de fetch: método, cuerpo…
+ * @returns el cuerpo de la respuesta; undefined si el backend responde 204 (sin cuerpo)
+ * @throws ErrorApi si el backend responde con error
+ */
 export async function pedir<T>(ruta: string, opciones: RequestInit = {}): Promise<T> {
   const cabeceras = new Headers(opciones.headers);
   cabeceras.set('Accept', 'application/json');
@@ -38,6 +48,9 @@ export async function pedir<T>(ruta: string, opciones: RequestInit = {}): Promis
       alExpirar();
     }
     throw new ErrorApi(respuesta.status, await mensajeDeError(respuesta));
+  }
+  if (respuesta.status === 204) {
+    return undefined as T;
   }
   return (await respuesta.json()) as T;
 }

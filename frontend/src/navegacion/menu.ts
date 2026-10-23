@@ -1,3 +1,7 @@
+import type { ComponentType } from 'react';
+import { PaginaUsuarios } from '../features/pacientes/PaginaUsuarios';
+import { PaginaAdministracion } from '../features/personal/PaginaAdministracion';
+import { PaginaRelojes } from '../features/relojes/PaginaRelojes';
 import type { Permiso } from '../features/sesion/tipos';
 
 /**
@@ -8,11 +12,17 @@ export interface Seccion {
   ruta: string;
   etiqueta: string;
   permiso: Permiso;
+  /** Página de la sección; puede tener sus propias rutas internas. Sin ella se muestra "todavía no está construida" */
+  pagina?: ComponentType;
 }
 
 export const SECCIONES: Seccion[] = [
   { ruta: '/alertas', etiqueta: 'Alertas', permiso: 'ALERTAS:VER' },
-  { ruta: '/usuarios', etiqueta: 'Usuarios', permiso: 'USUARIOS:VER' },
+  // "Usuarios" son los usuarios del programa (pacientes), como se les llama en el PRLAC
+  { ruta: '/usuarios', etiqueta: 'Usuarios', permiso: 'USUARIOS:VER', pagina: PaginaUsuarios },
+  // Los relojes usan los permisos de USUARIOS: quien inscribe al usuario le entrega el reloj
+  { ruta: '/relojes', etiqueta: 'Relojes', permiso: 'USUARIOS:VER', pagina: PaginaRelojes },
   { ruta: '/reportes', etiqueta: 'Reportes', permiso: 'REPORTES:VER' },
-  { ruta: '/administracion', etiqueta: 'Administración', permiso: 'ADMINISTRACION:VER' },
+  // Aquí van las cuentas del equipo
+  { ruta: '/administracion', etiqueta: 'Administración', permiso: 'ADMINISTRACION:VER', pagina: PaginaAdministracion },
 ];
