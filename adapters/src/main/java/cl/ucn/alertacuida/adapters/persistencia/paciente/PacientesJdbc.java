@@ -20,7 +20,7 @@ import org.springframework.stereotype.Repository;
  * Pacientes en la tabla paciente.
  *
  * <p>Las columnas marcadas "cifrado" en V2 (RUN, nombres, apellidos, fecha de nacimiento,
- * dirección) se guardan por ahora sin cifrar. Cuando llegue el cifrado (1.6.3), solo cambia esta
+ * dirección) se guardan por ahora sin cifrar. Cuando llegue el cifrado, solo cambia esta
  * clase: los casos de uso no se enteran. Por lo mismo, la lista se ordena aquí y no con ORDER BY.
  */
 @Repository
@@ -102,7 +102,7 @@ public class PacientesJdbc implements Pacientes {
 	/** Los mismos parámetros para el INSERT y el UPDATE. */
 	private static JdbcClient.StatementSpec parametros(JdbcClient.StatementSpec sql, DatosPaciente datos,
 			String runHash) {
-		// TODO 1.6.3: cifrar rut, nombres, apellidos, fecha_nacimiento y direccion
+		// TODO: cifrar rut, nombres, apellidos, fecha_nacimiento y direccion
 		return sql.param("rut", datos.run())
 				.param("rutHash", runHash)
 				.param("nombres", datos.nombres())
@@ -117,6 +117,7 @@ public class PacientesJdbc implements Pacientes {
 				.param("ingreso", datos.fechaIngreso());
 	}
 
+	/** Arma un {@link Paciente} desde una fila. La fecha de nacimiento es texto (irá cifrada) en formato ISO. */
 	private static Paciente paciente(ResultSet fila) throws SQLException {
 		String nacimiento = fila.getString("fecha_nacimiento");
 		String sexo = fila.getString("sexo");

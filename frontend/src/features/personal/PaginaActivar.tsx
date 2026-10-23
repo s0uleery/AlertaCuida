@@ -33,6 +33,7 @@ export function PaginaActivar() {
     }
   }, []);
 
+  /** Revisa el largo y que las dos contraseñas coincidan, y envía la contraseña al backend. */
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
     if (contrasena.length < LARGO_MINIMO) {

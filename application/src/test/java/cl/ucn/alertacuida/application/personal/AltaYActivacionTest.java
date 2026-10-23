@@ -32,6 +32,7 @@ import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+/** Alta de cuentas del personal y su activación con enlace, sin base de datos. */
 class AltaYActivacionTest {
 
 	private static final Instant AHORA = Instant.parse("2026-10-22T12:00:00Z");
@@ -46,6 +47,7 @@ class AltaYActivacionTest {
 	private NuevoEnlaceActivacion nuevoEnlace;
 	private ActivarCuenta activar;
 
+	/** Casos de uso con dobles en memoria y un reloj que las pruebas pueden adelantar. */
 	@BeforeEach
 	void preparar() {
 		// El "hash" del RUN es "h-" + RUN normalizado; el de la contraseña, "hash:" + contraseña
@@ -61,6 +63,7 @@ class AltaYActivacionTest {
 				contrasena -> "hash:" + contrasena, registro, enTransaccion, reloj);
 	}
 
+	/** La cuenta nace inactiva, sin contraseña y con un enlace que vence en 48 horas. */
 	@Test
 	void laCuentaNaceInactivaSinContrasenaYConUnEnlaceDe48Horas() {
 		EnlaceActivacion enlace = crear.crear(datos("12.345.678-5", "Ana@Muni.cl"), ADMIN, "ip");
@@ -74,6 +77,7 @@ class AltaYActivacionTest {
 		assertThat(auditoria).containsExactly("CREAR USUARIO por " + ADMIN);
 	}
 
+	/** Se rechazan el RUN inválido, el rol inexistente y el RUN o correo repetidos. */
 	@Test
 	void runInvalidoRolInexistenteYDuplicadosSeRechazan() {
 		crear.crear(datos("12.345.678-5", "ana@muni.cl"), ADMIN, "ip");
@@ -88,6 +92,7 @@ class AltaYActivacionTest {
 				.isInstanceOf(CuentaDuplicada.class).hasMessageContaining("correo");
 	}
 
+	/** Con el enlace, la persona elige su contraseña y la cuenta queda activa. */
 	@Test
 	void conElEnlaceEligeSuContrasenaYLaCuentaQuedaActiva() {
 		EnlaceActivacion enlace = crear.crear(datos("12.345.678-5", "ana@muni.cl"), ADMIN, "ip");
@@ -98,6 +103,7 @@ class AltaYActivacionTest {
 		assertThat(auditoria).last().isEqualTo("MODIFICAR USUARIO por " + enlace.idUsuario());
 	}
 
+	/** El enlace sirve una sola vez. */
 	@Test
 	void elEnlaceSirveUnaSolaVez() {
 		EnlaceActivacion enlace = crear.crear(datos("12.345.678-5", "ana@muni.cl"), ADMIN, "ip");
@@ -107,6 +113,7 @@ class AltaYActivacionTest {
 				.isInstanceOf(EnlaceInvalido.class);
 	}
 
+	/** Un enlace vencido o inventado no sirve. */
 	@Test
 	void elEnlaceVencidoOInventadoNoSirve() {
 		EnlaceActivacion enlace = crear.crear(datos("12.345.678-5", "ana@muni.cl"), ADMIN, "ip");
@@ -116,6 +123,7 @@ class AltaYActivacionTest {
 		assertThatThrownBy(() -> activar.activar("inventado", CLAVE, "ip")).isInstanceOf(EnlaceInvalido.class);
 	}
 
+	/** Una contraseña débil se rechaza, pero el enlace sigue sirviendo para intentar de nuevo. */
 	@Test
 	void unaContrasenaDebilSeRechazaPeroElEnlaceSigueSirviendo() {
 		EnlaceActivacion enlace = crear.crear(datos("12.345.678-5", "ana@muni.cl"), ADMIN, "ip");
@@ -127,6 +135,7 @@ class AltaYActivacionTest {
 		activar.activar(enlace.token(), CLAVE, "ip");
 	}
 
+	/** Un enlace nuevo anula al anterior. */
 	@Test
 	void unEnlaceNuevoAnulaElAnterior() {
 		EnlaceActivacion primero = crear.crear(datos("12.345.678-5", "ana@muni.cl"), ADMIN, "ip");
@@ -136,6 +145,7 @@ class AltaYActivacionTest {
 		activar.activar(segundo.token(), CLAVE, "ip");
 	}
 
+	/** Una cuenta ya activa, o que no existe, no recibe enlaces. */
 	@Test
 	void unaCuentaYaActivaNoRecibeEnlaces() {
 		EnlaceActivacion enlace = crear.crear(datos("12.345.678-5", "ana@muni.cl"), ADMIN, "ip");
@@ -147,13 +157,16 @@ class AltaYActivacionTest {
 				.isInstanceOf(CuentaNoPendiente.class);
 	}
 
+	/** @return datos de una persona con rol PERSONAL, con ese RUN y correo */
 	private static DatosCuenta datos(String run, String correo) {
 		return new DatosCuenta(run, " Ana Pérez ", "Enfermera", correo, "PERSONAL");
 	}
 
+	/** Una cuenta guardada en el doble en memoria, con su hash de contraseña (null = pendiente). */
 	private record CuentaGuardada(NuevaCuenta cuenta, String hashContrasena) {
 	}
 
+	/** Doble de {@link CuentasPersonal}: guarda en un mapa y conoce los tres roles iniciales. */
 	private static final class CuentasEnMemoria implements CuentasPersonal {
 
 		private final Map<UUID, CuentaGuardada> guardadas = new HashMap<>();
@@ -198,6 +211,7 @@ class AltaYActivacionTest {
 
 	}
 
+	/** Doble de {@link TokensActivacion}: guarda los enlaces sin usar por su hash. */
 	private static final class TokensEnMemoria implements TokensActivacion {
 
 		private final Map<String, TokenActivacion> porHash = new HashMap<>();
@@ -224,6 +238,7 @@ class AltaYActivacionTest {
 
 	}
 
+	/** Doble de {@link SecretosUnSoloUso}: entrega "secreto-1", "secreto-2"… y su hash es "hash-" + secreto. */
 	private static final class SecretosContados implements SecretosUnSoloUso {
 
 		private int emitidos;
@@ -240,14 +255,17 @@ class AltaYActivacionTest {
 
 	}
 
+	/** Reloj que las pruebas pueden adelantar, para probar enlaces vencidos. */
 	private static final class RelojMovible extends Clock {
 
 		private Instant ahora;
 
+		/** @param ahora hora inicial */
 		RelojMovible(Instant ahora) {
 			this.ahora = ahora;
 		}
 
+		/** Adelanta el reloj en {@code tiempo}. */
 		void avanzar(Duration tiempo) {
 			ahora = ahora.plus(tiempo);
 		}

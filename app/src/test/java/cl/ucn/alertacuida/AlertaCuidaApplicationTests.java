@@ -12,6 +12,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers(disabledWithoutDocker = true)
 class AlertaCuidaApplicationTests {
 
+	/** El backend arranca completo (con todas sus piezas conectadas) sobre un PostgreSQL de prueba. */
 	@Test
 	void contextLoads() {
 	}

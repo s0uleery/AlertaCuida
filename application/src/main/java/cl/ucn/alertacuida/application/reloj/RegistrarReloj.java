@@ -9,7 +9,7 @@ import cl.ucn.alertacuida.application.reloj.puerto.Relojes;
 import java.time.Clock;
 import java.util.UUID;
 
-/** Registro de un reloj en el inventario (1.2.2), con su ID único. Queda libre hasta vincularlo. */
+/** Registro de un reloj en el inventario, con su ID único. Queda libre hasta vincularlo. */
 public class RegistrarReloj {
 
 	private final Relojes relojes;
@@ -17,6 +17,7 @@ public class RegistrarReloj {
 	private final Transacciones transacciones;
 	private final Clock reloj;
 
+	/** Recibe los puertos que usa; los arma ConfiguracionPacientesYRelojes. */
 	public RegistrarReloj(Relojes relojes, RegistroAuditoria auditoria, Transacciones transacciones, Clock reloj) {
 		this.relojes = relojes;
 		this.auditoria = auditoria;

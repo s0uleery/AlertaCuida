@@ -10,6 +10,7 @@ import { pacientesApi } from './pacientesApi';
 import { TokenRelojMostrado } from './TokenRelojMostrado';
 import type { DetallePaciente, TokenReloj } from './tipos';
 
+/** Propiedades de RelojDelUsuario. */
 interface Props {
   detalle: DetallePaciente;
   /** Vuelve a cargar la ficha después de un cambio */
@@ -20,7 +21,7 @@ interface Props {
 type Modo = 'ver' | 'vincular' | 'reemplazar';
 
 /**
- * El reloj del usuario (3.3.3): vincular uno si no tiene; si tiene, reemplazarlo, retirarlo o
+ * El reloj del usuario: vincular uno si no tiene; si tiene, reemplazarlo, retirarlo o
  * generar otro token. Las reglas (consentimiento, reloj operativo y libre) las revisa el backend;
  * aquí solo se ofrecen los relojes que pueden servir.
  */
@@ -129,6 +130,7 @@ export function RelojDelUsuario({ detalle, alCambiar }: Props) {
   );
 }
 
+/** Propiedades de ElegirReloj. */
 interface PropsElegir {
   /** true al reemplazar: también se pregunta en qué estado queda el reloj anterior */
   reemplazo: boolean;

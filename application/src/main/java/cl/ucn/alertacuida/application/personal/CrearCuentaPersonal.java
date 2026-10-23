@@ -16,7 +16,7 @@ import java.util.Locale;
 import java.util.UUID;
 
 /**
- * Alta de una persona del equipo (1.3.2). La cuenta queda inactiva y sin contraseña: la persona
+ * Alta de una persona del equipo. La cuenta queda inactiva y sin contraseña: la persona
  * elige la suya con el enlace de activación, así nadie más la conoce.
  */
 public class CrearCuentaPersonal {
@@ -28,6 +28,7 @@ public class CrearCuentaPersonal {
 	private final Transacciones transacciones;
 	private final Clock reloj;
 
+	/** Recibe los puertos que usa; los arma ConfiguracionCasosDeUso. */
 	public CrearCuentaPersonal(CuentasPersonal cuentas, HashRun hashRun, EmisorEnlacesActivacion enlaces,
 			RegistroAuditoria auditoria, Transacciones transacciones, Clock reloj) {
 		this.cuentas = cuentas;

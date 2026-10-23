@@ -25,8 +25,8 @@ import org.springframework.test.web.servlet.ResultActions;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
- * Alta y activación de cuentas del personal de punta a punta (1.3.2), y autorización por permiso
- * en los endpoints (1.3.7): HTTP, Spring Security, base de datos y auditoría. Sin Docker se omite.
+ * Alta y activación de cuentas del personal de punta a punta, y autorización por permiso
+ * en los endpoints: HTTP, Spring Security, base de datos y auditoría. Sin Docker se omite.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -54,6 +54,7 @@ class CuentasPersonalTest {
 		crear("22.222.222-2", "COORDINADOR", "Coord", "coord@muni.cl");
 	}
 
+	/** Sin token responde 401; el coordinador no tiene ADMINISTRACION:CREAR y recibe 403. */
 	@Test
 	void sinTokenResponde401YSinElPermisoResponde403() throws Exception {
 		mvc.perform(post("/api/personal").contentType(MediaType.APPLICATION_JSON).content(cuenta("12.345.678-5")))
@@ -63,6 +64,7 @@ class CuentasPersonalTest {
 				.andExpect(status().isForbidden());
 	}
 
+	/** El administrador crea la cuenta, la persona la activa con el enlace y puede iniciar sesión. */
 	@Test
 	void elAdministradorCreaLaCuentaLaPersonaLaActivaYPuedeIniciarSesion() throws Exception {
 		ResultActions alta = altaCon(tokenAdmin(), cuenta("12.345.678-5"))
@@ -80,6 +82,7 @@ class CuentasPersonalTest {
 		assertThat(altas).isEqualTo(1);
 	}
 
+	/** Antes de activarla, la cuenta no puede iniciar sesión. */
 	@Test
 	void antesDeActivarlaLaCuentaNoPuedeIniciarSesion() throws Exception {
 		altaCon(tokenAdmin(), cuenta("12.345.678-5")).andExpect(status().isCreated());
@@ -87,6 +90,7 @@ class CuentasPersonalTest {
 		login("12345678-5", CLAVE_NUEVA).andExpect(status().isUnauthorized());
 	}
 
+	/** El enlace sirve una sola vez y una contraseña débil se rechaza. */
 	@Test
 	void elEnlaceSirveUnaSolaVezYLaContrasenaDebilSeRechaza() throws Exception {
 		String tokenEnlace = tokenDelEnlace(altaCon(tokenAdmin(), cuenta("12.345.678-5")));
@@ -97,6 +101,7 @@ class CuentasPersonalTest {
 		activar(tokenEnlace, "otra frase secreta larga").andExpect(status().isBadRequest());
 	}
 
+	/** Un RUN repetido responde 409 y uno inválido, 400. */
 	@Test
 	void runRepetidoResponde409YRunInvalido400() throws Exception {
 		String admin = tokenAdmin();
@@ -106,6 +111,7 @@ class CuentasPersonalTest {
 		altaCon(admin, cuenta("12.345.678-0")).andExpect(status().isBadRequest());
 	}
 
+	/** Un enlace nuevo reemplaza al anterior, y una cuenta activa no recibe enlaces (404). */
 	@Test
 	void unEnlaceNuevoReemplazaAlAnteriorYUnaCuentaActivaNoRecibeEnlaces() throws Exception {
 		String admin = tokenAdmin();
@@ -120,6 +126,7 @@ class CuentasPersonalTest {
 		nuevoEnlace(admin, id).andExpect(status().isNotFound());
 	}
 
+	/** Crea una cuenta del personal activa con contraseña "Clave-de-" + nombre + "1". */
 	private void crear(String run, String rol, String nombre, String correo) {
 		jdbc.sql("""
 				INSERT INTO usuario (codigo_rol, rut, rut_hash, nombre_profesional, correo, hash_contrasena, activo)
@@ -140,26 +147,31 @@ class CuentasPersonalTest {
 				.formatted(run);
 	}
 
+	/** Pide el alta de una cuenta con ese token. */
 	private ResultActions altaCon(String token, String cuerpo) throws Exception {
 		return mvc.perform(post("/api/personal").header("Authorization", "Bearer " + token)
 				.contentType(MediaType.APPLICATION_JSON).content(cuerpo));
 	}
 
+	/** Pide otro enlace de activación para la cuenta. */
 	private ResultActions nuevoEnlace(String token, String idUsuario) throws Exception {
 		return mvc.perform(post("/api/personal/" + idUsuario + "/enlace-activacion")
 				.header("Authorization", "Bearer " + token));
 	}
 
+	/** Activa una cuenta con el token del enlace (sin sesión). */
 	private ResultActions activar(String tokenEnlace, String contrasena) throws Exception {
 		return mvc.perform(post("/api/auth/activar").contentType(MediaType.APPLICATION_JSON)
 				.content("{\"token\": \"" + tokenEnlace + "\", \"contrasena\": \"" + contrasena + "\"}"));
 	}
 
+	/** Intenta iniciar sesión. */
 	private ResultActions login(String run, String contrasena) throws Exception {
 		return mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
 				.content("{\"run\": \"" + run + "\", \"contrasena\": \"" + contrasena + "\"}"));
 	}
 
+	/** @return el token de acceso del administrador de prueba */
 	private String tokenAdmin() throws Exception {
 		return token("11.111.111-1", "Clave-de-Admin1");
 	}

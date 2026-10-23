@@ -3,7 +3,7 @@ package cl.ucn.alertacuida.application.personal.modelo;
 /**
  * Cuenta lista para guardar: inactiva y sin contraseña hasta que la persona la active.
  *
- * @param run     normalizado. Va en la columna rut, que se cifrará en 1.6.3
+ * @param run     normalizado. Va en la columna rut, que se cifrará más adelante
  * @param runHash con el que la persona inicia sesión
  * @param correo  en minúsculas
  */

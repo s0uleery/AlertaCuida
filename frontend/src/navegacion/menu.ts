@@ -16,6 +16,7 @@ export interface Seccion {
   pagina?: ComponentType;
 }
 
+/** Secciones en el orden en que aparecen en el menú. */
 export const SECCIONES: Seccion[] = [
   { ruta: '/alertas', etiqueta: 'Alertas', permiso: 'ALERTAS:VER' },
   // "Usuarios" son los usuarios del programa (pacientes), como se les llama en el PRLAC

@@ -24,7 +24,7 @@ import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-/** Alta, edición, baja y consulta de pacientes (1.2.1), sin base de datos. */
+/** Alta, edición, baja y consulta de pacientes, sin base de datos. */
 class PacientesTest {
 
 	/** 12:00 en Chile del 22-10-2026. */
@@ -40,6 +40,7 @@ class PacientesTest {
 	private DarDeBajaPaciente baja;
 	private ConsultarPacientes consultar;
 
+	/** Casos de uso con dobles en memoria y la hora fija en {@code AHORA}. */
 	@BeforeEach
 	void preparar() {
 		Clock reloj = Clock.fixed(AHORA, ZoneOffset.UTC);
@@ -52,6 +53,7 @@ class PacientesTest {
 		consultar = new ConsultarPacientes(pacientes, asignaciones, reloj);
 	}
 
+	/** El alta guarda el RUN sin puntos y los textos sin espacios sobrantes (vacío = null). */
 	@Test
 	void registraConElRunNormalizadoYLosTextosLimpios() {
 		UUID id = registrar.registrar(datos("12.345.678-5", "  María José ", LocalDate.of(1940, 10, 23)), COORDINADOR,
@@ -64,6 +66,7 @@ class PacientesTest {
 		assertThat(auditoria).containsExactly("CREAR PACIENTE");
 	}
 
+	/** La edad se calcula con la fecha de hoy en Chile: la víspera del cumpleaños aún no lo cumple. */
 	@Test
 	void laEdadSeCalculaHoyEnChile() {
 		// Cumple 86 mañana: hoy todavía tiene 85
@@ -74,6 +77,7 @@ class PacientesTest {
 		assertThat(fila.relojActual()).isNull();
 	}
 
+	/** Se rechazan el RUN repetido o inválido, las fechas futuras y los nombres vacíos. */
 	@Test
 	void runRepetidoInvalidoOFechasFuturasSeRechazan() {
 		registrar.registrar(datos("12.345.678-5", "María", null), COORDINADOR, "ip");
@@ -88,6 +92,7 @@ class PacientesTest {
 				.isInstanceOf(SolicitudRechazada.class).hasMessageContaining("nombres");
 	}
 
+	/** Al editar se puede corregir el RUN, pero no usar el de otro paciente. */
 	@Test
 	void editarPermiteCorregirElRunPeroNoUsarElDeOtro() {
 		UUID maria = registrar.registrar(datos("12.345.678-5", "María", null), COORDINADOR, "ip");
@@ -102,6 +107,7 @@ class PacientesTest {
 				"ip")).isInstanceOf(NoEncontrado.class);
 	}
 
+	/** No se puede quitar el consentimiento a quien tiene reloj. */
 	@Test
 	void conRelojNoSePuedeQuitarElConsentimiento() {
 		UUID maria = registrar.registrar(datos("12.345.678-5", "María", null), COORDINADOR, "ip");
@@ -113,6 +119,7 @@ class PacientesTest {
 				.isInstanceOf(Conflicto.class).hasMessageContaining("consentimiento");
 	}
 
+	/** La baja cierra el reloj y saca al paciente de la lista, pero conserva su ficha e historial. */
 	@Test
 	void laBajaCierraElRelojYSaleDeLaListaPeroSeConserva() {
 		UUID maria = registrar.registrar(datos("12.345.678-5", "María", null), COORDINADOR, "ip");
@@ -128,6 +135,10 @@ class PacientesTest {
 		assertThatThrownBy(() -> baja.darDeBaja(maria, COORDINADOR, "ip")).isInstanceOf(Conflicto.class);
 	}
 
+	/**
+	 * @return datos válidos de un paciente con ese RUN, nombres y fecha de nacimiento; consentimiento e
+	 *         ingreso de ayer
+	 */
 	private static DatosPaciente datos(String run, String nombres, LocalDate nacimiento) {
 		return new DatosPaciente(run, nombres, "Rojas", " ", nacimiento, null, null, NivelDependencia.SEVERA,
 				HOY.minusDays(1), HOY.minusDays(1));

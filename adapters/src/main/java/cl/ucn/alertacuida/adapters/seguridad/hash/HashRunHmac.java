@@ -21,6 +21,7 @@ public class HashRunHmac implements HashRun {
 
 	private final SecretKeySpec clave;
 
+	/** @param propiedades de ahí sale la clave del HMAC (alertacuida.seguridad.clave-run) */
 	public HashRunHmac(PropiedadesSeguridad propiedades) {
 		this.clave = new SecretKeySpec(propiedades.claveRun().getBytes(StandardCharsets.UTF_8), ALGORITMO);
 	}

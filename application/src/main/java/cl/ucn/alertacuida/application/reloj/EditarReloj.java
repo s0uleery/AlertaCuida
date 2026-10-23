@@ -20,6 +20,7 @@ public class EditarReloj {
 	private final Transacciones transacciones;
 	private final Clock reloj;
 
+	/** Recibe los puertos que usa; los arma ConfiguracionPacientesYRelojes. */
 	public EditarReloj(Relojes relojes, Asignaciones asignaciones, RegistroAuditoria auditoria,
 			Transacciones transacciones, Clock reloj) {
 		this.relojes = relojes;

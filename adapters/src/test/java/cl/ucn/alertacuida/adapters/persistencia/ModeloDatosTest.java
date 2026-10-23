@@ -22,7 +22,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * Pruebas del modelo de datos (tarea 1.1.6) sobre la base que crean las migraciones de Flyway,
+ * Pruebas del modelo de datos sobre la base que crean las migraciones de Flyway,
  * en un PostgreSQL real (Docker). Los casos van en orden y comparten datos inventados:
  * pacientes María, Pedro y Rosa; profesionales Ana y Luis. Explicación del modelo: docs/modelo-datos.md.
  * Sin Docker se omiten (no fallan); en el CI corren siempre.
@@ -40,6 +40,7 @@ class ModeloDatosTest {
 	private static Connection conexion;
 	private static Casos c;
 
+	/** Levanta la base vacía aplicando las migraciones de Flyway, igual que el backend al arrancar. */
 	@BeforeAll
 	static void crearBase() throws Exception {
 		Flyway.configure()
@@ -51,11 +52,13 @@ class ModeloDatosTest {
 		c = new Casos(conexion, identificadores());
 	}
 
+	/** Cierra la conexión al terminar todos los casos. */
 	@AfterAll
 	static void cerrar() throws Exception {
 		conexion.close();
 	}
 
+	/** Todos los grupos de casos, en orden: cada grupo usa los datos que dejaron los anteriores. */
 	@TestFactory
 	Stream<DynamicContainer> modeloDeDatos() {
 		return Stream.of(estructura(), rolesYProfesionales(), inicioDeSesion(), pacientes(), contactos(),
@@ -88,10 +91,17 @@ class ModeloDatosTest {
 		return ids;
 	}
 
+	/** @return un grupo de casos con ese nombre, como se ve en el informe de pruebas */
 	private static DynamicContainer grupo(String nombre, DynamicTest... casos) {
 		return DynamicContainer.dynamicContainer(nombre, Stream.of(casos));
 	}
 
+	/**
+	 * INSERT de una alerta detectada por el reloj.
+	 *
+	 * @param cols columnas extra, empezando con coma (ej. ", es_simulacro"), o ""
+	 * @param vals sus valores, en el mismo orden
+	 */
 	private static String alertaReloj(String alerta, String asig, String tipo, String sev, String cols, String vals) {
 		return "INSERT INTO alerta (id_alerta, event_id, id_asignacion, hash_configuracion, origen, tipo_evento,"
 				+ " severidad, fecha_hora_deteccion, fecha_hora_recepcion" + cols + ") VALUES ('{" + alerta
@@ -99,30 +109,48 @@ class ModeloDatosTest {
 				+ "', '2026-10-15 03:00-03', now()" + vals + ")";
 	}
 
+	/** INSERT de una alerta detectada por el reloj, sin columnas extra. */
 	private static String alertaReloj(String alerta, String asig, String tipo, String sev) {
 		return alertaReloj(alerta, asig, tipo, sev, "", "");
 	}
 
+	/**
+	 * INSERT de una alerta técnica generada por el servidor (gravedad LEVE).
+	 *
+	 * @param cols columnas extra, empezando con coma, o ""
+	 * @param vals sus valores, en el mismo orden
+	 */
 	private static String alertaServidor(String alerta, String asig, String tipo, String cols, String vals) {
 		return "INSERT INTO alerta (id_alerta, event_id, id_asignacion, origen, tipo_evento, severidad,"
 				+ " fecha_hora_recepcion" + cols + ") VALUES ('{" + alerta + "}', gen_random_uuid(), '{" + asig
 				+ "}', 'SERVIDOR', '" + tipo + "', 'LEVE', now()" + vals + ")";
 	}
 
+	/** INSERT de una alerta técnica del servidor, sin columnas extra. */
 	private static String alertaServidor(String alerta, String asig, String tipo) {
 		return alertaServidor(alerta, asig, tipo, "", "");
 	}
 
+	/**
+	 * INSERT de un intento de aviso a un contacto (registro_intento).
+	 *
+	 * @param ronda vuelta de la lista de contactos (1 o 2)
+	 * @param cols  columnas extra, empezando con coma, o ""
+	 * @param vals  sus valores, en el mismo orden
+	 * @param canal WHATSAPP o CORREO
+	 */
 	private static String aviso(String alerta, String vinculo, int ronda, String cols, String vals, String canal) {
 		return "INSERT INTO registro_intento (id_intento, event_id, id_alerta, id_contacto_paciente, canal, ronda,"
 				+ " fecha_hora_envio" + cols + ") VALUES (gen_random_uuid(), gen_random_uuid(), '{" + alerta + "}', '{"
 				+ vinculo + "}', '" + canal + "', " + ronda + ", now()" + vals + ")";
 	}
 
+	/** INSERT de un intento de aviso por WhatsApp, con columnas extra. */
 	private static String aviso(String alerta, String vinculo, int ronda, String cols, String vals) {
 		return aviso(alerta, vinculo, ronda, cols, vals, "WHATSAPP");
 	}
 
+	/** INSERT de un intento de aviso por WhatsApp, sin columnas extra. */
 	private static String aviso(String alerta, String vinculo, int ronda) {
 		return aviso(alerta, vinculo, ronda, "", "", "WHATSAPP");
 	}
@@ -136,21 +164,36 @@ class ModeloDatosTest {
 				+ " WHERE atencion_alerta.fecha_hora_toma IS NULL AND atencion_alerta.fecha_hora_cierre IS NULL";
 	}
 
+	/** INSERT de la atención de una alerta con las columnas que se indiquen. */
 	private static String atencion(String alerta, String cols, String vals) {
 		return "INSERT INTO atencion_alerta (id_alerta" + cols + ") VALUES ('{" + alerta + "}'" + vals + ")";
 	}
 
+	/**
+	 * Caso que revisa el estado calculado de una alerta en la vista alerta_estado.
+	 *
+	 * @param contacto estado esperado del aviso a contactos
+	 * @param atencion estado esperado de la atención del equipo
+	 */
 	private static DynamicTest estado(String caso, String alerta, String contacto,
 			String atencion) {
 		return c.vale(caso, "SELECT estado_contacto || ' / ' || estado_atencion n FROM alerta_estado"
 				+ " WHERE id_alerta = '{" + alerta + "}'", contacto + " / " + atencion);
 	}
 
+	/** Caso que revisa si el reloj tiene configuración pendiente: el hash de su último lote distinto del vigente. */
 	private static DynamicTest pendiente(String caso, String asig, String hash, boolean esperado) {
 		return c.vale(caso, "SELECT (SELECT hash_configuracion FROM sincronizacion WHERE id_asignacion = '{" + asig
 				+ "}' ORDER BY fecha_hora_recepcion DESC LIMIT 1) IS DISTINCT FROM '" + hash + "' n", esperado);
 	}
 
+	/**
+	 * INSERT de una cuenta del personal.
+	 *
+	 * @param id    nombre del identificador de prueba, o null para uno al azar
+	 * @param cols  columnas extra, empezando con coma, o ""
+	 * @param vals  sus valores, en el mismo orden
+	 */
 	private static String usuario(String id, String rol, String nombre, String correo, String rutHash, String cols,
 			String vals) {
 		String valorId = id == null ? "gen_random_uuid()" : "'{" + id + "}'";
@@ -159,42 +202,61 @@ class ModeloDatosTest {
 				+ correo + "'" + vals + ")";
 	}
 
+	/** INSERT de una cuenta del personal, sin columnas extra. */
 	private static String usuario(String id, String rol, String nombre, String correo, String rutHash) {
 		return usuario(id, rol, nombre, correo, rutHash, "", "");
 	}
 
+	/**
+	 * INSERT de un contacto en la lista de un paciente (contacto_paciente).
+	 *
+	 * @param prio orden de prioridad en la lista
+	 * @param cols columnas extra, empezando con coma, o ""
+	 * @param vals sus valores, en el mismo orden
+	 */
 	private static String vinculo(String pac, String cont, String tipo, int prio, String cols, String vals) {
 		return "INSERT INTO contacto_paciente (id_contacto_paciente, id_paciente, id_contacto, codigo_tipo_contacto,"
 				+ " orden_prioridad" + cols + ") VALUES (gen_random_uuid(), '{" + pac + "}', '{" + cont + "}', '"
 				+ tipo + "', " + prio + vals + ")";
 	}
 
+	/** INSERT de un contacto en la lista de un paciente, sin columnas extra. */
 	private static String vinculo(String pac, String cont, String tipo, int prio) {
 		return vinculo(pac, cont, tipo, prio, "", "");
 	}
 
+	/**
+	 * INSERT de un vínculo reloj-paciente.
+	 *
+	 * @param fin   fin del vínculo, o null si sigue vigente
+	 * @param token hash del token del reloj
+	 */
 	private static String asignacion(String reloj, String pac, String ini, String fin, String token) {
 		return "INSERT INTO asignacion_reloj (id_asignacion, id_dispositivo, id_paciente, fecha_inicio, fecha_fin,"
 				+ " hash_token_reloj) VALUES (gen_random_uuid(), '{" + reloj + "}', '{" + pac + "}', '" + ini + "', "
 				+ (fin == null ? "null" : "'" + fin + "'") + ", '" + token + "')";
 	}
 
+	/** INSERT de un vínculo reloj-paciente vigente. */
 	private static String asignacion(String reloj, String pac, String ini) {
 		return asignacion(reloj, pac, ini, null, "tok-x");
 	}
 
+	/** INSERT de una lectura de FC o SpO2 dentro de un lote. */
 	private static String lectura(String lote, String asig, String tipo, int valor, String hora) {
 		return "INSERT INTO registro_vital (id_registro, id_sincronizacion, id_asignacion, tipo, valor,"
 				+ " fecha_hora_medicion) VALUES (gen_random_uuid(), '{" + lote + "}', '{" + asig + "}', '" + tipo
 				+ "', " + valor + ", '" + hora + "')";
 	}
 
+	/** Consulta que cuenta las alertas técnicas abiertas de ese tipo para el vínculo (evita repetirlas). */
 	private static String abiertaServidor(String asig, String tipo) {
 		return "SELECT count(*) n FROM alerta a LEFT JOIN atencion_alerta t USING (id_alerta) WHERE a.id_asignacion"
 				+ " = '{" + asig + "}' AND a.tipo_evento = '" + tipo + "' AND a.origen = 'SERVIDOR'"
 				+ " AND NOT a.es_simulacro AND t.fecha_hora_cierre IS NULL";
 	}
 
+	/** Consulta que dice si el contacto está disponible a esa hora, considerando horarios que cruzan la medianoche. */
 	private static String disponible(String vinculo, String hora) {
 		String h = "'" + hora + "'::time";
 		return "SELECT (hora_inicio IS NULL OR (hora_inicio < hora_fin AND " + h + " >= hora_inicio AND " + h
@@ -245,6 +307,7 @@ class ModeloDatosTest {
 					SELECT count(*) n FROM pg_extension WHERE extname = 'btree_gist'""", 1));
 	}
 
+	/** Roles, permisos y cuentas del personal. */
 	private DynamicContainer rolesYProfesionales() {
 		return grupo("2. Roles, permisos y profesionales",
 			c.vale("Roles iniciales de la migración", "SELECT count(*) n FROM rol", 3),
@@ -340,6 +403,7 @@ class ModeloDatosTest {
 					VALUES (gen_random_uuid(), '{LUIS}', 'ses-1', now(), now() + interval '7 days')""", UNICO));
 	}
 
+	/** Inicio de sesión: accesos y bloqueo calculados desde la auditoría. */
 	private DynamicContainer inicioDeSesion() {
 		String bloqueada = """
 				SELECT count(*) >= 3 n FROM registro_auditoria f
@@ -372,6 +436,7 @@ class ModeloDatosTest {
 					VALUES (gen_random_uuid(), 'IMPRIMIR', now())""", CHECK));
 	}
 
+	/** Pacientes, su ficha de salud, condiciones y documentos. */
 	private DynamicContainer pacientes() {
 		String documento = """
 				INSERT INTO documento (id_documento, id_paciente, tipo, nombre_archivo, ruta, hash_sha256, fecha_subida,
@@ -437,6 +502,7 @@ class ModeloDatosTest {
 					VALUES (gen_random_uuid(), 'rut-z', '2026-10-01')""", NULO));
 	}
 
+	/** Contactos compartidos y exclusivos, prioridades, horarios y opt-in. */
 	private DynamicContainer contactos() {
 		return grupo("5. Contactos (compartidos, exclusivos y horarios)",
 			c.vale("Tipos de contacto iniciales de la migración", """
@@ -503,6 +569,7 @@ class ModeloDatosTest {
 					FORANEA));
 	}
 
+	/** Configuración clínica versionada y umbrales. */
 	private DynamicContainer configuracionYUmbrales() {
 		String umbral = "INSERT INTO umbral VALUES ('{PEDRO}', '%s', now(), %s)";
 		return grupo("6. Configuración clínica y umbrales (historiales separados)",
@@ -566,6 +633,7 @@ class ModeloDatosTest {
 					"BEGIN; " + umbral.formatted("FC", "40, 50, 100, 120") + "; ROLLBACK"));
 	}
 
+	/** Relojes y vínculos con pacientes, sin cruces en el tiempo. */
 	private DynamicContainer relojesYAsignaciones() {
 		return grupo("7. Relojes y asignaciones",
 			c.acepta("Registro de cinco relojes con su SIM (uno retirado)", """
@@ -639,6 +707,7 @@ class ModeloDatosTest {
 					"UPDATE paciente SET fecha_baja = '2026-10-20' WHERE id_paciente = '{PEDRO}'"));
 	}
 
+	/** Datos que envía el reloj: lotes, lecturas, ubicaciones y eventos descartados. */
 	private DynamicContainer datosDelReloj() {
 		return grupo("8. Datos recibidos del reloj (lotes, lecturas, GPS)",
 			c.acepta("Lotes de cada reloj (LTE y Wi-Fi)", """
@@ -706,6 +775,7 @@ class ModeloDatosTest {
 					ORDER BY fecha_hora_recepcion DESC LIMIT 1""", 70));
 	}
 
+	/** Configuración pendiente de aplicar en el reloj. */
 	private DynamicContainer configuracionPendiente() {
 		return grupo("9. Configuración pendiente en el reloj (por hash)",
 			pendiente("Pedro: el reloj tiene h1 y el backend calcula h1", "A_PEDRO", "h1", false),
@@ -719,6 +789,7 @@ class ModeloDatosTest {
 			pendiente("Un reloj que aún no envía lotes queda pendiente", "INEXISTENTE", "h1", true));
 	}
 
+	/** Flujo completo de una alerta: aviso a contactos, confirmación y cierre. */
 	private DynamicContainer flujoDeUnaAlerta() {
 		return grupo("10. Flujo completo de una alerta (caída de María)",
 			c.acepta("Llega una caída MEDIA del reloj, con su evidencia",
@@ -815,6 +886,7 @@ class ModeloDatosTest {
 					"UPDATE alerta SET severidad = 'LEVE' WHERE id_alerta = '{CAIDA_MARIA}'"));
 	}
 
+	/** Reglas de la atención de una alerta por el equipo (tomar, cerrar, clasificar). */
 	private DynamicContainer reglasDeLaAtencion() {
 		return grupo("11. Reglas de la atención (atencion_alerta)",
 			c.acepta("Media de madrugada (Rosa): avisa de inmediato a Seguridad Ciudadana (compartido)",
@@ -846,6 +918,7 @@ class ModeloDatosTest {
 					", id_usuario_responsable, fecha_hora_toma", ", '{ANA}', now()"), FORANEA));
 	}
 
+	/** Gravedad de la alerta y disponibilidad de los contactos según el horario. */
 	private DynamicContainer gravedadYHorario() {
 		return grupo("12. Gravedad y horario (leve, media y grave de madrugada)",
 			c.acepta("Leve de madrugada (Pedro): el reloj no avisa y espera el día hábil",
@@ -879,6 +952,7 @@ class ModeloDatosTest {
 			c.rechaza("Tercera ronda de avisos", aviso("GRAVE_ROSA", "R1", 3), CHECK));
 	}
 
+	/** Alertas canceladas por el paciente y simulacros. */
 	private DynamicContainer cancelacionYSimulacro() {
 		return grupo("13. Cancelación por el paciente y simulacro",
 			c.acepta("El paciente cancela una caída en los 30 segundos",
@@ -897,6 +971,7 @@ class ModeloDatosTest {
 					"UPDATE aviso_fcm SET intentos = -1 WHERE id_alerta = '{SIMULACRO}'", CHECK));
 	}
 
+	/** Alertas técnicas del servidor (silencio de datos, batería, reloj no puesto) sin repetirse. */
 	private DynamicContainer alertasTecnicas() {
 		return grupo("14. Alertas técnicas del servidor",
 			c.acepta("Bloqueo de la nota de alerta: pg_advisory_xact_lock(hashtextextended(...))", """
@@ -935,6 +1010,7 @@ class ModeloDatosTest {
 					alertaReloj("ALERTA_X5", "A_PEDRO", "SILENCIO_DATOS", "LEVE"), CHECK));
 	}
 
+	/** Idempotencia: el mismo event_id no se guarda dos veces aunque el reloj reintente. */
 	private DynamicContainer idempotencia() {
 		String reenvio = """
 				INSERT INTO alerta (id_alerta, event_id, id_asignacion, hash_configuracion, origen, tipo_evento,
@@ -960,6 +1036,7 @@ class ModeloDatosTest {
 					"BEGIN; " + aviso("MEDIA_ROSA", "R1", 2) + "; ROLLBACK"));
 	}
 
+	/** Avisos a contactos: intentos, canales y rondas. */
 	private DynamicContainer avisosAContactos() {
 		return grupo("16. Reglas de los avisos a contactos",
 			c.rechaza("Respuesta del contacto sin su hora",
@@ -980,6 +1057,7 @@ class ModeloDatosTest {
 					aviso("LEVE_PEDRO", "P1", 1)));
 	}
 
+	/** Datos que se calculan y no se guardan (estados de la alerta, edad, vigencias). */
 	private DynamicContainer datosCalculados() {
 		return grupo("17. Datos calculados (reportes, hallazgos, panel)",
 			c.vale("Reporte diario de María (hora de Chile): FC promedio / mínima / máxima", """
@@ -1013,6 +1091,7 @@ class ModeloDatosTest {
 					ORDER BY s.id_asignacion, s.fecha_hora_recepcion DESC) u WHERE nivel_bateria < 20""", 1));
 	}
 
+	/** Registro de auditoría: quién leyó o cambió qué. */
 	private DynamicContainer auditoria() {
 		String configuracionMaria = "'{MARIA}|2026-10-10 12:00Z'";
 		return grupo("18. Auditoría de cambios",
@@ -1039,8 +1118,9 @@ class ModeloDatosTest {
 					"DELETE FROM usuario WHERE id_usuario = '{ANA}'", FORANEA));
 	}
 
+	/** Borrado al terminar el piloto: lo que se elimina en cascada y lo que se conserva. */
 	private DynamicContainer borradoAlFinDelPiloto() {
-		return grupo("19. Borrado al terminar el piloto (4.4.5)",
+		return grupo("19. Borrado al terminar el piloto",
 			c.rechaza("Borrar un reloj asignado", "DELETE FROM smartwatch WHERE id_dispositivo = '{W1}'", FORANEA),
 			c.rechaza("Borrar un vínculo que tiene avisos enviados",
 					"DELETE FROM contacto_paciente WHERE id_contacto_paciente = '{M1}'", FORANEA),

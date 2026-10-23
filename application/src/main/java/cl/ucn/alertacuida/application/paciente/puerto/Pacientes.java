@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-/** Pacientes guardados (tabla paciente). Los datos personales se cifrarán en el adaptador (1.6.3). */
+/** Pacientes guardados (tabla paciente). Los datos personales se cifrarán en el adaptador. */
 public interface Pacientes {
 
 	/**

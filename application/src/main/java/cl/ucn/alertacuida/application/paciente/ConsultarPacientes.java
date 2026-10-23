@@ -17,7 +17,7 @@ import java.util.UUID;
 /**
  * Lista y ficha de pacientes. La edad no se guarda (se volvería incorrecta): se calcula aquí.
  *
- * <p>La lista no se filtra en la base: los nombres irán cifrados (1.6.3) y no se podrán buscar con
+ * <p>La lista no se filtra en la base: los nombres irán cifrados y no se podrán buscar con
  * SQL. Con los pacientes del piloto, el dashboard filtra en el navegador.
  */
 public class ConsultarPacientes {
@@ -26,6 +26,7 @@ public class ConsultarPacientes {
 	private final Asignaciones asignaciones;
 	private final Clock reloj;
 
+	/** Recibe los puertos que usa; los arma ConfiguracionPacientesYRelojes. */
 	public ConsultarPacientes(Pacientes pacientes, Asignaciones asignaciones, Clock reloj) {
 		this.pacientes = pacientes;
 		this.asignaciones = asignaciones;

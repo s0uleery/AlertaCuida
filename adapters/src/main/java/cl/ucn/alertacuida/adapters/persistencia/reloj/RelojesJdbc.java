@@ -101,7 +101,7 @@ public class RelojesJdbc implements Relojes {
 				ORDER BY s.identificador_reloj""")
 				.query((fila, n) -> {
 					UUID idPaciente = fila.getObject("id_paciente", UUID.class);
-					// TODO 1.6.3: descifrar nombres y apellidos
+					// TODO: descifrar nombres y apellidos
 					String nombre = idPaciente == null ? null
 							: fila.getString("nombres") + " " + fila.getString("apellidos");
 					return new RelojConPaciente(reloj(fila), idPaciente, nombre);
@@ -119,6 +119,7 @@ public class RelojesJdbc implements Relojes {
 				.param("estado", datos.estado().name());
 	}
 
+	/** Arma un {@link Reloj} desde una fila de smartwatch (con el alias "s"). */
 	private static Reloj reloj(ResultSet fila) throws SQLException {
 		return new Reloj(fila.getObject("id_dispositivo", UUID.class), new DatosReloj(
 				fila.getString("identificador_reloj"), fila.getString("modelo"), fila.getString("iccid"),

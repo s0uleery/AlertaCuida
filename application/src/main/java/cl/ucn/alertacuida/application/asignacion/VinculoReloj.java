@@ -19,7 +19,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Vínculo entre un reloj y un paciente (1.2.3, 1.2.4 y 1.2.5): vincular, reemplazar, desvincular y
+ * Vínculo entre un reloj y un paciente: vincular, reemplazar, desvincular y
  * generar un token nuevo. El historial nunca se pierde: los vínculos se cierran, no se borran.
  *
  * <p>Reglas para vincular (nota de asignacion_reloj en V4):
@@ -43,6 +43,7 @@ public class VinculoReloj {
 	private final Transacciones transacciones;
 	private final Clock reloj;
 
+	/** Recibe los puertos que usa; los arma ConfiguracionPacientesYRelojes. */
 	public VinculoReloj(Asignaciones asignaciones, Pacientes pacientes, Relojes relojes, SecretosUnSoloUso secretos,
 			RegistroAuditoria auditoria, Transacciones transacciones, Clock reloj) {
 		this.asignaciones = asignaciones;
@@ -170,6 +171,10 @@ public class VinculoReloj {
 		}
 	}
 
+	/**
+	 * @return el vínculo vigente del paciente
+	 * @throws Conflicto si no tiene reloj
+	 */
 	private AsignacionVigente vigente(UUID idPaciente) {
 		return asignaciones.vigenteDelPaciente(idPaciente)
 				.orElseThrow(() -> new Conflicto("El usuario no tiene un reloj vinculado"));

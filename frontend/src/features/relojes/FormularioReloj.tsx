@@ -9,6 +9,7 @@ import {
 } from '../../comun/estilos';
 import { NOMBRE_ESTADO, type DatosReloj, type EstadoReloj } from './tipos';
 
+/** Formulario vacío para registrar un reloj: operativo por defecto. */
 const VACIO: DatosReloj = {
   identificadorReloj: '',
   modelo: null,
@@ -18,6 +19,7 @@ const VACIO: DatosReloj = {
   estado: 'OPERATIVO',
 };
 
+/** Propiedades de FormularioReloj. */
 interface Props {
   /** Datos actuales al editar; sin ellos, el formulario parte vacío (registro) */
   inicial?: DatosReloj;
@@ -37,6 +39,7 @@ export function FormularioReloj({ inicial, alGuardar, alCancelar }: Props) {
     setDatos((anteriores) => ({ ...anteriores, [campo]: valor === '' ? null : valor }));
   }
 
+  /** Envía los datos; si el backend responde con error, lo muestra. */
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
     setEnviando(true);

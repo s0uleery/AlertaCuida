@@ -6,6 +6,7 @@ package cl.ucn.alertacuida.application.comun.error;
  */
 public class SolicitudRechazada extends RuntimeException {
 
+	/** @param mensaje por ejemplo, "La contraseña debe tener al menos 12 caracteres" */
 	public SolicitudRechazada(String mensaje) {
 		super(mensaje);
 	}

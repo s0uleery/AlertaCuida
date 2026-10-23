@@ -14,6 +14,7 @@ import { formatearRun, runValido } from '../../comun/run';
 import { pacientesApi } from './pacientesApi';
 import type { DatosPaciente, NivelDependencia, Sexo } from './tipos';
 
+/** Formulario vacío para un alta, con la fecha de ingreso de hoy. */
 function vacio(): DatosPaciente {
   return {
     run: '',
@@ -31,7 +32,7 @@ function vacio(): DatosPaciente {
 
 /**
  * Alta (/usuarios/nuevo) y edición (/usuarios/:id/editar) de la identidad de un usuario del
- * programa (3.3.2). Revisa el RUN antes de enviar; las demás reglas las revisa el backend.
+ * programa. Revisa el RUN antes de enviar; las demás reglas las revisa el backend.
  */
 export function FormularioUsuario() {
   const { id } = useParams();
@@ -59,6 +60,7 @@ export function FormularioUsuario() {
     setDatos((anteriores) => anteriores && { ...anteriores, [campo]: valor === '' && !obligatorio ? null : valor });
   }
 
+  /** Revisa el RUN, guarda (alta o edición) y abre la ficha del usuario. */
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
     if (!datos) return;

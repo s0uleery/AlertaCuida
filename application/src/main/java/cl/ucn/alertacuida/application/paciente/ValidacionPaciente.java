@@ -13,6 +13,7 @@ import java.time.LocalDate;
  */
 final class ValidacionPaciente {
 
+	/** Solo métodos estáticos: no se crean objetos de esta clase. */
 	private ValidacionPaciente() {
 	}
 
@@ -42,6 +43,10 @@ final class ValidacionPaciente {
 				datos.fechaIngreso());
 	}
 
+	/**
+	 * @return el texto sin espacios sobrantes
+	 * @throws SolicitudRechazada con {@code mensaje} si quedó vacío
+	 */
 	private static String obligatorio(String texto, String mensaje) {
 		String limpio = opcional(texto);
 		if (limpio == null) {
@@ -55,6 +60,7 @@ final class ValidacionPaciente {
 		return texto == null || texto.isBlank() ? null : texto.strip();
 	}
 
+	/** @throws SolicitudRechazada con {@code mensaje} si la fecha es posterior a hoy (una fecha vacía se acepta) */
 	private static void noFutura(LocalDate fecha, LocalDate hoy, String mensaje) {
 		if (fecha != null && fecha.isAfter(hoy)) {
 			throw new SolicitudRechazada(mensaje);

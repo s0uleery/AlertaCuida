@@ -10,6 +10,7 @@ public final class Run {
 
 	private final String valor;
 
+	/** Privado: un Run solo se crea con {@link #de(String)}, que valida y normaliza. */
 	private Run(String valor) {
 		this.valor = valor;
 	}
@@ -31,6 +32,12 @@ public final class Run {
 		return new Run(cuerpo + "-" + verificador);
 	}
 
+	/**
+	 * Dígito verificador módulo 11: multiplica los dígitos de derecha a izquierda por 2, 3, … 7 (y vuelve a 2).
+	 *
+	 * @param cuerpo el RUN sin el dígito verificador, solo números
+	 * @return '0' a '9' o 'K'
+	 */
 	static char digitoVerificador(String cuerpo) {
 		int suma = 0;
 		int factor = 2;

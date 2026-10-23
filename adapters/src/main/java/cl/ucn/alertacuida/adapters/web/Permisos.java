@@ -1,7 +1,7 @@
 package cl.ucn.alertacuida.adapters.web;
 
 /**
- * Reglas de {@code @PreAuthorize} para los endpoints (1.3.7). Juntas aquí para no escribir el
+ * Reglas de {@code @PreAuthorize} para los endpoints. Juntas aquí para no escribir el
  * permiso a mano en cada controlador: un error de tipeo dejaría el endpoint cerrado para todos.
  *
  * <p>Los permisos son "MODULO:ACCION", como en la tabla permiso_rol. Recordar que el módulo
@@ -24,6 +24,7 @@ public final class Permisos {
 	/** Dar de baja a un paciente (no se borra: queda su historial). */
 	public static final String USUARIOS_ELIMINAR = "hasAuthority('USUARIOS:ELIMINAR')";
 
+	/** Solo constantes: no se crean objetos de esta clase. */
 	private Permisos() {
 	}
 

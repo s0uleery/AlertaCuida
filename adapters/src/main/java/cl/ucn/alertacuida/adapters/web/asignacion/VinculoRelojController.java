@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * El reloj de un paciente (1.2.3 y 1.2.4): vincular, reemplazar, desvincular y token nuevo.
+ * El reloj de un paciente: vincular, reemplazar, desvincular y token nuevo.
  * Todo exige USUARIOS:EDITAR. Las respuestas con token lo muestran una sola vez.
  */
 @RestController

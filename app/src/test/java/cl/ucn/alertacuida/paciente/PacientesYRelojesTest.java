@@ -33,7 +33,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
- * Pacientes, relojes y vínculos de punta a punta (1.2): HTTP, permisos, base de datos (incluidas
+ * Pacientes, relojes y vínculos de punta a punta: HTTP, permisos, base de datos (incluidas
  * sus restricciones) y auditoría. Sin Docker se omite.
  */
 @SpringBootTest
@@ -65,6 +65,7 @@ class PacientesYRelojesTest {
 		coordinador = token("11.111.111-1", "Clave-de-Coord1");
 	}
 
+	/** Sin token responde 401, y el rol PERSONAL no puede ver pacientes (403). */
 	@Test
 	void sinTokenResponde401YElRolPersonalNoVePacientes() throws Exception {
 		mvc.perform(get("/api/pacientes")).andExpect(status().isUnauthorized());
@@ -72,6 +73,7 @@ class PacientesYRelojesTest {
 				.andExpect(status().isForbidden());
 	}
 
+	/** El alta aparece en la lista con su edad y sin reloj, y en la ficha sin historial. */
 	@Test
 	void registraYListaUnPacienteConSuEdad() throws Exception {
 		String id = crearPaciente("12.345.678-5", "2026-01-10");
@@ -89,6 +91,7 @@ class PacientesYRelojesTest {
 				.andExpect(jsonPath("$.historial", hasSize(0)));
 	}
 
+	/** Un RUN repetido responde 409 y una fecha futura, 400. */
 	@Test
 	void runRepetidoResponde409YFechaFuturaResponde400() throws Exception {
 		crearPaciente("12.345.678-5", "2026-01-10");
@@ -98,6 +101,7 @@ class PacientesYRelojesTest {
 				.andExpect(status().isBadRequest());
 	}
 
+	/** Vincular entrega el token una vez; la base guarda solo su hash y las listas muestran el vínculo. */
 	@Test
 	void vincularEntregaElTokenUnaVezYLaBaseSoloGuardaSuHash() throws Exception {
 		String maria = crearPaciente("12.345.678-5", "2026-01-10");
@@ -115,6 +119,7 @@ class PacientesYRelojesTest {
 				.andExpect(jsonPath("$[0].nombrePaciente").value("María Rojas"));
 	}
 
+	/** Un reloj no puede estar con dos pacientes, ni pasar a "en reparación" mientras se usa. */
 	@Test
 	void unRelojNoPuedeEstarConDosPacientesNiSalirDeServicioEnUso() throws Exception {
 		String maria = crearPaciente("12.345.678-5", "2026-01-10");
@@ -128,6 +133,7 @@ class PacientesYRelojesTest {
 				.andExpect(status().isConflict());
 	}
 
+	/** Sin consentimiento no se vincula (400). */
 	@Test
 	void sinConsentimientoNoSeVincula() throws Exception {
 		String sinConsentimiento = crearPaciente("12.345.678-5", null);
@@ -136,6 +142,7 @@ class PacientesYRelojesTest {
 		vincular(sinConsentimiento, reloj).andExpect(status().isBadRequest());
 	}
 
+	/** El reemplazo conserva el historial y deja el reloj anterior en reparación. */
 	@Test
 	void reemplazarConservaElHistorialYDejaElAnteriorEnReparacion() throws Exception {
 		String maria = crearPaciente("12.345.678-5", "2026-01-10");
@@ -157,6 +164,7 @@ class PacientesYRelojesTest {
 		assertThat(estado).isEqualTo("EN_REPARACION");
 	}
 
+	/** La baja cierra el vínculo, el reloj queda libre para otro y cada cambio queda en la auditoría. */
 	@Test
 	void laBajaCierraElVinculoYLiberaElReloj() throws Exception {
 		String maria = crearPaciente("12.345.678-5", "2026-01-10");
@@ -177,6 +185,7 @@ class PacientesYRelojesTest {
 		assertThat(cambios).isEqualTo(4);
 	}
 
+	/** Crea una cuenta del personal activa con contraseña "Clave-de-" + nombre + "1". */
 	private void crearUsuario(String run, String rol, String nombre) {
 		jdbc.sql("""
 				INSERT INTO usuario (codigo_rol, rut, rut_hash, nombre_profesional, correo, hash_contrasena, activo)
@@ -201,10 +210,20 @@ class PacientesYRelojesTest {
 				.formatted(run, consentimiento == null ? "null" : "\"" + consentimiento + "\"");
 	}
 
+	/**
+	 * Crea el paciente por la API como el coordinador.
+	 *
+	 * @return su identificador
+	 */
 	private String crearPaciente(String run, String consentimiento) throws Exception {
 		return id(conJson(post("/api/pacientes"), paciente(run, consentimiento)).andExpect(status().isCreated()));
 	}
 
+	/**
+	 * Registra un reloj operativo por la API como el coordinador.
+	 *
+	 * @return su identificador
+	 */
 	private String crearReloj(String identificador) throws Exception {
 		return id(conJson(post("/api/relojes"), "{\"identificadorReloj\": \"" + identificador + "\"}")
 				.andExpect(status().isCreated()));
@@ -220,10 +239,12 @@ class PacientesYRelojesTest {
 		return mvc.perform(conToken(peticion, coordinador).contentType(MediaType.APPLICATION_JSON).content(cuerpo));
 	}
 
+	/** @return la petición con el token en la cabecera Authorization */
 	private static MockHttpServletRequestBuilder conToken(MockHttpServletRequestBuilder peticion, String token) {
 		return peticion.header("Authorization", "Bearer " + token);
 	}
 
+	/** Inicia sesión y devuelve el token de acceso. */
 	private String token(String run, String contrasena) throws Exception {
 		String respuesta = mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
 				.content("{\"run\": \"" + run + "\", \"contrasena\": \"" + contrasena + "\"}"))
@@ -231,6 +252,7 @@ class PacientesYRelojesTest {
 		return JsonPath.read(respuesta, "$.token");
 	}
 
+	/** @return el "id" de la respuesta de un alta */
 	private static String id(ResultActions respuesta) throws Exception {
 		return JsonPath.read(respuesta.andReturn().getResponse().getContentAsString(), "$.id");
 	}

@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Activación de una cuenta con su enlace (1.3.2). Es pública (ver ConfiguracionSeguridad):
+ * Activación de una cuenta con su enlace. Es pública (ver ConfiguracionSeguridad):
  * la persona todavía no tiene contraseña, así que la autoriza el token del enlace.
  */
 @RestController

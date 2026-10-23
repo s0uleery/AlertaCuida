@@ -8,6 +8,7 @@ import { FormularioReloj } from './FormularioReloj';
 import { relojesApi } from './relojesApi';
 import { NOMBRE_ESTADO, type EstadoReloj, type RelojConPaciente } from './tipos';
 
+/** Color de la etiqueta de cada estado. */
 const COLOR_ESTADO: Record<EstadoReloj, string> = {
   OPERATIVO: 'bg-emerald-100 text-emerald-800',
   EN_REPARACION: 'bg-amber-100 text-amber-800',
@@ -15,8 +16,8 @@ const COLOR_ESTADO: Record<EstadoReloj, string> = {
 };
 
 /**
- * Inventario de relojes (1.2.2): lista, registro y edición. Para entregar un reloj a un usuario
- * se va a su ficha. El estado técnico (batería, última sincronización) llega con la 3.8.
+ * Inventario de relojes: lista, registro y edición. Para entregar un reloj a un usuario
+ * se va a su ficha. El estado técnico (batería, última sincronización) se agregará más adelante.
  */
 export function PaginaRelojes() {
   const { puede } = useSesion();
@@ -24,6 +25,7 @@ export function PaginaRelojes() {
   /** null = sin formulario; 'nuevo' = registro; un reloj = edición de ese reloj */
   const [editando, setEditando] = useState<RelojConPaciente | 'nuevo' | null>(null);
 
+  /** Registra o edita según lo que esté abierto, cierra el formulario y recarga la lista. */
   async function guardar(datos: Parameters<typeof relojesApi.registrar>[0]) {
     if (editando === 'nuevo') {
       await relojesApi.registrar(datos);

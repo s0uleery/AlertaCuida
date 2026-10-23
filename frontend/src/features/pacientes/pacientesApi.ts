@@ -2,7 +2,7 @@ import { pedir } from '../../api/cliente';
 import type { EstadoReloj } from '../relojes/tipos';
 import type { DatosPaciente, DetallePaciente, ResumenPaciente, TokenReloj } from './tipos';
 
-/** Llamadas al backend para pacientes y su reloj (1.2). Exigen permisos de USUARIOS. */
+/** Llamadas al backend para pacientes y su reloj. Exigen permisos de USUARIOS. */
 export const pacientesApi = {
   /** Pacientes con su edad y reloj actual. */
   listar: (incluirBajas: boolean) => pedir<ResumenPaciente[]>(`/pacientes?incluirBajas=${incluirBajas}`),

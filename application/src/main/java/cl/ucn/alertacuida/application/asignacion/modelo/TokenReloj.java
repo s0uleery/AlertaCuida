@@ -3,7 +3,7 @@ package cl.ucn.alertacuida.application.asignacion.modelo;
 import java.util.UUID;
 
 /**
- * Llave con que el reloj se identifica ante el servidor (rol DEVICE, 1.4.1). Solo existe en esta
+ * Llave con que el reloj se identifica ante el servidor (rol DEVICE). Solo existe en esta
  * respuesta: la base guarda su hash. Quien instala el reloj la ingresa en su app; si se pierde,
  * se genera otra y la anterior deja de servir.
  *

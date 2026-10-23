@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Cuentas del personal del PRLAC (1.3.2). Solo traduce HTTP: las reglas están en los casos de uso.
+ * Cuentas del personal del PRLAC. Solo traduce HTTP: las reglas están en los casos de uso.
  * Todos los endpoints exigen ADMINISTRACION:CREAR, que solo tiene el administrador.
  */
 @RestController

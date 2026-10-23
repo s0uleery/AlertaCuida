@@ -2,6 +2,7 @@
 // En la pantalla se les llama "usuarios", como en el PRLAC; en el código y el backend, "pacientes".
 
 export type Sexo = 'FEMENINO' | 'MASCULINO';
+/** Nivel de dependencia evaluado por el PRLAC. */
 export type NivelDependencia = 'MODERADA' | 'SEVERA';
 
 /** Identidad del paciente, como se escribe y como se guarda. Las fechas van como "2026-10-24". */
@@ -22,6 +23,7 @@ export interface DatosPaciente {
   fechaIngreso: string;
 }
 
+/** Un paciente guardado. */
 export interface Paciente {
   id: string;
   datos: DatosPaciente;

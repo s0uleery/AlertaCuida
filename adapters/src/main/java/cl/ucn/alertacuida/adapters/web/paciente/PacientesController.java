@@ -28,7 +28,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Pacientes del programa (1.2.1); en el dashboard se les llama "Usuarios". Usa los permisos del
+ * Pacientes del programa; en el dashboard se les llama "Usuarios". Usa los permisos del
  * módulo USUARIOS. Solo traduce HTTP: las reglas están en los casos de uso. El reloj de cada
  * paciente se maneja en {@code VinculoRelojController}.
  */

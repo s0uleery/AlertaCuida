@@ -11,7 +11,9 @@ export class ErrorApi extends Error {
   }
 }
 
+/** Función que entrega el token actual, o null si no hay sesión. */
 type ProveedorToken = () => string | null;
+/** Qué hacer cuando el backend rechaza el token (sesión vencida o inválida). */
 type AlSalir = () => void;
 
 let tokenActual: ProveedorToken = () => null;

@@ -16,7 +16,7 @@ import cl.ucn.alertacuida.domain.personal.PoliticaContrasena;
 import java.time.Clock;
 import java.time.Instant;
 
-/** La persona abre su enlace y elige su contraseña (1.3.2). Desde ahí puede iniciar sesión. */
+/** La persona abre su enlace y elige su contraseña. Desde ahí puede iniciar sesión. */
 public class ActivarCuenta {
 
 	private final TokensActivacion tokens;
@@ -28,6 +28,7 @@ public class ActivarCuenta {
 	private final Transacciones transacciones;
 	private final Clock reloj;
 
+	/** Recibe los puertos que usa; los arma ConfiguracionCasosDeUso. */
 	public ActivarCuenta(TokensActivacion tokens, SecretosUnSoloUso secretos, CuentasPersonal cuentas,
 			HashRun hashRun, HashContrasena hashContrasena, RegistroAuditoria auditoria,
 			Transacciones transacciones, Clock reloj) {

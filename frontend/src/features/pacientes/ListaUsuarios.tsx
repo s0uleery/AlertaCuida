@@ -7,6 +7,7 @@ import { useSesion } from '../sesion/SesionContext';
 import { pacientesApi } from './pacientesApi';
 import type { ResumenPaciente } from './tipos';
 
+/** Cómo se muestra cada nivel de dependencia. */
 const NIVEL: Record<string, string> = { MODERADA: 'Moderada', SEVERA: 'Severa' };
 
 /** true si el paciente coincide con lo buscado: por nombre, alias o RUN (con o sin puntos). */
@@ -18,8 +19,8 @@ function coincide(fila: ResumenPaciente, busqueda: string): boolean {
 }
 
 /**
- * Lista de usuarios del programa con búsqueda (3.3.1). Se filtra aquí y no en el backend: los
- * nombres irán cifrados en la base (1.6.3) y el piloto tiene pocos usuarios.
+ * Lista de usuarios del programa con búsqueda. Se filtra aquí y no en el backend: los
+ * nombres irán cifrados en la base y el piloto tiene pocos usuarios.
  */
 export function ListaUsuarios() {
   const { puede } = useSesion();

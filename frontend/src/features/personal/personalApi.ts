@@ -1,7 +1,7 @@
 import { pedir } from '../../api/cliente';
 import type { RespuestaEnlace, SolicitudCuenta } from './tipos';
 
-/** Llamadas al backend para las cuentas del personal (1.3.2). */
+/** Llamadas al backend para las cuentas del personal. */
 export const personalApi = {
   /** Crea la cuenta (exige ADMINISTRACION:CREAR) y devuelve su enlace de activación. */
   crear: (solicitud: SolicitudCuenta) =>

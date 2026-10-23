@@ -41,6 +41,10 @@ class InicioSesionTest {
 	@Autowired
 	private PasswordEncoder encoder;
 
+	/**
+	 * Base con dos cuentas: Ana (PERSONAL, activa) y Luis (COORDINADOR, inactiva). Contraseña
+	 * "Clave-de-" + nombre + "1".
+	 */
 	@BeforeEach
 	void crearUsuarios() {
 		jdbc.sql("DELETE FROM registro_auditoria").update();
@@ -49,6 +53,7 @@ class InicioSesionTest {
 		crear("11.111.111-1", "COORDINADOR", "Luis", "luis@muni.cl", false);
 	}
 
+	/** Con RUN y contraseña entra, recibe los permisos de su rol y /yo responde quién es. */
 	@Test
 	void conRunYContrasenaEntraYRecibeLosPermisosDeSuRol() throws Exception {
 		String token = token(login("12.345.678-5", "Clave-de-Ana1")
@@ -62,11 +67,13 @@ class InicioSesionTest {
 				.andExpect(jsonPath("$.nombre").value("Ana"));
 	}
 
+	/** El RUN sin puntos es el mismo RUN. */
 	@Test
 	void elRunSinPuntosEsElMismo() throws Exception {
 		login("12345678-5", "Clave-de-Ana1").andExpect(status().isOk());
 	}
 
+	/** Contraseña incorrecta, RUN inexistente y cuenta inactiva dan el mismo error. */
 	@Test
 	void contrasenaIncorrectaRunInexistenteYCuentaInactivaDanElMismoError() throws Exception {
 		rechazado(login("12.345.678-5", "otra"));
@@ -74,6 +81,7 @@ class InicioSesionTest {
 		rechazado(login("11.111.111-1", "Clave-de-Luis1"));
 	}
 
+	/** Cada intento, correcto o fallido, queda en la auditoría. */
 	@Test
 	void cadaIntentoQuedaEnLaAuditoria() throws Exception {
 		login("12.345.678-5", "otra");
@@ -87,6 +95,7 @@ class InicioSesionTest {
 		assertThat(correctos).isEqualTo(1);
 	}
 
+	/** Tres fallos bloquean la cuenta. */
 	@Test
 	void tresFallosBloqueanLaCuenta() throws Exception {
 		for (int i = 0; i < 3; i++) {
@@ -95,18 +104,21 @@ class InicioSesionTest {
 		rechazado(login("12.345.678-5", "Clave-de-Ana1"));
 	}
 
+	/** Sin token, o con un token falso, no se entra. */
 	@Test
 	void sinTokenOConTokenFalsoNoSeEntra() throws Exception {
 		mvc.perform(get("/api/auth/yo")).andExpect(status().isUnauthorized());
 		mvc.perform(get("/api/auth/yo").header("Authorization", "Bearer falso")).andExpect(status().isUnauthorized());
 	}
 
+	/** Sin contraseña la petición es inválida (400). */
 	@Test
 	void faltaLaContrasena() throws Exception {
 		mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON).content("{\"run\": \"1-9\"}"))
 				.andExpect(status().isBadRequest());
 	}
 
+	/** Crea una cuenta del personal con contraseña "Clave-de-" + nombre + "1". */
 	private void crear(String run, String rol, String nombre, String correo, boolean activo) {
 		jdbc.sql("""
 				INSERT INTO usuario (codigo_rol, rut, rut_hash, nombre_profesional, correo, hash_contrasena, activo)
@@ -120,6 +132,7 @@ class InicioSesionTest {
 				.update();
 	}
 
+	/** Intenta iniciar sesión. */
 	private ResultActions login(String run, String contrasena) throws Exception {
 		return mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
 				.content("{\"run\": \"" + run + "\", \"contrasena\": \"" + contrasena + "\"}"));
@@ -131,6 +144,7 @@ class InicioSesionTest {
 				.andExpect(jsonPath("$.detail").value("RUN o contraseña incorrectos"));
 	}
 
+	/** @return el token de acceso de una respuesta de login */
 	private static String token(ResultActions respuesta) throws Exception {
 		return JsonPath.read(respuesta.andReturn().getResponse().getContentAsString(), "$.token");
 	}

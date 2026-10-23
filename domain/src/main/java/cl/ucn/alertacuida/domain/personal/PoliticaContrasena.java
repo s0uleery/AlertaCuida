@@ -12,7 +12,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Política de contraseñas del personal (1.3.2), según NIST SP 800-63B: largo mínimo y lista de
+ * Política de contraseñas del personal, según NIST SP 800-63B: largo mínimo y lista de
  * contraseñas comunes, sin exigir mayúsculas ni símbolos. Que no sea el RUN lo revisa quien conoce el RUN.
  */
 public final class PoliticaContrasena {
@@ -23,6 +23,7 @@ public final class PoliticaContrasena {
 
 	private static final Set<String> COMUNES = cargarComunes();
 
+	/** Solo métodos estáticos: no se crean objetos de esta clase. */
 	private PoliticaContrasena() {
 	}
 
@@ -40,10 +41,15 @@ public final class PoliticaContrasena {
 		return Optional.empty();
 	}
 
+	/** @return si la contraseña repite un solo carácter (ej. "aaaaaaaaaaaa") */
 	private static boolean unSoloCaracter(String contrasena) {
 		return contrasena.chars().distinct().count() == 1;
 	}
 
+	/**
+	 * Lee contrasenas-comunes.txt (en resources, junto a esta clase): una por línea, en minúsculas y sin
+	 * los comentarios "#".
+	 */
 	private static Set<String> cargarComunes() {
 		InputStream lista = PoliticaContrasena.class.getResourceAsStream("contrasenas-comunes.txt");
 		if (lista == null) {

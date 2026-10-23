@@ -20,7 +20,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Casos de uso de pacientes, relojes y el vínculo entre ambos (1.2), unidos con sus adaptadores.
+ * Casos de uso de pacientes, relojes y el vínculo entre ambos, unidos con sus adaptadores.
  * Igual que {@link ConfiguracionCasosDeUso}, que tiene los del inicio de sesión y el personal.
  */
 @Configuration
@@ -32,21 +32,21 @@ public class ConfiguracionPacientesYRelojes {
 		return new ConsultarPacientes(pacientes, asignaciones, reloj);
 	}
 
-	/** Alta de pacientes (1.2.1). */
+	/** Alta de pacientes. */
 	@Bean
 	RegistrarPaciente registrarPaciente(Pacientes pacientes, HashRun hashRun, RegistroAuditoria auditoria,
 			Transacciones transacciones, Clock reloj) {
 		return new RegistrarPaciente(pacientes, hashRun, auditoria, transacciones, reloj);
 	}
 
-	/** Edición de pacientes (1.2.1). */
+	/** Edición de pacientes. */
 	@Bean
 	EditarPaciente editarPaciente(Pacientes pacientes, Asignaciones asignaciones, HashRun hashRun,
 			RegistroAuditoria auditoria, Transacciones transacciones, Clock reloj) {
 		return new EditarPaciente(pacientes, asignaciones, hashRun, auditoria, transacciones, reloj);
 	}
 
-	/** Baja de pacientes, que cierra su reloj (1.2.1). */
+	/** Baja de pacientes, que cierra su reloj. */
 	@Bean
 	DarDeBajaPaciente darDeBajaPaciente(Pacientes pacientes, Asignaciones asignaciones, RegistroAuditoria auditoria,
 			Transacciones transacciones, Clock reloj) {
@@ -59,7 +59,7 @@ public class ConfiguracionPacientesYRelojes {
 		return new ConsultarRelojes(relojes);
 	}
 
-	/** Registro de relojes (1.2.2). */
+	/** Registro de relojes. */
 	@Bean
 	RegistrarReloj registrarReloj(Relojes relojes, RegistroAuditoria auditoria, Transacciones transacciones,
 			Clock reloj) {
@@ -73,7 +73,7 @@ public class ConfiguracionPacientesYRelojes {
 		return new EditarReloj(relojes, asignaciones, auditoria, transacciones, reloj);
 	}
 
-	/** Vincular, reemplazar y desvincular relojes (1.2.3 y 1.2.4). */
+	/** Vincular, reemplazar y desvincular relojes. */
 	@Bean
 	VinculoReloj vinculoReloj(Asignaciones asignaciones, Pacientes pacientes, Relojes relojes,
 			SecretosUnSoloUso secretos, RegistroAuditoria auditoria, Transacciones transacciones, Clock reloj) {

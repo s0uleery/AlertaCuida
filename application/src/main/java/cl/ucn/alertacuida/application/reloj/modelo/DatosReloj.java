@@ -10,7 +10,7 @@ import java.time.LocalDate;
  * @param modelo               opcional, ej. Galaxy Watch
  * @param iccid                opcional: identificador físico de la SIM LTE, no cambia
  * @param numeroSim            opcional: número de la SIM, puede cambiar
- * @param fechaVencimientoPlan opcional: vencido, el reloj no envía alertas (3.8.2)
+ * @param fechaVencimientoPlan opcional: vencido, el reloj no envía alertas
  */
 public record DatosReloj(String identificadorReloj, String modelo, String iccid, String numeroSim,
 		LocalDate fechaVencimientoPlan, EstadoReloj estado) {

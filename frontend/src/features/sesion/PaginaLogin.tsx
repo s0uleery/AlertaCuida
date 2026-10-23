@@ -23,6 +23,7 @@ export function PaginaLogin() {
     return <Navigate to={destino} replace />;
   }
 
+  /** Revisa el RUN, inicia sesión y vuelve a la página de origen. */
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
     if (!runValido(run)) {

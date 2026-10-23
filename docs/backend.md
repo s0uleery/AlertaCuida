@@ -89,7 +89,7 @@ Decisiones de seguridad:
 - **Los permisos viajan en el token**: si cambian, se notan al iniciar sesión de nuevo.
 - **La contraseña no aparece en los logs** (`SolicitudLogin.toString`).
 
-## Autorización por permiso (1.3.7)
+## Autorización por permiso
 
 Hay dos niveles:
 1. `ConfiguracionSeguridad` exige un token válido en todo, salvo `login` y `activar`. Sin token, la respuesta es **401**.
@@ -97,7 +97,7 @@ Hay dos niveles:
 
 Importante: el módulo `USUARIOS` son los **pacientes**. Las cuentas del personal van en `ADMINISTRACION`, que solo tiene el administrador.
 
-## Cuentas del personal (1.3.2)
+## Cuentas del personal
 
 Endpoints:
 
@@ -117,7 +117,7 @@ Recorrido:
    - lo registra en la auditoría.
 
    Todo en una transacción.
-2. El enlace es `http://…/activar#<token>` y vence en 48 h. Mientras no exista el correo (2.4), el administrador lo copia y se lo pasa a la persona.
+2. El enlace es `http://…/activar#<token>` y vence en 48 h. Mientras no exista el correo, el administrador lo copia y se lo pasa a la persona.
 3. La persona abre el enlace y elige su contraseña. `ActivarCuenta`:
    - revisa que el token exista, no esté usado ni vencido;
    - valida la contraseña con `PoliticaContrasena`;
@@ -135,7 +135,7 @@ Decisiones:
 - **Un enlace sirve una sola vez, aunque se use en dos pestañas a la vez**: las actualizaciones tienen condiciones (`WHERE fecha_uso IS NULL`, `WHERE hash_contrasena IS NULL`).
 - **Transacciones sin Spring en los casos de uso**: usan el puerto `Transacciones`, implementado con `TransactionTemplate` en `adapters`.
 
-## Pacientes y relojes (1.2)
+## Pacientes y relojes
 
 En el dashboard, a los pacientes se les llama "usuarios" (término del PRLAC); en el código y la base, "pacientes". Todo usa los permisos del módulo `USUARIOS`, que tienen el coordinador y el administrador.
 
@@ -153,7 +153,7 @@ En el dashboard, a los pacientes se les llama "usuarios" (término del PRLAC); e
 | `GET /api/relojes` | `VER` | Inventario con el paciente que usa cada reloj. |
 | `POST /api/relojes` / `PUT /api/relojes/{id}` | `CREAR` / `EDITAR` | Registro y edición (modelo, SIM, plan, estado). |
 
-Reglas (1.2.5), en `VinculoReloj`, `EditarPaciente` y `EditarReloj`:
+Reglas, en `VinculoReloj`, `EditarPaciente` y `EditarReloj`:
 
 - Solo se vinculan relojes `OPERATIVO` a pacientes **con consentimiento** y **sin baja**.
 - Un reloj con un solo paciente a la vez, y un paciente con un solo reloj. Si dos personas vinculan a la vez, la base lo impide igual (restricciones `EXCLUDE` de V4).
@@ -164,10 +164,10 @@ Reglas (1.2.5), en `VinculoReloj`, `EditarPaciente` y `EditarReloj`:
 Decisiones:
 
 - **El historial nunca se pierde**: los vínculos se cierran con fecha de fin, no se borran. Así se sabe qué reloj mandó cada dato.
-- **Token del reloj (rol DEVICE)**: 256 bits aleatorios, se muestran una sola vez y en la base va su SHA-256, igual que el enlace de activación. Cerrar el vínculo lo revoca. El uso del token por el reloj llega en 1.4.1.
+- **Token del reloj (rol DEVICE)**: 256 bits aleatorios, se muestran una sola vez y en la base va su SHA-256, igual que el enlace de activación. Cerrar el vínculo lo revoca. El reloj lo usará cuando exista su API.
 - **La edad no se guarda**: se calcula con la fecha de hoy en Chile (`ZonaHoraria`).
-- **Datos personales sin cifrar todavía**: RUN, nombres, apellidos, fecha de nacimiento y dirección se guardan tal cual (con `TODO 1.6.3` en `PacientesJdbc`). Cuando llegue el cifrado, solo cambia ese adaptador. Por eso la lista se ordena en Java y la búsqueda se hace en el dashboard: la base no podrá ordenar ni buscar datos cifrados.
-- La ficha de salud, las condiciones y los documentos quedan para la 3.3.
+- **Datos personales sin cifrar todavía**: RUN, nombres, apellidos, fecha de nacimiento y dirección se guardan tal cual (con un `TODO` en `PacientesJdbc`). Cuando llegue el cifrado, solo cambia ese adaptador. Por eso la lista se ordena en Java y la búsqueda se hace en el dashboard: la base no podrá ordenar ni buscar datos cifrados.
+- La ficha de salud, las condiciones y los documentos quedan para más adelante.
 
 ## Configuración
 
@@ -192,7 +192,7 @@ Sin las claves, el backend no arranca. El perfil `dev` trae claves de desarrollo
 ## Pendiente del login
 
 - Listar, editar y desactivar cuentas del personal (hoy solo se crean, desde Administración en el dashboard).
-- Enviar el enlace por correo cuando exista (2.4).
-- Token de renovación con cookie y cierre de sesión (1.3.4).
-- Segundo factor TOTP (1.3.5).
-- Cifrar el `rut` en la base (1.6.3).
+- Enviar el enlace por correo cuando exista.
+- Token de renovación con cookie y cierre de sesión.
+- Segundo factor TOTP.
+- Cifrar el `rut` en la base.

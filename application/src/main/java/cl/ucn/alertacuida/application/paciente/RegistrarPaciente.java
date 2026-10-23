@@ -12,7 +12,7 @@ import cl.ucn.alertacuida.domain.comun.ZonaHoraria;
 import java.time.Clock;
 import java.util.UUID;
 
-/** Alta de un paciente en el programa (1.2.1). Sin reloj: se vincula después (VinculoReloj). */
+/** Alta de un paciente en el programa. Sin reloj: se vincula después (VinculoReloj). */
 public class RegistrarPaciente {
 
 	private final Pacientes pacientes;
@@ -21,6 +21,7 @@ public class RegistrarPaciente {
 	private final Transacciones transacciones;
 	private final Clock reloj;
 
+	/** Recibe los puertos que usa; los arma ConfiguracionPacientesYRelojes. */
 	public RegistrarPaciente(Pacientes pacientes, HashRun hashRun, RegistroAuditoria auditoria,
 			Transacciones transacciones, Clock reloj) {
 		this.pacientes = pacientes;

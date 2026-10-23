@@ -6,7 +6,7 @@ import java.time.LocalDate;
 
 /**
  * Identidad de un paciente, tal como se escribe al crearlo o editarlo. Los datos de salud
- * (ficha, condiciones, documentos) van aparte (3.3).
+ * (ficha, condiciones, documentos) van aparte.
  *
  * @param run                 con o sin puntos al entrar; el caso de uso lo normaliza
  * @param alias               nombre corto para los mensajes a los contactos, sin datos clínicos

@@ -18,6 +18,7 @@ public class NuevoEnlaceActivacion {
 	private final Transacciones transacciones;
 	private final Clock reloj;
 
+	/** Recibe los puertos que usa; los arma ConfiguracionCasosDeUso. */
 	public NuevoEnlaceActivacion(CuentasPersonal cuentas, EmisorEnlacesActivacion enlaces,
 			RegistroAuditoria auditoria, Transacciones transacciones, Clock reloj) {
 		this.cuentas = cuentas;

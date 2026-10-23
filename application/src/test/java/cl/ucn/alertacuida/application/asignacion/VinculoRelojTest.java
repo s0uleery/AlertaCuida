@@ -23,7 +23,7 @@ import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-/** Vincular, reemplazar, desvincular y renovar el token de un reloj (1.2.3 a 1.2.5), sin base de datos. */
+/** Vincular, reemplazar, desvincular y renovar el token de un reloj, sin base de datos. */
 class VinculoRelojTest {
 
 	private static final Instant AHORA = Instant.parse("2026-10-22T15:00:00Z");
@@ -38,6 +38,10 @@ class VinculoRelojTest {
 	private UUID reloj1;
 	private UUID reloj2;
 
+	/**
+	 * Un paciente con consentimiento y dos relojes operativos. Los tokens son "token-1", "token-2"…
+	 * y su hash, "hash-" + token.
+	 */
 	@BeforeEach
 	void preparar() {
 		SecretosUnSoloUso secretos = new SecretosUnSoloUso() {
@@ -61,6 +65,7 @@ class VinculoRelojTest {
 		reloj2 = relojes.agregar("R-002", EstadoReloj.OPERATIVO);
 	}
 
+	/** Al vincular se entrega el token una vez y se guarda solo su hash. */
 	@Test
 	void vincularEntregaUnTokenYGuardaSoloSuHash() {
 		TokenReloj token = vinculo.vincular(maria, reloj1, COORDINADOR, "ip");
@@ -70,6 +75,7 @@ class VinculoRelojTest {
 		assertThat(asignaciones.vigenteDelPaciente(maria)).isPresent();
 	}
 
+	/** Sin consentimiento, dado de baja o con reloj no operativo, no se vincula. */
 	@Test
 	void sinConsentimientoDadoDeBajaORelojNoOperativoNoSeVincula() {
 		UUID sinConsentimiento = pacientes.crear(paciente(null), "h-2");
@@ -87,6 +93,7 @@ class VinculoRelojTest {
 				.isInstanceOf(NoEncontrado.class);
 	}
 
+	/** Un reloj no puede estar con dos pacientes, ni un paciente con dos relojes. */
 	@Test
 	void unRelojConUnSoloPacienteYUnPacienteConUnSoloReloj() {
 		UUID pedro = pacientes.crear(paciente(AYER), "h-2");
@@ -98,6 +105,7 @@ class VinculoRelojTest {
 				.isInstanceOf(Conflicto.class).hasMessageContaining("reemplazar");
 	}
 
+	/** El reemplazo cierra el reloj anterior en el mismo instante en que abre el nuevo, y conserva el historial. */
 	@Test
 	void reemplazarCierraElAnteriorEnElMismoInstanteYConservaElHistorial() {
 		vinculo.vincular(maria, reloj1, COORDINADOR, "ip");
@@ -112,6 +120,7 @@ class VinculoRelojTest {
 		assertThat(nuevo.token()).isEqualTo("token-2");
 	}
 
+	/** No se puede reemplazar si el paciente no tiene reloj, ni por el mismo reloj. */
 	@Test
 	void reemplazarPorElMismoRelojOSinRelojNoTieneSentido() {
 		assertThatThrownBy(() -> vinculo.reemplazar(maria, reloj2, null, COORDINADOR, "ip"))
@@ -121,6 +130,7 @@ class VinculoRelojTest {
 				.isInstanceOf(SolicitudRechazada.class);
 	}
 
+	/** Al desvincular, el reloj queda libre para otro paciente. */
 	@Test
 	void desvincularLiberaElRelojParaOtroPaciente() {
 		UUID pedro = pacientes.crear(paciente(AYER), "h-2");
@@ -133,6 +143,7 @@ class VinculoRelojTest {
 		assertThat(asignaciones.vigenteDelReloj(reloj1).orElseThrow().idPaciente()).isEqualTo(pedro);
 	}
 
+	/** Un token nuevo reemplaza al anterior sin cerrar el vínculo. */
 	@Test
 	void unTokenNuevoReemplazaAlAnteriorSinCerrarElVinculo() {
 		vinculo.vincular(maria, reloj1, COORDINADOR, "ip");
@@ -144,6 +155,7 @@ class VinculoRelojTest {
 		assertThat(asignaciones.filas.getFirst().fin).isNull();
 	}
 
+	/** @return datos de un paciente con esa fecha de consentimiento (null = sin consentimiento) */
 	private static DatosPaciente paciente(LocalDate consentimiento) {
 		return new DatosPaciente("12345678-5", "María", "Rojas", null, null, null, null, null, consentimiento, AYER);
 	}

@@ -4,6 +4,7 @@ export function limpiarRun(texto: string): string {
   return texto.replace(/[^0-9kK]/g, '').toUpperCase();
 }
 
+/** Dígito verificador módulo 11 del cuerpo del RUN (sin el dígito): '0' a '9' o 'K'. */
 export function digitoVerificador(cuerpo: string): string {
   let suma = 0;
   let factor = 2;
@@ -17,6 +18,7 @@ export function digitoVerificador(cuerpo: string): string {
   return String(resto);
 }
 
+/** true si el RUN tiene formato válido y su dígito verificador corresponde. */
 export function runValido(texto: string): boolean {
   const limpio = limpiarRun(texto);
   if (!/^\d{7,8}[0-9K]$/.test(limpio)) return false;

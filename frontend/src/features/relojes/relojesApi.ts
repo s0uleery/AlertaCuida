@@ -1,7 +1,7 @@
 import { pedir } from '../../api/cliente';
 import type { DatosReloj, RelojConPaciente } from './tipos';
 
-/** Llamadas al backend para el inventario de relojes (1.2.2). Exigen permisos de USUARIOS. */
+/** Llamadas al backend para el inventario de relojes. Exigen permisos de USUARIOS. */
 export const relojesApi = {
   /** Todos los relojes con el paciente que usa cada uno. */
   listar: () => pedir<RelojConPaciente[]>('/relojes'),

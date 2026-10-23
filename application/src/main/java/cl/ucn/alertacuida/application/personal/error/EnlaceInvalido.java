@@ -6,6 +6,7 @@ package cl.ucn.alertacuida.application.personal.error;
  */
 public class EnlaceInvalido extends RuntimeException {
 
+	/** Crea el error con su mensaje fijo (el mismo para cualquier causa). */
 	public EnlaceInvalido() {
 		super("El enlace no es válido o ya venció. Pide uno nuevo al administrador");
 	}

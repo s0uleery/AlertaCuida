@@ -45,6 +45,7 @@ public class RegistroAccesosJdbc implements RegistroAccesos {
 				.single();
 	}
 
+	/** Escribe un acceso (LOGIN o LOGIN_FALLIDO) en registro_auditoria. */
 	private void registrar(UUID idUsuario, String accion, String ip, Instant fechaHora) {
 		jdbc.sql("""
 				INSERT INTO registro_auditoria (id_usuario, accion, fecha_hora, ip)

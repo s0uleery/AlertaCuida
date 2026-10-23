@@ -10,7 +10,9 @@ import { pacientesApi } from './pacientesApi';
 import { RelojDelUsuario } from './RelojDelUsuario';
 import type { DatosPaciente } from './tipos';
 
+/** Cómo se muestra cada sexo. */
 const SEXO: Record<string, string> = { FEMENINO: 'Femenino', MASCULINO: 'Masculino' };
+/** Cómo se muestra cada nivel de dependencia. */
 const NIVEL: Record<string, string> = { MODERADA: 'Moderada', SEVERA: 'Severa' };
 
 /** Filas de la tabla de datos personales: etiqueta y cómo mostrar el valor. */
@@ -40,6 +42,7 @@ export function FichaUsuario() {
 
   const { paciente, edad, historial } = detalle;
 
+  /** Pide confirmación, da de baja al usuario y recarga la ficha. */
   async function darDeBaja() {
     if (!window.confirm('¿Dar de baja a este usuario? Se le retirará el reloj; su historial se conserva.')) return;
     try {

@@ -23,6 +23,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+/** Inicio de sesión, sin base de datos. */
 class IniciarSesionTest {
 
 	private static final Instant AHORA = Instant.parse("2026-10-21T12:00:00Z");
@@ -32,6 +33,7 @@ class IniciarSesionTest {
 	private final AccesosEnMemoria accesos = new AccesosEnMemoria();
 	private IniciarSesion iniciarSesion;
 
+	/** Un administrador activo con contraseña "clave" y bloqueo tras 3 fallos. */
 	@BeforeEach
 	void preparar() {
 		// El "hash" del RUN es el RUN normalizado y el de la contraseña es "hash:" + contraseña
@@ -43,6 +45,7 @@ class IniciarSesionTest {
 		cuentas.permisos.put("ADMINISTRADOR", Set.of("ALERTAS:VER", "USUARIOS:CREAR"));
 	}
 
+	/** Con RUN y contraseña correctos, entra con los permisos de su rol y queda en la auditoría. */
 	@Test
 	void conRunYContrasenaCorrectosEntraConLosPermisosDeSuRol() {
 		SesionIniciada sesion = iniciarSesion.iniciar("11.111.111-1", "clave", "127.0.0.1");
@@ -53,6 +56,7 @@ class IniciarSesionTest {
 		assertThat(accesos.registros).containsExactly("LOGIN " + ADMIN);
 	}
 
+	/** Con contraseña incorrecta falla, y el intento queda en la auditoría. */
 	@Test
 	void contrasenaIncorrectaFallaYQuedaEnLaAuditoria() {
 		assertThatThrownBy(() -> iniciarSesion.iniciar("11111111-1", "otra", "ip"))
@@ -60,6 +64,7 @@ class IniciarSesionTest {
 		assertThat(accesos.registros).containsExactly("LOGIN_FALLIDO " + ADMIN);
 	}
 
+	/** Un RUN inexistente, uno inválido y una contraseña incorrecta dan el mismo mensaje. */
 	@Test
 	void runInexistenteOInvalidoFallaConElMismoMensaje() {
 		String inexistente = mensaje(() -> iniciarSesion.iniciar("12.345.678-5", "clave", "ip"));
@@ -70,6 +75,7 @@ class IniciarSesionTest {
 		assertThat(accesos.registros).startsWith("LOGIN_FALLIDO null", "LOGIN_FALLIDO null");
 	}
 
+	/** Una cuenta que no se ha activado no entra. */
 	@Test
 	void cuentaSinActivarNoEntra() {
 		UUID nueva = UUID.randomUUID();
@@ -79,6 +85,7 @@ class IniciarSesionTest {
 				.isInstanceOf(InicioSesionFallido.class);
 	}
 
+	/** Una cuenta desactivada no entra aunque la contraseña sea correcta. */
 	@Test
 	void cuentaDesactivadaNoEntraAunqueLaContrasenaSeaCorrecta() {
 		UUID desactivada = UUID.randomUUID();
@@ -88,6 +95,7 @@ class IniciarSesionTest {
 				.isInstanceOf(InicioSesionFallido.class);
 	}
 
+	/** Tras tres fallos la cuenta se bloquea, aunque después la contraseña sea correcta. */
 	@Test
 	void trasTresFallosSeBloqueaAunqueLaContrasenaSeaCorrecta() {
 		for (int i = 0; i < 3; i++) {
@@ -97,6 +105,7 @@ class IniciarSesionTest {
 				.isInstanceOf(InicioSesionFallido.class);
 	}
 
+	/** Dos fallos todavía no bloquean. */
 	@Test
 	void dosFallosNoBloquean() {
 		mensaje(() -> iniciarSesion.iniciar("11111111-1", "otra", "ip"));
@@ -105,6 +114,7 @@ class IniciarSesionTest {
 		assertThat(iniciarSesion.iniciar("11111111-1", "clave", "ip").usuario().id()).isEqualTo(ADMIN);
 	}
 
+	/** @return el mensaje del error de inicio de sesión que lanza {@code intento} */
 	private static String mensaje(Runnable intento) {
 		try {
 			intento.run();
@@ -114,11 +124,13 @@ class IniciarSesionTest {
 		throw new AssertionError("Se esperaba que el inicio de sesión fallara");
 	}
 
+	/** Doble de {@link CuentaUsuarioRepository}: cuentas por hash del RUN y permisos por rol. */
 	private static final class CuentasEnMemoria implements CuentaUsuarioRepository {
 
 		private final Map<String, CuentaUsuario> porRunHash = new HashMap<>();
 		private final Map<String, Set<String>> permisos = new HashMap<>();
 
+		/** Guarda una cuenta con ese hash de RUN. */
 		void agregar(String runHash, CuentaUsuario cuenta) {
 			porRunHash.put(runHash, cuenta);
 		}

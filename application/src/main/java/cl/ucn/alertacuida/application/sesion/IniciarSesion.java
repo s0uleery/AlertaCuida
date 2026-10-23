@@ -15,7 +15,7 @@ import java.time.Instant;
 import java.util.Optional;
 
 /**
- * Inicio de sesión del personal con RUN y contraseña (1.3.3 y 1.3.6). El segundo factor llega en 1.3.5.
+ * Inicio de sesión del personal con RUN y contraseña. El segundo factor (TOTP) se agregará más adelante.
  *
  * <p>Pasos: buscar la cuenta por el hash del RUN, revisar si está bloqueada por intentos fallidos,
  * comparar la contraseña y, si todo está bien, emitir el token con los permisos del rol. Cada intento,
@@ -31,6 +31,7 @@ public class IniciarSesion {
 	private final PoliticaBloqueo bloqueo;
 	private final Clock reloj;
 
+	/** Recibe los puertos que usa; los arma ConfiguracionCasosDeUso. */
 	public IniciarSesion(CuentaUsuarioRepository cuentas, RegistroAccesos accesos, HashRun hashRun,
 			VerificadorContrasena verificador, EmisorToken emisor, PoliticaBloqueo bloqueo, Clock reloj) {
 		this.cuentas = cuentas;

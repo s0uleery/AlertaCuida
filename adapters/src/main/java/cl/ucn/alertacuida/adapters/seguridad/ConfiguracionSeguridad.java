@@ -24,11 +24,11 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtGra
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
- * Seguridad del dashboard (1.3). Sin sesión en el servidor: cada petición trae el token en la cabecera
+ * Seguridad del dashboard. Sin sesión en el servidor: cada petición trae el token en la cabecera
  * Authorization: Bearer. Por eso no hace falta CSRF (no hay cookies que el navegador mande solo).
  * Cada permiso del token ("ALERTAS:VER") es una authority.
  *
- * <p>Autorización en dos niveles (1.3.7):
+ * <p>Autorización en dos niveles:
  * <ol>
  * <li>Aquí: todo exige un token válido, salvo las pocas rutas públicas (sin token responde 401).</li>
  * <li>En cada endpoint: {@code @PreAuthorize("hasAuthority('MODULO:ACCION')")} exige el permiso

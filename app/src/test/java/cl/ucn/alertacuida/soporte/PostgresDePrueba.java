@@ -15,6 +15,7 @@ public class PostgresDePrueba {
 	/** Misma versión que el servidor (ver Versiones.md). */
 	public static final String IMAGEN = "postgres:18-alpine";
 
+	/** @return el contenedor de PostgreSQL; Spring toma de él la conexión */
 	@Bean
 	@ServiceConnection
 	PostgreSQLContainer postgres() {

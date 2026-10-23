@@ -24,6 +24,7 @@ public final class AsignacionesEnMemoria implements Asignaciones {
 		public Instant fin;
 		public String hashToken;
 
+		/** Crea un vínculo vigente (sin fin). */
 		Fila(UUID idDispositivo, UUID idPaciente, Instant inicio, String hashToken) {
 			this.idDispositivo = idDispositivo;
 			this.idPaciente = idPaciente;
@@ -78,10 +79,12 @@ public final class AsignacionesEnMemoria implements Asignaciones {
 		fila(idAsignacion).hashToken = hashToken;
 	}
 
+	/** @return la fila con ese identificador (falla si no existe) */
 	private Fila fila(UUID id) {
 		return filas.stream().filter(f -> f.id.equals(id)).findFirst().orElseThrow();
 	}
 
+	/** @return la fila como vínculo vigente */
 	private AsignacionVigente vigente(Fila f) {
 		return new AsignacionVigente(f.id, f.idDispositivo, f.idPaciente);
 	}

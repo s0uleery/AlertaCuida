@@ -15,7 +15,7 @@ import java.time.Clock;
 import java.util.UUID;
 
 /**
- * Corrige la identidad de un paciente (1.2.1), incluido el RUN si se escribió mal. Se permite
+ * Corrige la identidad de un paciente, incluido el RUN si se escribió mal. Se permite
  * también con pacientes dados de baja, para corregir su historial.
  */
 public class EditarPaciente {
@@ -27,6 +27,7 @@ public class EditarPaciente {
 	private final Transacciones transacciones;
 	private final Clock reloj;
 
+	/** Recibe los puertos que usa; los arma ConfiguracionPacientesYRelojes. */
 	public EditarPaciente(Pacientes pacientes, Asignaciones asignaciones, HashRun hashRun,
 			RegistroAuditoria auditoria, Transacciones transacciones, Clock reloj) {
 		this.pacientes = pacientes;

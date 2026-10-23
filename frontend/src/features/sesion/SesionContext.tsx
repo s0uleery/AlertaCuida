@@ -4,6 +4,7 @@ import { almacenToken } from './almacenToken';
 import { sesionApi } from './sesionApi';
 import type { Permiso, Usuario } from './tipos';
 
+/** Lo que cualquier componente puede saber y hacer con la sesión. */
 interface Sesion {
   usuario: Usuario | null;
   /** true mientras se recupera la sesión guardada al recargar la página */
@@ -15,6 +16,7 @@ interface Sesion {
 
 const SesionContext = createContext<Sesion | null>(null);
 
+/** Guarda la sesión para toda la aplicación y la recupera al recargar la página. */
 export function SesionProvider({ children }: { children: ReactNode }) {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [cargando, setCargando] = useState(() => almacenToken.leer() !== null);
@@ -58,6 +60,7 @@ export function SesionProvider({ children }: { children: ReactNode }) {
   return <SesionContext.Provider value={valor}>{children}</SesionContext.Provider>;
 }
 
+/** @returns la sesión actual. Solo funciona dentro de <SesionProvider>. */
 export function useSesion(): Sesion {
   const sesion = useContext(SesionContext);
   if (!sesion) {

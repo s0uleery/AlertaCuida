@@ -4,7 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 
 /**
- * Bloqueo por intentos fallidos (1.3.6): la cuenta queda bloqueada si tiene {@code intentos}
+ * Bloqueo por intentos fallidos: la cuenta queda bloqueada si tiene {@code intentos}
  * LOGIN_FALLIDO en la última {@code ventana} sin un LOGIN posterior. Los valores van en la configuración.
  */
 public record PoliticaBloqueo(int intentos, Duration ventana) {

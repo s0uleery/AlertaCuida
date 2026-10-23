@@ -13,7 +13,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Baja de un paciente del programa (1.2.1). No se borra nada: queda la fecha de baja, se cierra su
+ * Baja de un paciente del programa. No se borra nada: queda la fecha de baja, se cierra su
  * vínculo con el reloj (lo que revoca el token del reloj) y su historial se conserva.
  */
 public class DarDeBajaPaciente {
@@ -24,6 +24,7 @@ public class DarDeBajaPaciente {
 	private final Transacciones transacciones;
 	private final Clock reloj;
 
+	/** Recibe los puertos que usa; los arma ConfiguracionPacientesYRelojes. */
 	public DarDeBajaPaciente(Pacientes pacientes, Asignaciones asignaciones, RegistroAuditoria auditoria,
 			Transacciones transacciones, Clock reloj) {
 		this.pacientes = pacientes;

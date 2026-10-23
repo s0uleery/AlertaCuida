@@ -13,6 +13,7 @@ public final class ZonaHoraria {
 	/** America/Santiago: considera el cambio de horario de verano. */
 	public static final ZoneId CHILE = ZoneId.of("America/Santiago");
 
+	/** Solo constantes y métodos estáticos: no se crean objetos de esta clase. */
 	private ZonaHoraria() {
 	}
 

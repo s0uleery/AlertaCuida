@@ -4,7 +4,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Respuesta del alta y de un enlace nuevo. Mientras no exista el correo (2.4), el administrador
+ * Respuesta del alta y de un enlace nuevo. Mientras no exista el correo, el administrador
  * copia el enlace y se lo pasa a la persona; después, el enlace se enviará por correo y no vendrá aquí.
  *
  * @param idUsuario        cuenta creada o a la que pertenece el enlace

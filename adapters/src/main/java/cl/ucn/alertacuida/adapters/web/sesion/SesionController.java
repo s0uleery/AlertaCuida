@@ -16,7 +16,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Inicio de sesión del personal (1.3.3). Solo traduce HTTP: las reglas están en IniciarSesion. */
+/** Inicio de sesión del personal. Solo traduce HTTP: las reglas están en IniciarSesion. */
 @RestController
 @RequestMapping("/api/auth")
 public class SesionController {

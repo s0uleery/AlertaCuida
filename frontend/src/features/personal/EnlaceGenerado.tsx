@@ -5,6 +5,7 @@ import { formatearFechaHora } from '../../comun/fechas';
 import { personalApi } from './personalApi';
 import type { RespuestaEnlace } from './tipos';
 
+/** Propiedades de EnlaceGenerado. */
 interface Props {
   /** Enlace recién creado */
   enlace: RespuestaEnlace;
@@ -16,7 +17,7 @@ interface Props {
 
 /**
  * Muestra el enlace de activación para que el administrador lo copie y se lo pase a la persona.
- * Mientras no exista el correo (2.4) es la única forma de entregarlo: el enlace no se puede volver
+ * Mientras no exista el correo es la única forma de entregarlo: el enlace no se puede volver
  * a ver, porque el backend solo guarda su hash. Si se pierde, se genera otro.
  */
 export function EnlaceGenerado({ enlace: inicial, nombre, alTerminar }: Props) {
@@ -25,6 +26,7 @@ export function EnlaceGenerado({ enlace: inicial, nombre, alTerminar }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [generando, setGenerando] = useState(false);
 
+  /** Copia el enlace al portapapeles. */
   async function copiar() {
     try {
       await navigator.clipboard.writeText(enlace.enlaceActivacion);
@@ -35,6 +37,7 @@ export function EnlaceGenerado({ enlace: inicial, nombre, alTerminar }: Props) {
     }
   }
 
+  /** Pide otro enlace al backend; el anterior deja de servir. */
   async function generarOtro() {
     setGenerando(true);
     setError(null);

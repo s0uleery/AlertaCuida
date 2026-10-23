@@ -32,7 +32,7 @@ public record PropiedadesSeguridad(
 	}
 
 	/**
-	 * Enlaces de activación de cuentas (1.3.2).
+	 * Enlaces de activación de cuentas.
 	 *
 	 * @param url      página del dashboard que recibe el enlace; el token se agrega después de "#"
 	 * @param vigencia cuánto dura un enlace sin usar

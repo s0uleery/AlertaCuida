@@ -10,6 +10,7 @@ import cl.ucn.alertacuida.domain.reloj.EstadoReloj;
  */
 final class ValidacionReloj {
 
+	/** Solo métodos estáticos: no se crean objetos de esta clase. */
 	private ValidacionReloj() {
 	}
 

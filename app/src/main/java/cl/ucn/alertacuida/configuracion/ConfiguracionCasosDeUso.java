@@ -38,7 +38,7 @@ public class ConfiguracionCasosDeUso {
 		return Clock.systemUTC();
 	}
 
-	/** Inicio de sesión con RUN y contraseña (1.3.3, 1.3.6). */
+	/** Inicio de sesión con RUN y contraseña. */
 	@Bean
 	IniciarSesion iniciarSesion(CuentaUsuarioRepository cuentas, RegistroAccesos accesos, HashRun hashRun,
 			VerificadorContrasena verificador, EmisorToken emisor, PropiedadesSeguridad propiedades, Clock reloj) {
@@ -54,21 +54,21 @@ public class ConfiguracionCasosDeUso {
 		return new EmisorEnlacesActivacion(tokens, secretos, propiedades.activacion().vigencia());
 	}
 
-	/** Alta de cuentas del personal (1.3.2). */
+	/** Alta de cuentas del personal. */
 	@Bean
 	CrearCuentaPersonal crearCuentaPersonal(CuentasPersonal cuentas, HashRun hashRun,
 			EmisorEnlacesActivacion enlaces, RegistroAuditoria auditoria, Transacciones transacciones, Clock reloj) {
 		return new CrearCuentaPersonal(cuentas, hashRun, enlaces, auditoria, transacciones, reloj);
 	}
 
-	/** Reemplazo de un enlace de activación perdido o vencido (1.3.2). */
+	/** Reemplazo de un enlace de activación perdido o vencido. */
 	@Bean
 	NuevoEnlaceActivacion nuevoEnlaceActivacion(CuentasPersonal cuentas, EmisorEnlacesActivacion enlaces,
 			RegistroAuditoria auditoria, Transacciones transacciones, Clock reloj) {
 		return new NuevoEnlaceActivacion(cuentas, enlaces, auditoria, transacciones, reloj);
 	}
 
-	/** Activación de la cuenta con el enlace (1.3.2). */
+	/** Activación de la cuenta con el enlace. */
 	@Bean
 	ActivarCuenta activarCuenta(TokensActivacion tokens, SecretosUnSoloUso secretos, CuentasPersonal cuentas,
 			HashRun hashRun, HashContrasena hashContrasena, RegistroAuditoria auditoria, Transacciones transacciones,

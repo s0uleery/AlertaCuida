@@ -9,6 +9,7 @@ import type { TokenReloj } from './tipos';
 export function TokenRelojMostrado({ token, alCerrar }: { token: TokenReloj; alCerrar: () => void }) {
   const [copiado, setCopiado] = useState(false);
 
+  /** Copia el token al portapapeles. */
   async function copiar() {
     try {
       await navigator.clipboard.writeText(token.token);

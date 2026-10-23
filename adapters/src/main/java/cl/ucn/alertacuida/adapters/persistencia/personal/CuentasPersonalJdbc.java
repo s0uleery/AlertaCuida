@@ -64,7 +64,7 @@ public class CuentasPersonalJdbc implements CuentasPersonal {
 					VALUES (:rol, :rut, :rutHash, :nombre, :cargo, :correo)
 					RETURNING id_usuario""")
 					.param("rol", cuenta.codigoRol())
-					// TODO 1.6.3: cifrar el RUN antes de guardarlo
+					// TODO: cifrar el RUN antes de guardarlo
 					.param("rut", cuenta.run())
 					.param("rutHash", cuenta.runHash())
 					.param("nombre", cuenta.nombre())

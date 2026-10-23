@@ -115,6 +115,7 @@ public class AsignacionesJdbc implements Asignaciones {
 				.optional();
 	}
 
+	/** @return el instante de esa columna, o null si está vacía */
 	private static Instant instante(ResultSet fila, String columna) throws SQLException {
 		Timestamp valor = fila.getTimestamp(columna);
 		return valor == null ? null : valor.toInstant();

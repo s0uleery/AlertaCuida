@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Inventario de relojes (1.2.2). Usa los permisos del módulo USUARIOS. */
+/** Inventario de relojes. Usa los permisos del módulo USUARIOS. */
 @RestController
 @RequestMapping("/api/relojes")
 public class RelojesController {
