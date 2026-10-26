@@ -1,0 +1,757 @@
+openapi: 3.1.0
+info:
+  title: AlertaCuida - API del reloj
+  version: 0.1.0
+  summary: Contrato entre el reloj (o el simulador) y la plataforma, más el webhook de WhatsApp.
+  description: |
+    Borrador para revisar con quien desarrolla el reloj (tarea 0.4.8). Las razones de cada
+    decisión y el flujo completo están en `docs/api-reloj.md`.
+
+    - Todo va por HTTPS. Las horas van en ISO-8601 con zona (UTC, terminadas en `Z`).
+    - El reloj se identifica con el token que se le entrega al vincularlo (rol DEVICE). El
+      servidor deduce de él la asignación y el paciente: el reloj nunca envía el id del paciente.
+    - Las alertas se identifican por el `eventId` que genera el reloj (o el servidor, en los
+      simulacros y alertas técnicas).
+    - Lo que el reloj puede reintentar lleva un `eventId`: repetirlo devuelve la misma respuesta
+      sin duplicar nada.
+    - Los errores siguen RFC 9457 (`application/problem+json`) con un `codigo` estable.
+servers:
+  - url: http://localhost:8080
+    description: Desarrollo local
+  - url: https://alertacuida.example.cl
+    description: Servidor municipal (subdominio por definir con TI)
+tags:
+  - name: Sincronización
+    description: Estado del reloj y lecturas acumuladas, cada 2 horas o al 15 % de batería.
+  - name: Configuración
+    description: Parámetros del paciente que aplica el reloj.
+  - name: Alertas
+    description: Alertas detectadas por el reloj, su cancelación y agravamiento.
+  - name: Escalamiento
+    description: Avisos a los contactos que pide el reloj, estado de la alerta y fin de la lista.
+  - name: Avisos FCM
+    description: Token de Firebase del reloj y acuse de los avisos recibidos.
+  - name: Webhook de WhatsApp
+    description: Llamadas de Meta al servidor. No usan el token del reloj.
+
+security:
+  - tokenReloj: []
+
+paths:
+  /api/reloj/v1/sincronizaciones:
+    post:
+      tags: [Sincronización]
+      operationId: sincronizar
+      summary: Envía el estado del reloj y las lecturas acumuladas
+      description: |
+        Un lote cada 2 horas, o antes si la batería baja del 15 %. Puede incluir lecturas ya
+        enviadas (el reloj guarda 14 días): las repetidas se ignoran sin error.
+
+        Una lectura fuera de rango no rechaza el lote: se descarta sola y se informa en
+        `lecturasRechazadas`, para que la cola del reloj no se trabe.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Sincronizacion' }
+      responses:
+        '200':
+          description: Lote guardado, o ya recibido antes con el mismo `eventId` (misma respuesta).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RespuestaSincronizacion' }
+        '400': { $ref: '#/components/responses/MalFormado' }
+        '401': { $ref: '#/components/responses/TokenInvalido' }
+        '409': { $ref: '#/components/responses/NoAplica' }
+        '413': { $ref: '#/components/responses/LoteGrande' }
+        '429': { $ref: '#/components/responses/DemasiadasPeticiones' }
+
+  /api/reloj/v1/configuracion:
+    get:
+      tags: [Configuración]
+      operationId: obtenerConfiguracion
+      summary: Descarga la configuración vigente del paciente
+      description: |
+        El reloj la pide cuando la sincronización responde `configuracionNueva: true` o al recibir
+        el aviso FCM `CONFIGURACION_NUEVA`. Con `If-None-Match` y la versión que ya tiene, el
+        servidor responde 304 si no cambió. El reloj informa la versión que aplicó en su siguiente
+        sincronización (`estado.versionConfiguracion`).
+      parameters:
+        - name: If-None-Match
+          in: header
+          required: false
+          description: Versión que el reloj ya aplica, entre comillas (como un ETag).
+          schema: { type: string, example: '"9f2c4e1a"' }
+      responses:
+        '200':
+          description: Configuración vigente.
+          headers:
+            ETag:
+              description: La misma `version` del cuerpo, entre comillas.
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Configuracion' }
+        '304':
+          description: La versión del reloj es la vigente.
+        '401': { $ref: '#/components/responses/TokenInvalido' }
+
+  /api/reloj/v1/alertas:
+    post:
+      tags: [Alertas]
+      operationId: crearAlerta
+      summary: Envía una alerta al terminar la ventana de 30 segundos sin cancelación
+      description: |
+        El servidor nunca descarta una alerta por su contenido: si la evidencia no calza con la
+        configuración vigente, la acepta y marca la discrepancia para el equipo. Solo responde 400
+        si el mensaje está mal formado; en ese caso el reloj debe mostrar "No se pudo avisar".
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Alerta' }
+      responses:
+        '201':
+          description: Alerta registrada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RespuestaAlerta' }
+        '200':
+          description: Ya estaba registrada con ese `eventId` (reintento). Misma respuesta que el 201.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RespuestaAlerta' }
+        '400': { $ref: '#/components/responses/MalFormado' }
+        '401': { $ref: '#/components/responses/TokenInvalido' }
+        '409': { $ref: '#/components/responses/NoAplica' }
+        '429': { $ref: '#/components/responses/DemasiadasPeticiones' }
+
+  /api/reloj/v1/cancelaciones:
+    post:
+      tags: [Alertas]
+      operationId: registrarCancelacion
+      summary: Informa una alerta que el paciente canceló dentro de los 30 segundos
+      description: |
+        Solo para métricas: queda como alerta `CANCELADA`, sin avisos ni atención. Puede llegar
+        mucho después (en la siguiente conexión).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Cancelacion' }
+      responses:
+        '201':
+          description: Cancelación registrada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RespuestaAlerta' }
+        '200':
+          description: Ya estaba registrada (reintento).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RespuestaAlerta' }
+        '400': { $ref: '#/components/responses/MalFormado' }
+        '401': { $ref: '#/components/responses/TokenInvalido' }
+        '409': { $ref: '#/components/responses/NoAplica' }
+
+  /api/reloj/v1/alertas/{eventIdAlerta}:
+    parameters:
+      - $ref: '#/components/parameters/EventIdAlerta'
+    get:
+      tags: [Escalamiento]
+      operationId: consultarEstadoAlerta
+      summary: Estado de la alerta, que el reloj consulta antes de pasar al siguiente contacto
+      description: Respaldo por si el aviso FCM "alerta confirmada" se atrasa o no llega.
+      responses:
+        '200':
+          description: Estado actual.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EstadoAlerta' }
+        '401': { $ref: '#/components/responses/TokenInvalido' }
+        '404': { $ref: '#/components/responses/AlertaDesconocida' }
+
+  /api/reloj/v1/alertas/{eventIdAlerta}/agravamiento:
+    parameters:
+      - $ref: '#/components/parameters/EventIdAlerta'
+    post:
+      tags: [Alertas]
+      operationId: agravarAlerta
+      summary: Una caída leve o media pasa a grave por inmovilidad posterior
+      description: Repetirlo no cambia la hora ya registrada.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Agravamiento' }
+      responses:
+        '200':
+          description: Registrado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EstadoAlerta' }
+        '400': { $ref: '#/components/responses/MalFormado' }
+        '401': { $ref: '#/components/responses/TokenInvalido' }
+        '404': { $ref: '#/components/responses/AlertaDesconocida' }
+        '409': { $ref: '#/components/responses/NoAplica' }
+
+  /api/reloj/v1/alertas/{eventIdAlerta}/avisos:
+    parameters:
+      - $ref: '#/components/parameters/EventIdAlerta'
+    post:
+      tags: [Escalamiento]
+      operationId: solicitarAviso
+      summary: Pide avisar a un contacto por WhatsApp o correo
+      description: |
+        El reloj elige el contacto (prioridad, horario, gravedad) y el servidor lo envía. Si el
+        servidor no puede enviarlo, responde `RECHAZADO` con el motivo y el reloj pasa al siguiente
+        contacto: es parte normal del flujo, por eso es 200 y no un error.
+
+        No se envía dos veces: ni al repetir el `eventId` de la solicitud, ni al pedir el mismo
+        contacto, canal y ronda con otro `eventId` (por ejemplo, tras reiniciarse el reloj).
+
+        Si la alerta ya fue confirmada, resuelta o cancelada, responde `RECHAZADO` y
+        `estadoAlerta.detenerEscalamiento: true`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SolicitudAviso' }
+      responses:
+        '200':
+          description: Aceptado para envío, o rechazado con su motivo.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RespuestaAviso' }
+        '400': { $ref: '#/components/responses/MalFormado' }
+        '401': { $ref: '#/components/responses/TokenInvalido' }
+        '404': { $ref: '#/components/responses/AlertaDesconocida' }
+
+  /api/reloj/v1/alertas/{eventIdAlerta}/sin-respuesta:
+    parameters:
+      - $ref: '#/components/parameters/EventIdAlerta'
+    post:
+      tags: [Escalamiento]
+      operationId: informarSinRespuesta
+      summary: El reloj recorrió la lista dos veces sin confirmación
+      description: La alerta pasa a `SIN_RESPUESTA` y queda con prioridad máxima en el dashboard.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FinEscalamiento' }
+      responses:
+        '200':
+          description: Registrado (también al repetirlo).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EstadoAlerta' }
+        '401': { $ref: '#/components/responses/TokenInvalido' }
+        '404': { $ref: '#/components/responses/AlertaDesconocida' }
+        '409': { $ref: '#/components/responses/NoAplica' }
+
+  /api/reloj/v1/token-fcm:
+    put:
+      tags: [Avisos FCM]
+      operationId: registrarTokenFcm
+      summary: Registra o renueva el token de Firebase del reloj
+      description: El reloj lo envía al instalarse y cada vez que Firebase se lo cambia.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string, minLength: 1, maxLength: 4096 }
+      responses:
+        '204': { description: Guardado. }
+        '400': { $ref: '#/components/responses/MalFormado' }
+        '401': { $ref: '#/components/responses/TokenInvalido' }
+
+  /api/reloj/v1/avisos-fcm/{idAviso}/recepcion:
+    parameters:
+      - name: idAviso
+        in: path
+        required: true
+        description: El `idAviso` que venía en el aviso FCM.
+        schema: { type: string, format: uuid }
+    post:
+      tags: [Avisos FCM]
+      operationId: acusarAvisoFcm
+      summary: Confirma que el reloj recibió un aviso FCM de una alerta
+      description: |
+        Apenas lo recibe. Si no llega en el plazo, el servidor reintenta el aviso. Repetirlo no
+        cambia la hora ya registrada. Los avisos `CONFIGURACION_NUEVA` no se acusan: el reloj
+        simplemente descarga la configuración.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fechaHoraRecepcion]
+              properties:
+                fechaHoraRecepcion: { type: string, format: date-time }
+      responses:
+        '204': { description: Registrado. }
+        '401': { $ref: '#/components/responses/TokenInvalido' }
+        '404':
+          description: No existe un aviso con ese id para este reloj.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problema' }
+
+  /api/webhooks/whatsapp:
+    get:
+      tags: [Webhook de WhatsApp]
+      operationId: verificarWebhook
+      summary: Verificación inicial que hace Meta al configurar el webhook
+      security: []
+      parameters:
+        - { name: hub.mode, in: query, required: true, schema: { type: string, const: subscribe } }
+        - name: hub.verify_token
+          in: query
+          required: true
+          description: Debe ser igual al secreto configurado en el servidor.
+          schema: { type: string }
+        - { name: hub.challenge, in: query, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Devuelve `hub.challenge` tal cual.
+          content:
+            text/plain:
+              schema: { type: string }
+        '403': { description: El `hub.verify_token` no coincide. }
+    post:
+      tags: [Webhook de WhatsApp]
+      operationId: recibirWebhook
+      summary: Respuestas de los contactos (botones) y estados de entrega
+      description: |
+        Formato definido por Meta (Cloud API, objeto `whatsapp_business_account`); el servidor lee
+        `messages[].interactive.button_reply.id` ("VOY_EN_CAMINO" o "NO_PUEDO") y `statuses[]`
+        (`sent`, `delivered`, `read`, `failed`). Cada mensaje se vincula a su intento por el id del
+        mensaje de Meta. Un mensaje repetido no se procesa dos veces.
+      security: []
+      parameters:
+        - name: X-Hub-Signature-256
+          in: header
+          required: true
+          description: '"sha256=" + HMAC-SHA256 del cuerpo con el secreto de la app de Meta.'
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Ver la documentación de webhooks de la Cloud API de Meta.
+      responses:
+        '200': { description: Recibido. Se responde rápido; el procesamiento sigue aparte. }
+        '401': { description: Firma ausente o inválida. }
+
+components:
+  securitySchemes:
+    tokenReloj:
+      type: http
+      scheme: bearer
+      description: |
+        Token del reloj (rol DEVICE), entregado una sola vez al vincular el reloj con el paciente.
+        Deja de servir al desvincularlo, reemplazarlo o generar otro: entonces todo responde 401
+        y el reloj debe mostrar que está desvinculado.
+
+  parameters:
+    EventIdAlerta:
+      name: eventIdAlerta
+      in: path
+      required: true
+      description: El `eventId` de la alerta (el que la creó), no el id interno del servidor.
+      schema: { type: string, format: uuid }
+
+  responses:
+    MalFormado:
+      description: |
+        Falta un campo, un tipo no corresponde o un valor está fuera de lo permitido. El reloj no
+        debe reintentar el mismo mensaje: es un error de programación que hay que corregir.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problema' }
+          example:
+            type: about:blank
+            title: Bad Request
+            status: 400
+            detail: 'nivelBateria debe estar entre 0 y 100'
+            codigo: MENSAJE_INVALIDO
+    TokenInvalido:
+      description: Sin token, token desconocido o asignación cerrada. No reintentar con el mismo token.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problema' }
+    AlertaDesconocida:
+      description: |
+        No hay una alerta con ese `eventId` para este reloj. Si el reloj aún no recibió la
+        respuesta de `POST /alertas`, debe reenviar la alerta primero.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problema' }
+    NoAplica:
+      description: |
+        El mensaje no aplica: el `eventId` ya lo usó otro reloj, una alerta enviada llega como
+        cancelación (o al revés), o la alerta no admite el cambio (agravar algo que no es caída).
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problema' }
+    LoteGrande:
+      description: Más elementos de los permitidos. El reloj debe partir el historial en lotes más chicos.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problema' }
+    DemasiadasPeticiones:
+      description: Límite de frecuencia superado. Reintentar después de `Retry-After` segundos.
+      headers:
+        Retry-After:
+          schema: { type: integer, minimum: 1 }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problema' }
+
+  schemas:
+    Problema:
+      type: object
+      description: Error en formato RFC 9457, el mismo que usa el dashboard.
+      required: [status, codigo]
+      properties:
+        type: { type: string, default: about:blank }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string, description: Mensaje para registro; el reloj no lo muestra al paciente. }
+        codigo:
+          type: string
+          description: Para que el reloj decida qué hacer sin leer el texto.
+          enum: [MENSAJE_INVALIDO, TOKEN_INVALIDO, ALERTA_DESCONOCIDA, NO_APLICA, LOTE_GRANDE,
+            DEMASIADAS_PETICIONES, AVISO_DESCONOCIDO]
+
+    EventId:
+      type: string
+      format: uuid
+      description: UUID aleatorio (versión 4) que genera el reloj para cada mensaje que puede reintentar.
+
+    TipoEvento:
+      type: string
+      description: |
+        Lo que detectó el reloj. `SILENCIO_DATOS` no existe aquí: solo lo detecta el servidor.
+      enum: [CAIDA, FC, SPO2, FC_SPO2, TENDENCIA, INACTIVIDAD, BATERIA_BAJA, RELOJ_NO_PUESTO]
+
+    Severidad:
+      type: string
+      enum: [LEVE, MEDIA, GRAVE]
+
+    Lectura:
+      type: object
+      required: [tipo, valor, fechaHoraMedicion]
+      properties:
+        tipo: { type: string, enum: [FC, SPO2] }
+        valor:
+          type: number
+          description: FC en latidos por minuto (20 a 250); SpO2 en % (50 a 100). Las de SpO2 fallidas no se envían.
+        fechaHoraMedicion: { type: string, format: date-time, description: Hora real de la medición en el reloj. }
+
+    Ubicacion:
+      type: object
+      description: Solo si el paciente tiene el GPS activo. No genera alertas.
+      required: [latitud, longitud, fechaHoraMedicion]
+      properties:
+        latitud: { type: number, minimum: -90, maximum: 90 }
+        longitud: { type: number, minimum: -180, maximum: 180 }
+        precisionMetros: { type: number, minimum: 0 }
+        fechaHoraMedicion: { type: string, format: date-time }
+
+    Sincronizacion:
+      type: object
+      required: [eventId, fechaHoraEnvio, estado]
+      properties:
+        eventId: { $ref: '#/components/schemas/EventId' }
+        fechaHoraEnvio: { type: string, format: date-time, description: Hora del reloj al armar el lote. }
+        estado:
+          type: object
+          required: [nivelBateria, relojPuesto, tipoConexion, versionApp]
+          properties:
+            nivelBateria: { type: integer, minimum: 0, maximum: 100 }
+            relojPuesto: { type: boolean, description: Si estaba puesto al armar el lote. }
+            minutosPuesto: { type: integer, minimum: 0, description: Minutos puesto desde el lote anterior. }
+            tipoConexion: { type: string, enum: [LTE, WIFI] }
+            versionApp: { type: string, maxLength: 40 }
+            versionConfiguracion:
+              type: [string, 'null']
+              description: '`version` de la configuración que está aplicando; null si aún no recibió ninguna.'
+        lecturas:
+          type: array
+          maxItems: 2000
+          items: { $ref: '#/components/schemas/Lectura' }
+        ubicaciones:
+          type: array
+          maxItems: 2000
+          items: { $ref: '#/components/schemas/Ubicacion' }
+        eventosDescartados:
+          type: array
+          description: Eventos que el reloj detectó pero no alertó desde el lote anterior (métricas).
+          items:
+            type: object
+            required: [tipoEvento, cantidad]
+            properties:
+              tipoEvento: { $ref: '#/components/schemas/TipoEvento' }
+              cantidad: { type: integer, minimum: 1 }
+
+    RespuestaSincronizacion:
+      type: object
+      required: [idSincronizacion, fechaHoraRecepcion, lecturasGuardadas, lecturasRepetidas,
+        lecturasRechazadas, loteRepetido, configuracionNueva]
+      properties:
+        idSincronizacion: { type: string, format: uuid }
+        loteRepetido:
+          type: boolean
+          description: |
+            true si el lote ya había llegado (mismo `eventId`): no se guardó nada nuevo, y los
+            contadores son los de la primera vez (`lecturasRepetidas` 0 y sin `lecturasRechazadas`).
+        fechaHoraRecepcion: { type: string, format: date-time }
+        lecturasGuardadas: { type: integer }
+        lecturasRepetidas: { type: integer, description: Ya estaban guardadas de un lote anterior. }
+        lecturasRechazadas:
+          type: array
+          description: Lecturas descartadas, con su posición en `lecturas` (desde 0) y el motivo.
+          items:
+            type: object
+            required: [indice, motivo]
+            properties:
+              indice: { type: integer }
+              motivo: { type: string, enum: [FUERA_DE_RANGO, HORA_FUTURA, ANTERIOR_A_LA_ASIGNACION] }
+        configuracionNueva:
+          type: boolean
+          description: true si `estado.versionConfiguracion` no es la vigente; el reloj debe descargarla.
+        versionConfiguracion:
+          type: string
+          description: Versión vigente en el servidor. No viene mientras no exista la configuración del reloj (tarea 1.7).
+        desfaseRelojSegundos:
+          type: integer
+          description: |
+            Diferencia entre la hora del reloj y la del servidor, si supera 120 segundos. El lote se
+            acepta igual; el dashboard lo muestra para revisar el reloj.
+
+    Configuracion:
+      type: object
+      description: |
+        Todo lo que el reloj necesita para evaluar y escalar sin conexión. Los contactos van sin
+        número ni correo. Los valores que el paciente no tiene ajustados vienen con el valor base.
+      required: [version, modulos, gpsActivo, modoConservador, umbrales, escalamiento, contactos, calendario]
+      properties:
+        version:
+          type: string
+          description: Hash del contenido. Cambia si cambia cualquier dato, aunque sea de un contacto.
+        modulos:
+          type: object
+          required: [caidas, fc, spo2, inactividad, tendencia]
+          properties:
+            caidas: { type: boolean }
+            fc: { type: boolean }
+            spo2: { type: boolean }
+            inactividad: { type: boolean }
+            tendencia: { type: boolean }
+        gpsActivo: { type: boolean, description: Solo para ubicar a la persona; no genera alertas. }
+        modoConservador: { type: boolean }
+        umbrales:
+          type: object
+          required: [fc, spo2]
+          properties:
+            fc:
+              type: object
+              description: graveBajo < normalMin < normalMax < graveAlto.
+              required: [graveBajo, normalMin, normalMax, graveAlto]
+              properties:
+                graveBajo: { type: number }
+                normalMin: { type: number }
+                normalMax: { type: number }
+                graveAlto: { type: number }
+            spo2:
+              type: object
+              description: Sin límite alto. graveBajo < normalMin ≤ 100.
+              required: [graveBajo, normalMin]
+              properties:
+                graveBajo: { type: number }
+                normalMin: { type: number }
+        reglas:
+          type: object
+          description: |
+            Versión de la matriz de riesgo FC × SpO2 y parámetros de la regla de tendencia. Su
+            contenido se define con el equipo clínico (Anexo B); por ahora solo la versión.
+          required: [versionMatriz]
+          properties:
+            versionMatriz: { type: string }
+        escalamiento:
+          type: object
+          required: [minutosEspera, rondas]
+          properties:
+            minutosEspera: { type: integer, minimum: 1, description: Antes de pasar al siguiente contacto. }
+            rondas: { type: integer, const: 2, description: La lista se recorre dos veces. }
+        contactos:
+          type: array
+          description: Ordenados por prioridad. Solo los activos.
+          items:
+            type: object
+            required: [idContacto, nombre, prioridad, canales]
+            properties:
+              idContacto: { type: string, format: uuid, description: Se usa en la solicitud de aviso. }
+              nombre: { type: string, description: 'Para la pantalla "Alerta recibida por ...".' }
+              prioridad: { type: integer, minimum: 1 }
+              horario:
+                type: [object, 'null']
+                description: Hora local de Chile. null = todo el día. Si inicio > fin, cruza la medianoche.
+                required: [inicio, fin]
+                properties:
+                  inicio: { type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$', example: '08:00' }
+                  fin: { type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]$', example: '20:00' }
+              canales:
+                type: array
+                minItems: 1
+                description: Canales que el servidor puede usar ahora (WhatsApp solo con opt-in vigente).
+                items: { type: string, enum: [WHATSAPP, CORREO] }
+        calendario:
+          type: object
+          required: [zonaHoraria, horarioHabil, feriados]
+          properties:
+            zonaHoraria: { type: string, const: America/Santiago }
+            horarioHabil:
+              type: array
+              description: Un tramo por día hábil. Los días que no aparecen no son hábiles.
+              items:
+                type: object
+                required: [dia, inicio, fin]
+                properties:
+                  dia: { type: string, enum: [LUNES, MARTES, MIERCOLES, JUEVES, VIERNES, SABADO, DOMINGO] }
+                  inicio: { type: string, example: '08:30' }
+                  fin: { type: string, example: '17:30' }
+            feriados:
+              type: array
+              description: Del año en curso y el siguiente.
+              items: { type: string, format: date }
+
+    Evidencia:
+      type: object
+      description: |
+        Lo que llevó al reloj a alertar. El servidor la guarda tal cual y la compara con la
+        configuración vigente.
+      properties:
+        lecturas:
+          type: array
+          description: Las lecturas que cumplieron la regla (por ejemplo, las 2 consecutivas).
+          items: { $ref: '#/components/schemas/Lectura' }
+        nivelBateria: { type: integer, minimum: 0, maximum: 100 }
+        segundosInmovilidad: { type: integer, minimum: 0, description: En las caídas. }
+        celdaMatriz: { type: string, description: 'Celda de la matriz FC × SpO2 que aplicó (FC_SPO2).' }
+        ubicacion: { $ref: '#/components/schemas/Ubicacion' }
+
+    Alerta:
+      type: object
+      required: [eventId, tipoEvento, severidad, versionConfiguracion, fechaHoraDeteccion, fechaHoraEnvio,
+        esperaDiaHabil]
+      properties:
+        eventId: { $ref: '#/components/schemas/EventId' }
+        tipoEvento: { $ref: '#/components/schemas/TipoEvento' }
+        severidad: { $ref: '#/components/schemas/Severidad' }
+        versionConfiguracion: { type: string, description: La configuración con que la evaluó. }
+        fechaHoraDeteccion: { type: string, format: date-time }
+        fechaHoraEnvio: { type: string, format: date-time, description: Fin de la ventana de 30 s. }
+        esperaDiaHabil:
+          type: boolean
+          description: true si es leve fuera del horario hábil y el reloj no avisará a nadie.
+        evidencia: { $ref: '#/components/schemas/Evidencia' }
+
+    Cancelacion:
+      type: object
+      required: [eventId, tipoEvento, severidad, versionConfiguracion, fechaHoraDeteccion,
+        fechaHoraCancelacion]
+      properties:
+        eventId: { $ref: '#/components/schemas/EventId' }
+        tipoEvento: { $ref: '#/components/schemas/TipoEvento' }
+        severidad: { $ref: '#/components/schemas/Severidad' }
+        versionConfiguracion: { type: string }
+        fechaHoraDeteccion: { type: string, format: date-time }
+        fechaHoraCancelacion: { type: string, format: date-time }
+        evidencia: { $ref: '#/components/schemas/Evidencia' }
+
+    RespuestaAlerta:
+      type: object
+      required: [idAlerta, numero, estado]
+      properties:
+        idAlerta: { type: string, format: uuid }
+        numero: { type: integer, description: 'Folio legible para el equipo (#142).' }
+        estado: { $ref: '#/components/schemas/EstadoAlerta' }
+
+    Agravamiento:
+      type: object
+      required: [fechaHoraAgravamiento]
+      properties:
+        fechaHoraAgravamiento: { type: string, format: date-time }
+        segundosInmovilidad: { type: integer, minimum: 0 }
+
+    FinEscalamiento:
+      type: object
+      required: [fechaHora]
+      properties:
+        fechaHora: { type: string, format: date-time }
+
+    SolicitudAviso:
+      type: object
+      required: [eventId, idContacto, canal, ronda]
+      properties:
+        eventId: { $ref: '#/components/schemas/EventId' }
+        idContacto: { type: string, format: uuid, description: El de la configuración. }
+        canal: { type: string, enum: [WHATSAPP, CORREO] }
+        ronda: { type: integer, enum: [1, 2] }
+
+    RespuestaAviso:
+      type: object
+      required: [resultado, estadoAlerta]
+      properties:
+        resultado:
+          type: string
+          description: ACEPTADO = el servidor lo envía (si WhatsApp falla, intenta por correo).
+          enum: [ACEPTADO, RECHAZADO]
+        motivo:
+          type: string
+          description: Solo si fue rechazado. El reloj pasa al siguiente contacto.
+          enum: [SIN_OPT_IN, CANAL_NO_DISPONIBLE, CONTACTO_INACTIVO, CONTACTO_DESCONOCIDO, ALERTA_TERMINADA]
+        idIntento: { type: string, format: uuid, description: Solo si fue aceptado. }
+        estadoAlerta: { $ref: '#/components/schemas/EstadoAlerta' }
+
+    EstadoAlerta:
+      type: object
+      required: [eventId, estado, severidadActual, detenerEscalamiento]
+      properties:
+        eventId: { $ref: '#/components/schemas/EventId' }
+        estado:
+          type: string
+          description: Lo que pasa con el aviso a los contactos (vista alerta_estado).
+          enum: [RECIBIDA, AVISANDO_CONTACTO, CONFIRMADA, SIN_RESPUESTA, RESUELTA, PENDIENTE_DIA_HABIL, CANCELADA]
+        severidadActual: { $ref: '#/components/schemas/Severidad' }
+        detenerEscalamiento:
+          type: boolean
+          description: true si está CONFIRMADA, RESUELTA o CANCELADA. El reloj deja de avisar.
+        confirmadaPor:
+          type: [object, 'null']
+          description: El contacto que respondió "Voy en camino", si lo hay.
+          properties:
+            idContacto: { type: string, format: uuid }
+            fechaHora: { type: string, format: date-time }
+
+    AvisoFcm:
+      type: object
+      description: |
+        No es un endpoint: es el contenido (`data`) de cada aviso que el servidor envía al reloj por
+        Firebase, de alta prioridad y sin datos de salud. Se documenta aquí para que el reloj lo lea.
+      required: [tipo]
+      properties:
+        tipo: { type: string, enum: [ALERTA_CONFIRMADA, ALERTA_RESUELTA, SIMULACRO, CONFIGURACION_NUEVA] }
+        idAviso: { type: string, format: uuid, description: Para acusarlo. No viene en CONFIGURACION_NUEVA. }
+        eventIdAlerta: { type: string, format: uuid, description: No viene en CONFIGURACION_NUEVA. }
+        idContacto: { type: string, format: uuid, description: 'En ALERTA_CONFIRMADA: quién confirmó.' }
