@@ -1,1 +1,9 @@
 @import "tailwindcss";
+
+/* Colores del mockup del PRLAC; generan clases como bg-marino o text-prlac. */
+@theme {
+  --color-marino: #022b50;
+  --color-tinta: #0a2a4d;
+  --color-prlac: #0072b5;
+  --color-prlac-oscuro: #005c94;
+}
