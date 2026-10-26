@@ -1,9 +1,14 @@
 import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router';
 import { ErrorApi } from '../../api/cliente';
-import { formatearRun, runValido } from './run';
+import { CLASE_BOTON_PRINCIPAL, CLASE_CAMPO, CLASE_ERROR, CLASE_ETIQUETA } from '../../comun/estilos';
+import { formatearRun, runValido } from '../../comun/run';
 import { useSesion } from './SesionContext';
 
+/**
+ * Ingreso con RUN y contraseña. Revisa el dígito verificador antes de enviar; si ya hay sesión,
+ * vuelve a la página desde donde se llegó (o al inicio).
+ */
 export function PaginaLogin() {
   const { usuario, iniciar } = useSesion();
   const navegar = useNavigate();
@@ -18,6 +23,7 @@ export function PaginaLogin() {
     return <Navigate to={destino} replace />;
   }
 
+  /** Revisa el RUN, inicia sesión y vuelve a la página de origen. */
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
     if (!runValido(run)) {
@@ -45,7 +51,7 @@ export function PaginaLogin() {
         </div>
 
         <label className="block">
-          <span className="text-sm font-medium text-slate-700">RUN</span>
+          <span className={CLASE_ETIQUETA}>RUN</span>
           <input
             value={run}
             onChange={(e) => setRun(formatearRun(e.target.value))}
@@ -53,24 +59,24 @@ export function PaginaLogin() {
             autoComplete="username"
             inputMode="text"
             required
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 focus:border-sky-600 focus:outline-none"
+            className={CLASE_CAMPO}
           />
         </label>
 
         <label className="block">
-          <span className="text-sm font-medium text-slate-700">Contraseña</span>
+          <span className={CLASE_ETIQUETA}>Contraseña</span>
           <input
             type="password"
             value={contrasena}
             onChange={(e) => setContrasena(e.target.value)}
             autoComplete="current-password"
             required
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 focus:border-sky-600 focus:outline-none"
+            className={CLASE_CAMPO}
           />
         </label>
 
         {error && (
-          <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+          <p role="alert" className={CLASE_ERROR}>
             {error}
           </p>
         )}
@@ -78,7 +84,7 @@ export function PaginaLogin() {
         <button
           type="submit"
           disabled={enviando || !run || !contrasena}
-          className="w-full rounded-md bg-sky-700 py-2 font-medium text-white hover:bg-sky-800 disabled:opacity-50"
+          className={`${CLASE_BOTON_PRINCIPAL} w-full`}
         >
           {enviando ? 'Ingresando…' : 'Ingresar'}
         </button>

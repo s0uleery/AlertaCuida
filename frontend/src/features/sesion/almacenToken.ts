@@ -1,14 +1,16 @@
 // Dónde vive el token. Por ahora en sessionStorage (sobrevive a recargar, no a cerrar la pestaña).
-// En 3.2.4 pasa a memoria + renovación con cookie: solo cambia este archivo.
+// Más adelante pasa a memoria + renovación con cookie: solo cambia este archivo.
 
 const CLAVE = 'alertacuida.token';
 
+/** Dónde se guarda el token entre recargas de la página. */
 export interface AlmacenToken {
   leer(): string | null;
   guardar(token: string): void;
   borrar(): void;
 }
 
+/** Implementación con sessionStorage. Si el navegador lo bloquea, no falla: la sesión dura hasta recargar. */
 export const almacenToken: AlmacenToken = {
   leer: () => {
     try {

@@ -10,7 +10,6 @@ import java.sql.Statement;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 import org.junit.jupiter.api.DynamicTest;
 
 /**
@@ -30,6 +29,7 @@ final class Casos {
 
 		private final String sqlState;
 
+		/** @param sqlState código de error de PostgreSQL que corresponde a este motivo */
 		Motivo(String sqlState) {
 			this.sqlState = sqlState;
 		}
@@ -40,6 +40,10 @@ final class Casos {
 	private final Connection conexion;
 	private final Map<String, String> ids;
 
+	/**
+	 * @param conexion conexión a la base de prueba; se usa sin autocommit, una transacción por caso
+	 * @param ids identificadores de prueba por nombre, para reemplazar los {NOMBRE} del SQL
+	 */
 	Casos(Connection conexion, Map<String, String> ids) throws SQLException {
 		this.conexion = conexion;
 		this.ids = ids;
