@@ -10,7 +10,7 @@ Archivos relacionados: `tecnologias_plataforma_prlac_v3.md` y el [modelo de dato
 |---|---|
 | Tareas | 49 tareas activas y sus subtareas, en 6 fases (2 eliminadas respecto de la v5) |
 | Esfuerzo total | 774 horas-persona (unas 1.006 con 30 % de margen) |
-| Ya hecho | 22 horas (0.1, 0.2 y 0.3) |
+| Ya hecho | 162 horas al 25-10-2026 (0.1, 0.2, 0.3, casi toda 0.4, casi toda 1.1, 1.2, parte de 1.3, casi toda 1.4, 1.5, 3.2 y 3.3) |
 | Capacidad del equipo | 60 a 90 horas por semana (3 personas, 20 a 30 h cada una) |
 | Duración estimada | 7 sprints de 2 semanas, unas 14 semanas |
 | Fuera de alcance | App del reloj (ver la sección correspondiente) |
@@ -110,13 +110,13 @@ Depende de: 0.1. Listo cuando: el modelo está dibujado y el contrato en OpenAPI
 
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
-| [ ] | 0.4.1 | Listar entidades y relaciones (paciente, usuario del sistema, reloj, perfil clínico, contacto con opt-in, medición, alerta, estado de alerta, mensaje enviado, sincronización, auditoría) y dibujar el modelo | 3 |
-| [ ] | 0.4.2 | Definir la separación entre identidad y telemetría, y las claves (UUID) | 2 |
-| [ ] | 0.4.3 | Definir el formato de la sincronización cada 2 h (estado del reloj, tipo de conexión, lecturas con hora original en UTC, `event_id`, contadores de eventos descartados) | 3 |
-| [ ] | 0.4.4 | Definir el formato de la alerta (tipo, gravedad, evidencia de lecturas), de la solicitud de aviso a un contacto, de la consulta de estado y del fin del escalamiento, y los estados de la alerta en el servidor | 3 |
-| [ ] | 0.4.5 | Definir el formato de la configuración del reloj: umbrales, reglas de tendencia, módulos activos, GPS sí o no, modo conservador, contactos (identificador, nombre para mostrar, prioridad, horario y canales, sin números ni correos), plazo de espera, horario hábil, feriados y versión | 3 |
-| [ ] | 0.4.6 | Definir los avisos por FCM (alerta confirmada, alerta resuelta, configuración nueva, simulacro), solo con identificadores | 2 |
-| [ ] | 0.4.7 | Escribir el contrato en OpenAPI, incluidos la solicitud de aviso, el estado de la alerta y el webhook de WhatsApp: endpoints, errores, autenticación | 3 |
+| [x] | 0.4.1 | Listar entidades y relaciones (paciente, usuario del sistema, reloj, perfil clínico, contacto con opt-in, medición, alerta, estado de alerta, mensaje enviado, sincronización, auditoría) y dibujar el modelo | 3 |
+| [x] | 0.4.2 | Definir la separación entre identidad y telemetría, y las claves (UUID) | 2 |
+| [x] | 0.4.3 | Definir el formato de la sincronización cada 2 h (estado del reloj, tipo de conexión, lecturas con hora original en UTC, `event_id`, contadores de eventos descartados) | 3 |
+| [x] | 0.4.4 | Definir el formato de la alerta (tipo, gravedad, evidencia de lecturas), de la solicitud de aviso a un contacto, de la consulta de estado y del fin del escalamiento, y los estados de la alerta en el servidor | 3 |
+| [x] | 0.4.5 | Definir el formato de la configuración del reloj: umbrales, reglas de tendencia, módulos activos, GPS sí o no, modo conservador, contactos (identificador, nombre para mostrar, prioridad, horario y canales, sin números ni correos), plazo de espera, horario hábil, feriados y versión | 3 |
+| [x] | 0.4.6 | Definir los avisos por FCM (alerta confirmada, alerta resuelta, configuración nueva, simulacro), solo con identificadores | 2 |
+| [x] | 0.4.7 | Escribir el contrato en OpenAPI, incluidos la solicitud de aviso, el estado de la alerta y el webhook de WhatsApp: endpoints, errores, autenticación | 3 |
 | [ ] | 0.4.8 | Revisar el contrato con quien desarrolla el reloj y ajustar | 1 |
 
 ### 0.5 Simulador de reloj (17 h). Cambia en v7.
@@ -206,12 +206,12 @@ Depende de: 1.1. Listo cuando: se puede dar de alta un paciente, vincularle un r
 
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
-| [ ] | 1.2.1 | Crear, editar y dar de baja pacientes (API y reglas) | 5 |
-| [ ] | 1.2.2 | Registrar relojes con ID único | 3 |
-| [ ] | 1.2.3 | Vincular reloj con paciente y generar el token del reloj | 4 |
-| [ ] | 1.2.4 | Reemplazar reloj conservando el historial, y desvincular revocando el token | 4 |
-| [ ] | 1.2.5 | Validaciones (un reloj, un paciente activo; evitar vínculos duplicados) | 2 |
-| [ ] | 1.2.6 | Pruebas unitarias y de integración | 2 |
+| [x] | 1.2.1 | Crear, editar y dar de baja pacientes (API y reglas) | 5 |
+| [x] | 1.2.2 | Registrar relojes con ID único | 3 |
+| [x] | 1.2.3 | Vincular reloj con paciente y generar el token del reloj | 4 |
+| [x] | 1.2.4 | Reemplazar reloj conservando el historial, y desvincular revocando el token | 4 |
+| [x] | 1.2.5 | Validaciones (un reloj, un paciente activo; evitar vínculos duplicados) | 2 |
+| [x] | 1.2.6 | Pruebas unitarias y de integración | 2 |
 
 ### 1.3 Login del personal con Spring Security (24 h)
 Inicio de sesión del personal del PRLAC: contraseña, segundo factor, roles y protección contra intentos repetidos.
@@ -221,12 +221,12 @@ Depende de: 0.3. Listo cuando: un usuario inicia sesión con contraseña y segun
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
 | [x] | 1.3.1 | Modelo de usuarios del sistema y roles (administrador, coordinador, personal) | 3 |
-| [ ] | 1.3.2 | Alta de usuarios, hash de contraseñas (BCrypt o Argon2) y política de contraseñas | 3 |
+| [x] | 1.3.2 | Alta de usuarios, hash de contraseñas (BCrypt o Argon2) y política de contraseñas | 3 |
 | [x] | 1.3.3 | Endpoint de login y token de acceso de vida corta | 4 |
 | [ ] | 1.3.4 | Token de renovación guardado con hash, revocación y cierre de sesión | 4 |
 | [ ] | 1.3.5 | Segundo factor TOTP (alta, verificación y códigos de respaldo) | 5 |
 | [x] | 1.3.6 | Bloqueo por intentos fallidos y mensajes de error uniformes | 2 |
-| [ ] | 1.3.7 | Autorización por rol en los endpoints y pruebas de acceso | 3 |
+| [x] | 1.3.7 | Autorización por rol en los endpoints y pruebas de acceso | 3 |
 
 ### 1.4 API del reloj: sincronización y alertas (26 h). Cambia.
 Endpoints que usa el reloj: sincronización cada 2 horas, alertas y cancelación por el paciente. Valida todo y evita duplicados aunque el reloj reintente tras perder la señal. Los endpoints del escalamiento están en 2.10.
@@ -235,28 +235,30 @@ Depende de: 1.1. Listo cuando: el simulador sincroniza y envía alertas, todo se
 
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
-| [ ] | 1.4.1 | Autenticación del reloj por token (rol `DEVICE`), separada del login del personal | 4 |
-| [ ] | 1.4.2 | Endpoint de sincronización (estado del reloj, tipo de conexión y lecturas acumuladas) | 4 |
-| [ ] | 1.4.3 | Endpoint de creación de alerta, con evidencia de lecturas | 3 |
-| [ ] | 1.4.4 | Endpoint de cancelación por el paciente (alerta en estado `CANCELADA`, para métricas) | 1 |
-| [ ] | 1.4.5 | Validación estricta (rangos, formato, marca de tiempo, hora desfasada) y rechazo con error claro | 4 |
-| [ ] | 1.4.6 | Idempotencia por `event_id` y tolerancia a reintentos y mensajes que llegan tarde tras perder la señal | 3 |
-| [ ] | 1.4.7 | Guardado de mediciones con hora de la medición y hora de recepción | 3 |
+| [x] | 1.4.1 | Autenticación del reloj por token (rol `DEVICE`), separada del login del personal | 4 |
+| [x] | 1.4.2 | Endpoint de sincronización (estado del reloj, tipo de conexión y lecturas acumuladas) | 4 |
+| [x] | 1.4.3 | Endpoint de creación de alerta, con evidencia de lecturas | 3 |
+| [x] | 1.4.4 | Endpoint de cancelación por el paciente (alerta en estado `CANCELADA`, para métricas) | 1 |
+| [x] | 1.4.5 | Validación estricta (rangos, formato, marca de tiempo, hora desfasada) y rechazo con error claro | 4 |
+| [x] | 1.4.6 | Idempotencia por `event_id` y tolerancia a reintentos y mensajes que llegan tarde tras perder la señal | 3 |
+| [x] | 1.4.7 | Guardado de mediciones con hora de la medición y hora de recepción | 3 |
 | [ ] | 1.4.8 | Pruebas con el simulador | 4 |
 
-### 1.5 Perfil clínico y contactos por paciente (20 h). Cambia en v7.
+### 1.5 Perfil clínico y contactos por paciente (20 h). Cambia en v7. Hecha.
 Configuración clínica de cada paciente: umbrales, reglas de tendencia, contactos con canal, prioridad, horario y opt-in, y uso de GPS. Cada paciente tiene su propia lista de contactos. Todo cambio crea una versión de configuración nueva que viaja al reloj.
 
 Depende de: 1.1. Listo cuando: cada paciente tiene umbrales, contactos con WhatsApp o correo y su opt-in, prioridad y horario, y opciones de GPS guardados y validados.
 
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
-| [ ] | 1.5.1 | Umbrales base del sistema (tablas del Anexo B) como configuración | 3 |
-| [ ] | 1.5.2 | Ajuste de umbrales y reglas de tendencia por paciente, registrando quién y cuándo | 4 |
-| [ ] | 1.5.3 | Contactos por paciente con WhatsApp y/o correo, opt-in, prioridad y horario (el SAMU no puede ser contacto automático) | 5 |
-| [ ] | 1.5.4 | Opciones por paciente: GPS sí o no (solo para ubicar; sin zona segura) | 2 |
-| [ ] | 1.5.5 | Validaciones (umbral mínimo menor que el máximo, prioridades sin repetir, a toda hora al menos un contacto disponible con opt-in vigente o correo, para las alertas medias y graves) | 3 |
-| [ ] | 1.5.6 | Pruebas | 3 |
+| [x] | 1.5.1 | Umbrales base del sistema (tablas del Anexo B) como configuración | 3 |
+| [x] | 1.5.2 | Ajuste de umbrales y reglas de tendencia por paciente, registrando quién y cuándo | 4 |
+| [x] | 1.5.3 | Contactos por paciente con WhatsApp y/o correo, opt-in, prioridad y horario (el SAMU no puede ser contacto automático) | 5 |
+| [x] | 1.5.4 | Opciones por paciente: GPS sí o no (solo para ubicar; sin zona segura) | 2 |
+| [x] | 1.5.5 | Validaciones (umbral mínimo menor que el máximo, prioridades sin repetir, a toda hora al menos un contacto disponible con opt-in vigente o correo, para las alertas medias y graves) | 3 |
+| [x] | 1.5.6 | Pruebas | 3 |
+
+Notas (25-10-2026): los umbrales base son provisionales hasta que los valide el equipo clínico. La tendencia se activa o desactiva por paciente; sus parámetros esperan el Anexo B. La cobertura a toda hora se muestra como aviso en la ficha, sin bloquear el guardado. Las pantallas de contactos y umbrales ya están en la ficha; el aviso al reloj (3.3.4 y 3.3.5) depende de la 1.7 y la 2.3.
 
 ### 1.6 Auditoría y cifrado de campos sensibles (16 h). Cambia.
 Registrar quién accede o modifica datos y cifrar en la base los datos personales sensibles.
@@ -468,9 +470,9 @@ Depende de: 1.2, 1.5. Listo cuando: el personal configura un paciente completo d
 
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
-| [ ] | 3.3.1 | Lista de pacientes con búsqueda y filtros | 5 |
-| [ ] | 3.3.2 | Formulario de alta y edición de paciente | 5 |
-| [ ] | 3.3.3 | Vinculación y reemplazo de reloj | 5 |
+| [x] | 3.3.1 | Lista de pacientes con búsqueda y filtros | 5 |
+| [x] | 3.3.2 | Formulario de alta y edición de paciente | 5 |
+| [x] | 3.3.3 | Vinculación y reemplazo de reloj | 5 |
 | [ ] | 3.3.4 | Edición de contactos: WhatsApp, correo, opt-in, prioridad y horario (crea una configuración nueva que se avisa al reloj por FCM) | 6 |
 | [ ] | 3.3.5 | Edición de umbrales y reglas de tendencia (llegan al reloj en su siguiente sincronización) | 5 |
 | [ ] | 3.3.6 | Validaciones de formularios y mensajes de error | 3 |
@@ -821,7 +823,7 @@ No incluye llamadas, SMS, botón SOS, presión arterial ni zona segura.
 
 ## Anexo: contrato de mensajes (borrador)
 
-Propuesta de partida para la tarea 0.4. Debe validarse con quien desarrolle el reloj. Todo va por HTTPS con el token del reloj, salvo los avisos por FCM y el webhook de Meta.
+Propuesta de partida para la tarea 0.4. **El contrato ya escrito está en [api-reloj.md](api-reloj.md) y [api-reloj.yaml](api-reloj.yaml) (25-10-2026) y reemplaza a esta tabla.** Debe validarse con quien desarrolle el reloj. Todo va por HTTPS con el token del reloj, salvo los avisos por FCM y el webhook de Meta.
 
 | Mensaje | Cuándo | Contenido principal | Respuesta |
 |---|---|---|---|

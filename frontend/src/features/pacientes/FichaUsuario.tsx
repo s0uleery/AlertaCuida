@@ -6,7 +6,10 @@ import { formatearFecha, formatearFechaHora } from '../../comun/fechas';
 import { formatearRun } from '../../comun/run';
 import { useDatos } from '../../comun/useDatos';
 import { useSesion } from '../sesion/SesionContext';
+import { CondicionesDelUsuario } from './CondicionesDelUsuario';
+import { ContactosDelUsuario } from './ContactosDelUsuario';
 import { pacientesApi } from './pacientesApi';
+import { PerfilClinicoDelUsuario } from './PerfilClinicoDelUsuario';
 import { RelojDelUsuario } from './RelojDelUsuario';
 import type { DatosPaciente } from './tipos';
 
@@ -30,7 +33,10 @@ function filas(datos: DatosPaciente, edad: number | null): [string, string][] {
   ];
 }
 
-/** Ficha de un usuario del programa (/usuarios/:id): datos, su reloj e historial de relojes. */
+/**
+ * Ficha de un usuario del programa (/usuarios/:id): datos, salud, contactos, perfil clínico, su
+ * reloj e historial de relojes.
+ */
 export function FichaUsuario() {
   const { id = '' } = useParams();
   const { puede } = useSesion();
@@ -93,6 +99,21 @@ export function FichaUsuario() {
             </div>
           ))}
         </dl>
+      </section>
+
+      <section className={CLASE_TARJETA}>
+        <h2 className="mb-3 text-lg font-semibold text-slate-900">Salud</h2>
+        <CondicionesDelUsuario idPaciente={paciente.id} />
+      </section>
+
+      <section className={CLASE_TARJETA}>
+        <h2 className="mb-3 text-lg font-semibold text-slate-900">Contactos</h2>
+        <ContactosDelUsuario idPaciente={paciente.id} />
+      </section>
+
+      <section className={CLASE_TARJETA}>
+        <h2 className="mb-3 text-lg font-semibold text-slate-900">Perfil clínico</h2>
+        <PerfilClinicoDelUsuario idPaciente={paciente.id} />
       </section>
 
       <section className={`${CLASE_TARJETA} space-y-4`}>

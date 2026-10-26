@@ -80,6 +80,8 @@ class CuentasPersonalTest {
 		Long altas = jdbc.sql("SELECT count(*) FROM registro_auditoria WHERE accion = 'CREAR' AND entidad = 'USUARIO'")
 				.query(Long.class).single();
 		assertThat(altas).isEqualTo(1);
+		String rut = jdbc.sql("SELECT rut FROM usuario WHERE correo = 'ana@muni.cl'").query(String.class).single();
+		assertThat(rut).startsWith("v1:").doesNotContain("12345678");
 	}
 
 	/** Antes de activarla, la cuenta no puede iniciar sesión. */

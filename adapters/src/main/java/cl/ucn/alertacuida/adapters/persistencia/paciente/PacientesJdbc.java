@@ -1,5 +1,7 @@
 package cl.ucn.alertacuida.adapters.persistencia.paciente;
 
+import cl.ucn.alertacuida.adapters.seguridad.cifrado.CifradoCampos;
+import cl.ucn.alertacuida.adapters.seguridad.cifrado.ColumnaCifrada;
 import cl.ucn.alertacuida.application.paciente.modelo.DatosPaciente;
 import cl.ucn.alertacuida.application.paciente.modelo.Paciente;
 import cl.ucn.alertacuida.application.paciente.puerto.Pacientes;
@@ -20,8 +22,8 @@ import org.springframework.stereotype.Repository;
  * Pacientes en la tabla paciente.
  *
  * <p>Las columnas marcadas "cifrado" en V2 (RUN, nombres, apellidos, fecha de nacimiento,
- * dirección) se guardan por ahora sin cifrar. Cuando llegue el cifrado, solo cambia esta
- * clase: los casos de uso no se enteran. Por lo mismo, la lista se ordena aquí y no con ORDER BY.
+ * dirección) se cifran aquí al guardar y se descifran al leer: los casos de uso no se enteran.
+ * Por lo mismo, la lista se ordena aquí y no con ORDER BY: la base no puede ordenar datos cifrados.
  */
 @Repository
 public class PacientesJdbc implements Pacientes {
@@ -31,10 +33,15 @@ public class PacientesJdbc implements Pacientes {
 			fecha_consentimiento, fecha_ingreso, fecha_baja""";
 
 	private final JdbcClient jdbc;
+	private final CifradoCampos cifrado;
 
-	/** @param jdbc cliente de Spring sobre la conexión a PostgreSQL */
-	public PacientesJdbc(JdbcClient jdbc) {
+	/**
+	 * @param jdbc    cliente de Spring sobre la conexión a PostgreSQL
+	 * @param cifrado cifra y descifra los datos personales
+	 */
+	public PacientesJdbc(JdbcClient jdbc, CifradoCampos cifrado) {
 		this.jdbc = jdbc;
+		this.cifrado = cifrado;
 	}
 
 	@Override
@@ -79,7 +86,7 @@ public class PacientesJdbc implements Pacientes {
 				.optional();
 	}
 
-	/** Ordena por apellidos y nombres en Java: cuando vayan cifrados, la base no podrá ordenarlos. */
+	/** Ordena por apellidos y nombres en Java: van cifrados y la base no puede ordenarlos. */
 	@Override
 	public List<Paciente> listar(boolean incluirBajas) {
 		return jdbc.sql("SELECT " + COLUMNAS + " FROM paciente WHERE :todos OR fecha_baja IS NULL")
@@ -99,33 +106,38 @@ public class PacientesJdbc implements Pacientes {
 				.update();
 	}
 
-	/** Los mismos parámetros para el INSERT y el UPDATE. */
-	private static JdbcClient.StatementSpec parametros(JdbcClient.StatementSpec sql, DatosPaciente datos,
-			String runHash) {
-		// TODO: cifrar rut, nombres, apellidos, fecha_nacimiento y direccion
-		return sql.param("rut", datos.run())
+	/** Los mismos parámetros para el INSERT y el UPDATE, con los datos personales cifrados. */
+	private JdbcClient.StatementSpec parametros(JdbcClient.StatementSpec sql, DatosPaciente datos, String runHash) {
+		return sql.param("rut", cifrado.cifrar(datos.run(), ColumnaCifrada.PACIENTE_RUT))
 				.param("rutHash", runHash)
-				.param("nombres", datos.nombres())
-				.param("apellidos", datos.apellidos())
+				.param("nombres", cifrado.cifrar(datos.nombres(), ColumnaCifrada.PACIENTE_NOMBRES))
+				.param("apellidos", cifrado.cifrar(datos.apellidos(), ColumnaCifrada.PACIENTE_APELLIDOS))
 				.param("alias", datos.alias())
-				// Es texto porque irá cifrada: se guarda en formato ISO (2026-10-22)
-				.param("nacimiento", datos.fechaNacimiento() == null ? null : datos.fechaNacimiento().toString())
+				// Es texto porque va cifrada: antes de cifrar, en formato ISO (2026-10-22)
+				.param("nacimiento", cifrado.cifrar(
+						datos.fechaNacimiento() == null ? null : datos.fechaNacimiento().toString(),
+						ColumnaCifrada.PACIENTE_FECHA_NACIMIENTO))
 				.param("sexo", datos.sexo() == null ? null : datos.sexo().name())
-				.param("direccion", datos.direccion())
+				.param("direccion", cifrado.cifrar(datos.direccion(), ColumnaCifrada.PACIENTE_DIRECCION))
 				.param("nivel", datos.nivelDependencia() == null ? null : datos.nivelDependencia().name())
 				.param("consentimiento", datos.fechaConsentimiento())
 				.param("ingreso", datos.fechaIngreso());
 	}
 
-	/** Arma un {@link Paciente} desde una fila. La fecha de nacimiento es texto (irá cifrada) en formato ISO. */
-	private static Paciente paciente(ResultSet fila) throws SQLException {
-		String nacimiento = fila.getString("fecha_nacimiento");
+	/** Arma un {@link Paciente} desde una fila, descifrando sus datos personales. */
+	private Paciente paciente(ResultSet fila) throws SQLException {
+		String nacimiento = cifrado.descifrar(fila.getString("fecha_nacimiento"),
+				ColumnaCifrada.PACIENTE_FECHA_NACIMIENTO);
 		String sexo = fila.getString("sexo");
 		String nivel = fila.getString("nivel_dependencia");
-		DatosPaciente datos = new DatosPaciente(fila.getString("rut"), fila.getString("nombres"),
-				fila.getString("apellidos"), fila.getString("alias"),
+		DatosPaciente datos = new DatosPaciente(
+				cifrado.descifrar(fila.getString("rut"), ColumnaCifrada.PACIENTE_RUT),
+				cifrado.descifrar(fila.getString("nombres"), ColumnaCifrada.PACIENTE_NOMBRES),
+				cifrado.descifrar(fila.getString("apellidos"), ColumnaCifrada.PACIENTE_APELLIDOS),
+				fila.getString("alias"),
 				nacimiento == null ? null : LocalDate.parse(nacimiento),
-				sexo == null ? null : Sexo.valueOf(sexo), fila.getString("direccion"),
+				sexo == null ? null : Sexo.valueOf(sexo),
+				cifrado.descifrar(fila.getString("direccion"), ColumnaCifrada.PACIENTE_DIRECCION),
 				nivel == null ? null : NivelDependencia.valueOf(nivel),
 				fila.getObject("fecha_consentimiento", LocalDate.class),
 				fila.getObject("fecha_ingreso", LocalDate.class));

@@ -1,5 +1,8 @@
 package cl.ucn.alertacuida.adapters.seguridad;
 
+import cl.ucn.alertacuida.adapters.seguridad.dispositivo.EntradaNoAutorizadaReloj;
+import cl.ucn.alertacuida.adapters.seguridad.dispositivo.IntrospectorTokenReloj;
+import cl.ucn.alertacuida.adapters.seguridad.dispositivo.PrincipalReloj;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import java.nio.charset.StandardCharsets;
 import javax.crypto.SecretKey;
@@ -7,6 +10,7 @@ import javax.crypto.spec.SecretKeySpec;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -24,7 +28,8 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtGra
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
- * Seguridad del dashboard. Sin sesión en el servidor: cada petición trae el token en la cabecera
+ * Seguridad del dashboard y de la API del reloj, cada uno con su propia cadena de filtros y su
+ * propio token. Sin sesión en el servidor: cada petición trae el token en la cabecera
  * Authorization: Bearer. Por eso no hace falta CSRF (no hay cookies que el navegador mande solo).
  * Cada permiso del token ("ALERTAS:VER") es una authority.
  *
@@ -41,12 +46,39 @@ import org.springframework.security.web.SecurityFilterChain;
 public class ConfiguracionSeguridad {
 
 	/**
-	 * Reglas que se aplican a cada petición antes de llegar al controlador.
+	 * Reglas de la API del reloj (/api/reloj/**), aparte de las del dashboard: solo acepta el token
+	 * del reloj (rol DEVICE), que se revisa contra la base en cada petición. Va primera: las
+	 * peticiones del reloj nunca llegan a la cadena del dashboard, ni el token del dashboard sirve aquí.
+	 *
+	 * @param http         constructor de reglas de Spring Security
+	 * @param introspector reconoce el token del reloj
+	 * @param noAutorizado respuesta 401 con el formato del contrato
+	 * @return la cadena de filtros armada
+	 */
+	@Bean
+	@Order(1)
+	SecurityFilterChain filtrosDelReloj(HttpSecurity http, IntrospectorTokenReloj introspector,
+			EntradaNoAutorizadaReloj noAutorizado) throws Exception {
+		http
+				.securityMatcher("/api/reloj/**")
+				.csrf(AbstractHttpConfigurer::disable)
+				.sessionManagement(sesion -> sesion.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+				.authorizeHttpRequests(rutas -> rutas.anyRequest().hasAuthority(PrincipalReloj.ROL))
+				.exceptionHandling(errores -> errores.authenticationEntryPoint(noAutorizado))
+				.oauth2ResourceServer(servidor -> servidor
+						.authenticationEntryPoint(noAutorizado)
+						.opaqueToken(opaco -> opaco.introspector(introspector)));
+		return http.build();
+	}
+
+	/**
+	 * Reglas del dashboard, que se aplican a cada petición antes de llegar al controlador.
 	 *
 	 * @param http constructor de reglas de Spring Security
 	 * @return la cadena de filtros armada
 	 */
 	@Bean
+	@Order(2)
 	SecurityFilterChain filtrosDeSeguridad(HttpSecurity http) throws Exception {
 		http
 				.csrf(AbstractHttpConfigurer::disable)

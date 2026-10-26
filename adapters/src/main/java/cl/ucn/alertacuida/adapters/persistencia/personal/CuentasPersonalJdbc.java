@@ -1,5 +1,7 @@
 package cl.ucn.alertacuida.adapters.persistencia.personal;
 
+import cl.ucn.alertacuida.adapters.seguridad.cifrado.CifradoCampos;
+import cl.ucn.alertacuida.adapters.seguridad.cifrado.ColumnaCifrada;
 import cl.ucn.alertacuida.application.personal.error.CuentaDuplicada;
 import cl.ucn.alertacuida.application.personal.modelo.CuentaPendiente;
 import cl.ucn.alertacuida.application.personal.modelo.NuevaCuenta;
@@ -18,10 +20,15 @@ import org.springframework.stereotype.Repository;
 public class CuentasPersonalJdbc implements CuentasPersonal {
 
 	private final JdbcClient jdbc;
+	private final CifradoCampos cifrado;
 
-	/** @param jdbc cliente de Spring sobre la conexión a PostgreSQL */
-	public CuentasPersonalJdbc(JdbcClient jdbc) {
+	/**
+	 * @param jdbc    cliente de Spring sobre la conexión a PostgreSQL
+	 * @param cifrado cifra el RUN antes de guardarlo
+	 */
+	public CuentasPersonalJdbc(JdbcClient jdbc, CifradoCampos cifrado) {
 		this.jdbc = jdbc;
+		this.cifrado = cifrado;
 	}
 
 	/** @param runHash HMAC del RUN normalizado */
@@ -64,8 +71,7 @@ public class CuentasPersonalJdbc implements CuentasPersonal {
 					VALUES (:rol, :rut, :rutHash, :nombre, :cargo, :correo)
 					RETURNING id_usuario""")
 					.param("rol", cuenta.codigoRol())
-					// TODO: cifrar el RUN antes de guardarlo
-					.param("rut", cuenta.run())
+					.param("rut", cifrado.cifrar(cuenta.run(), ColumnaCifrada.USUARIO_RUT))
 					.param("rutHash", cuenta.runHash())
 					.param("nombre", cuenta.nombre())
 					.param("cargo", cuenta.cargo())

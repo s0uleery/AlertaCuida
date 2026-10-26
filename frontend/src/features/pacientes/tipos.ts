@@ -63,3 +63,126 @@ export interface TokenReloj {
   idAsignacion: string;
   token: string;
 }
+
+/** Enfermedad (EPOC, hipertensión…) o situación (movilidad reducida, vive sola…). */
+export type TipoCondicion = 'ENFERMEDAD' | 'SITUACION';
+
+/** Una enfermedad o situación del usuario (CondicionesController). */
+export interface Condicion {
+  id: string;
+  tipo: TipoCondicion;
+  /** Texto libre, sin espacios sobrantes */
+  descripcion: string;
+}
+
+/** Qué vigila el reloj en el usuario. */
+export interface Modulos {
+  caidas: boolean;
+  fc: boolean;
+  spo2: boolean;
+  inactividad: boolean;
+  tendencia: boolean;
+}
+
+/** Módulos y opciones del usuario (una fila del historial de configuración). */
+export interface AjustesClinicos {
+  modulos: Modulos;
+  /** Solo para ubicar a la persona; no genera alertas */
+  gpsActivo: boolean;
+  modoConservador: boolean;
+  /** Antes de pasar al siguiente contacto; null = valor base */
+  minutosEspera: number | null;
+  /** Por qué se cambió (opcional) */
+  motivo: string | null;
+}
+
+/** Límites de una variable: graveBajo < normalMin < normalMax < graveAlto. La SpO2 no tiene límites altos. */
+export interface Umbral {
+  graveBajo: number;
+  normalMin: number;
+  normalMax: number | null;
+  graveAlto: number | null;
+}
+
+/** El umbral que rige para una variable: propio del usuario o el base. */
+export interface UmbralVigente {
+  umbral: Umbral;
+  /** false = rige el umbral base */
+  propio: boolean;
+  /** Instante ISO desde el que rige el ajuste, o null */
+  desde: string | null;
+}
+
+/** Lo que rige hoy para el usuario (PerfilClinicoController). */
+export interface PerfilClinico {
+  ajustes: AjustesClinicos;
+  /** Instante ISO del último cambio; null si nunca se configuró */
+  ajustesDesde: string | null;
+  /** Los que rigen: los del usuario o el valor base */
+  minutosEspera: number;
+  fc: UmbralVigente;
+  spo2: UmbralVigente;
+}
+
+/** Variable de un umbral. */
+export type VariableUmbral = 'FC' | 'SPO2';
+
+/** Quién es el contacto respecto del usuario (familia, vecino…). */
+export interface TipoContacto {
+  codigo: string;
+  nombre: string;
+}
+
+/** Medio por el que el servidor avisa a un contacto. */
+export type Canal = 'WHATSAPP' | 'CORREO';
+
+/** Un contacto de la lista del usuario (ContactosController). */
+export interface Contacto {
+  /** Identificador del vínculo con el usuario */
+  id: string;
+  nombre: string;
+  /** Normalizado (+569…), o null */
+  whatsapp: string | null;
+  correo: string | null;
+  /** Si se le puede enviar WhatsApp */
+  optInVigente: boolean;
+  fechaOptIn: string | null;
+  fechaRevocacion: string | null;
+  tipo: string;
+  parentesco: string | null;
+  cuidadorPrincipal: boolean;
+  /** 1 = el primero al que avisa el reloj */
+  prioridad: number;
+  /** "HH:mm"; null = todo el día */
+  horaInicio: string | null;
+  horaFin: string | null;
+  activo: boolean;
+  /** De cuántos otros usuarios es contacto la misma persona */
+  otrosPacientes: number;
+  /** Los que el servidor puede usar hoy */
+  canales: Canal[];
+}
+
+/** Tramo del día ("HH:mm"); inicio igual a fin = el día completo. */
+export interface Tramo {
+  inicio: string;
+  fin: string;
+}
+
+/** Lista de contactos con las horas en que nadie puede recibir avisos. */
+export interface ListaContactos {
+  contactos: Contacto[];
+  sinCobertura: Tramo[];
+}
+
+/** Lo que se ingresa al agregar o editar un contacto. */
+export interface DatosContacto {
+  nombre: string;
+  whatsapp: string | null;
+  correo: string | null;
+  tipo: string;
+  parentesco: string | null;
+  cuidadorPrincipal: boolean;
+  horaInicio: string | null;
+  horaFin: string | null;
+}

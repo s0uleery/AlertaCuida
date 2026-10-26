@@ -2,6 +2,7 @@ package cl.ucn.alertacuida.application.soporte;
 
 import cl.ucn.alertacuida.application.asignacion.modelo.AsignacionHistorial;
 import cl.ucn.alertacuida.application.asignacion.modelo.AsignacionVigente;
+import cl.ucn.alertacuida.application.asignacion.modelo.RelojAutenticado;
 import cl.ucn.alertacuida.application.asignacion.puerto.Asignaciones;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -46,6 +47,12 @@ public final class AsignacionesEnMemoria implements Asignaciones {
 	public Optional<AsignacionVigente> vigenteDelReloj(UUID idDispositivo) {
 		return filas.stream().filter(f -> f.fin == null && f.idDispositivo.equals(idDispositivo)).findFirst()
 				.map(this::vigente);
+	}
+
+	@Override
+	public Optional<RelojAutenticado> vigentePorHashToken(String hashToken) {
+		return filas.stream().filter(f -> f.fin == null && f.hashToken.equals(hashToken)).findFirst()
+				.map(f -> new RelojAutenticado(f.id, f.idDispositivo, f.idPaciente, f.inicio));
 	}
 
 	@Override

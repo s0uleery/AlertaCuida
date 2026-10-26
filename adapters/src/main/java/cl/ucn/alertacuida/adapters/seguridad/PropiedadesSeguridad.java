@@ -14,6 +14,8 @@ import org.springframework.validation.annotation.Validated;
  *
  * @param claveRun      clave del HMAC con que se calcula rut_hash. Si cambia, nadie encuentra su RUN
  * @param claveJwt      firma de los tokens (HS256): al menos 32 caracteres
+ * @param claveCifrado  llave AES-256 de los datos personales: 32 bytes en base64. Si se pierde, no se
+ *                      pueden leer los datos cifrados
  * @param duracionToken vida del token de acceso
  * @param bloqueo       cuándo se bloquea una cuenta por intentos fallidos
  * @param activacion    enlaces para que el personal nuevo elija su contraseña
@@ -23,6 +25,7 @@ import org.springframework.validation.annotation.Validated;
 public record PropiedadesSeguridad(
 		@NotNull @Size(min = 16) String claveRun,
 		@NotNull @Size(min = 32) String claveJwt,
+		@NotBlank String claveCifrado,
 		@NotNull Duration duracionToken,
 		@NotNull @Valid Bloqueo bloqueo,
 		@NotNull @Valid Activacion activacion) {

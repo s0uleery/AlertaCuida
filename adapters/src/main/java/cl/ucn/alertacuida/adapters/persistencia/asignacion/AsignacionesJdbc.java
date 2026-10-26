@@ -2,6 +2,7 @@ package cl.ucn.alertacuida.adapters.persistencia.asignacion;
 
 import cl.ucn.alertacuida.application.asignacion.modelo.AsignacionHistorial;
 import cl.ucn.alertacuida.application.asignacion.modelo.AsignacionVigente;
+import cl.ucn.alertacuida.application.asignacion.modelo.RelojAutenticado;
 import cl.ucn.alertacuida.application.asignacion.puerto.Asignaciones;
 import cl.ucn.alertacuida.application.comun.error.Conflicto;
 import java.sql.ResultSet;
@@ -41,6 +42,19 @@ public class AsignacionesJdbc implements Asignaciones {
 	@Override
 	public Optional<AsignacionVigente> vigenteDelReloj(UUID idDispositivo) {
 		return vigente("id_dispositivo", idDispositivo);
+	}
+
+	/** Lo usa cada petición del reloj: busca por el índice único de hash_token_reloj. */
+	@Override
+	public Optional<RelojAutenticado> vigentePorHashToken(String hashToken) {
+		return jdbc.sql("""
+				SELECT id_asignacion, id_dispositivo, id_paciente, fecha_inicio FROM asignacion_reloj
+				WHERE hash_token_reloj = :hash AND fecha_fin IS NULL""")
+				.param("hash", hashToken)
+				.query((fila, n) -> new RelojAutenticado(fila.getObject("id_asignacion", UUID.class),
+						fila.getObject("id_dispositivo", UUID.class), fila.getObject("id_paciente", UUID.class),
+						instante(fila, "fecha_inicio")))
+				.optional();
 	}
 
 	@Override

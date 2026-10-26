@@ -18,6 +18,7 @@ import com.jayway.jsonpath.JsonPath;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.Period;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -33,7 +34,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
- * Pacientes, relojes y vínculos de punta a punta: HTTP, permisos, base de datos (incluidas
+ * Pacientes (con sus condiciones), relojes y vínculos de punta a punta: HTTP, permisos, base de datos (incluidas
  * sus restricciones) y auditoría. Sin Docker se omite.
  */
 @SpringBootTest
@@ -183,6 +184,62 @@ class PacientesYRelojesTest {
 		Long cambios = jdbc.sql("SELECT count(*) FROM registro_auditoria WHERE entidad = 'ASIGNACION_RELOJ'")
 				.query(Long.class).single();
 		assertThat(cambios).isEqualTo(4);
+	}
+
+	/** Las condiciones se agregan, listan y quitan; una repetida responde 409 y cada cambio queda auditado. */
+	@Test
+	void agregaListaYQuitaCondiciones() throws Exception {
+		String maria = crearPaciente("12.345.678-5", "2026-01-10");
+		String ruta = "/api/pacientes/" + maria + "/condiciones";
+
+		String epoc = id(conJson(post(ruta), "{\"tipo\": \"ENFERMEDAD\", \"descripcion\": \"EPOC\"}")
+				.andExpect(status().isCreated()));
+		conJson(post(ruta), "{\"tipo\": \"SITUACION\", \"descripcion\": \"Vive sola\"}")
+				.andExpect(status().isCreated());
+		conJson(post(ruta), "{\"tipo\": \"ENFERMEDAD\", \"descripcion\": \"epoc\"}").andExpect(status().isConflict());
+		conJson(post(ruta), "{\"tipo\": \"OTRA\", \"descripcion\": \"x\"}").andExpect(status().isBadRequest());
+
+		mvc.perform(conToken(get(ruta), coordinador))
+				.andExpect(jsonPath("$", hasSize(2)))
+				.andExpect(jsonPath("$[0].tipo").value("ENFERMEDAD"))
+				.andExpect(jsonPath("$[1].descripcion").value("Vive sola"));
+		mvc.perform(conToken(delete(ruta + "/" + epoc), coordinador)).andExpect(status().isNoContent());
+		mvc.perform(conToken(delete(ruta + "/" + epoc), coordinador)).andExpect(status().isNotFound());
+		mvc.perform(conToken(get(ruta), coordinador)).andExpect(jsonPath("$", hasSize(1)));
+		Long cambios = jdbc.sql("SELECT count(*) FROM registro_auditoria WHERE entidad = 'CONDICION_PACIENTE'")
+				.query(Long.class).single();
+		assertThat(cambios).isEqualTo(3);
+	}
+
+	/** En la base, los datos personales y las condiciones están cifrados; por la API se leen en claro. */
+	@Test
+	void losDatosPersonalesQuedanCifradosEnLaBase() throws Exception {
+		String maria = crearPaciente("12.345.678-5", "2026-01-10");
+		conJson(post("/api/pacientes/" + maria + "/condiciones"),
+				"{\"tipo\": \"ENFERMEDAD\", \"descripcion\": \"EPOC\"}").andExpect(status().isCreated());
+
+		List<String> guardados = jdbc.sql("""
+				SELECT unnest(ARRAY[p.rut, p.nombres, p.apellidos, p.fecha_nacimiento, c.descripcion])
+				FROM paciente p JOIN condicion_paciente c USING (id_paciente)""")
+				.query(String.class).list();
+		assertThat(guardados).hasSize(5).allSatisfy(valor -> assertThat(valor).startsWith("v1:"))
+				.noneMatch(valor -> valor.contains("12345678") || valor.contains("María") || valor.contains("Rojas")
+						|| valor.contains("1940") || valor.contains("EPOC"));
+		mvc.perform(conToken(get("/api/pacientes/" + maria), coordinador))
+				.andExpect(jsonPath("$.paciente.datos.run").value("12345678-5"))
+				.andExpect(jsonPath("$.paciente.datos.fechaNacimiento").value("1940-03-15"));
+	}
+
+	/** El rol PERSONAL no ve ni agrega condiciones (403). */
+	@Test
+	void elRolPersonalNoVeNiAgregaCondiciones() throws Exception {
+		String ruta = "/api/pacientes/" + crearPaciente("12.345.678-5", "2026-01-10") + "/condiciones";
+		String personal = token("22.222.222-2", "Clave-de-Pers1");
+
+		mvc.perform(conToken(get(ruta), personal)).andExpect(status().isForbidden());
+		mvc.perform(conToken(post(ruta), personal).contentType(MediaType.APPLICATION_JSON)
+				.content("{\"tipo\": \"ENFERMEDAD\", \"descripcion\": \"EPOC\"}"))
+				.andExpect(status().isForbidden());
 	}
 
 	/** Crea una cuenta del personal activa con contraseña "Clave-de-" + nombre + "1". */

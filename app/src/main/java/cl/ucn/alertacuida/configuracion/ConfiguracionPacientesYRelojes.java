@@ -6,6 +6,8 @@ import cl.ucn.alertacuida.application.auditoria.puerto.RegistroAuditoria;
 import cl.ucn.alertacuida.application.comun.puerto.HashRun;
 import cl.ucn.alertacuida.application.comun.puerto.SecretosUnSoloUso;
 import cl.ucn.alertacuida.application.comun.puerto.Transacciones;
+import cl.ucn.alertacuida.application.condicion.CondicionesPaciente;
+import cl.ucn.alertacuida.application.condicion.puerto.Condiciones;
 import cl.ucn.alertacuida.application.paciente.ConsultarPacientes;
 import cl.ucn.alertacuida.application.paciente.DarDeBajaPaciente;
 import cl.ucn.alertacuida.application.paciente.EditarPaciente;
@@ -20,7 +22,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Casos de uso de pacientes, relojes y el vínculo entre ambos, unidos con sus adaptadores.
+ * Casos de uso de pacientes (con sus condiciones), relojes y el vínculo entre ambos, unidos con
+ * sus adaptadores.
  * Igual que {@link ConfiguracionCasosDeUso}, que tiene los del inicio de sesión y el personal.
  */
 @Configuration
@@ -51,6 +54,13 @@ public class ConfiguracionPacientesYRelojes {
 	DarDeBajaPaciente darDeBajaPaciente(Pacientes pacientes, Asignaciones asignaciones, RegistroAuditoria auditoria,
 			Transacciones transacciones, Clock reloj) {
 		return new DarDeBajaPaciente(pacientes, asignaciones, auditoria, transacciones, reloj);
+	}
+
+	/** Enfermedades y situaciones de cada paciente. */
+	@Bean
+	CondicionesPaciente condicionesPaciente(Condiciones condiciones, Pacientes pacientes,
+			RegistroAuditoria auditoria, Transacciones transacciones, Clock reloj) {
+		return new CondicionesPaciente(condiciones, pacientes, auditoria, transacciones, reloj);
 	}
 
 	/** Inventario de relojes. */

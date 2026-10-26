@@ -2,6 +2,7 @@ package cl.ucn.alertacuida.application.asignacion.puerto;
 
 import cl.ucn.alertacuida.application.asignacion.modelo.AsignacionHistorial;
 import cl.ucn.alertacuida.application.asignacion.modelo.AsignacionVigente;
+import cl.ucn.alertacuida.application.asignacion.modelo.RelojAutenticado;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -19,6 +20,12 @@ public interface Asignaciones {
 
 	/** @return el vínculo vigente del reloj, si está con algún paciente */
 	Optional<AsignacionVigente> vigenteDelReloj(UUID idDispositivo);
+
+	/**
+	 * @param hashToken hash del token que envió el reloj
+	 * @return el vínculo vigente con ese token, o vacío si no existe o ya se cerró
+	 */
+	Optional<RelojAutenticado> vigentePorHashToken(String hashToken);
 
 	/** @return por cada paciente con reloj, el identificador de ese reloj (para la lista de pacientes) */
 	Map<UUID, String> relojesVigentesPorPaciente();

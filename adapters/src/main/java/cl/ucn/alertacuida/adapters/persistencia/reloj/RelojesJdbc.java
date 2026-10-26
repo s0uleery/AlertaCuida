@@ -1,5 +1,7 @@
 package cl.ucn.alertacuida.adapters.persistencia.reloj;
 
+import cl.ucn.alertacuida.adapters.seguridad.cifrado.CifradoCampos;
+import cl.ucn.alertacuida.adapters.seguridad.cifrado.ColumnaCifrada;
 import cl.ucn.alertacuida.application.comun.error.Conflicto;
 import cl.ucn.alertacuida.application.reloj.modelo.DatosReloj;
 import cl.ucn.alertacuida.application.reloj.modelo.Reloj;
@@ -28,10 +30,15 @@ public class RelojesJdbc implements Relojes {
 	private static final String SIM_REPETIDA = "Ya existe otro reloj con ese identificador, ICCID o número de SIM";
 
 	private final JdbcClient jdbc;
+	private final CifradoCampos cifrado;
 
-	/** @param jdbc cliente de Spring sobre la conexión a PostgreSQL */
-	public RelojesJdbc(JdbcClient jdbc) {
+	/**
+	 * @param jdbc    cliente de Spring sobre la conexión a PostgreSQL
+	 * @param cifrado descifra el nombre del paciente que usa cada reloj
+	 */
+	public RelojesJdbc(JdbcClient jdbc, CifradoCampos cifrado) {
 		this.jdbc = jdbc;
+		this.cifrado = cifrado;
 	}
 
 	@Override
@@ -101,9 +108,9 @@ public class RelojesJdbc implements Relojes {
 				ORDER BY s.identificador_reloj""")
 				.query((fila, n) -> {
 					UUID idPaciente = fila.getObject("id_paciente", UUID.class);
-					// TODO: descifrar nombres y apellidos
 					String nombre = idPaciente == null ? null
-							: fila.getString("nombres") + " " + fila.getString("apellidos");
+							: cifrado.descifrar(fila.getString("nombres"), ColumnaCifrada.PACIENTE_NOMBRES) + " "
+									+ cifrado.descifrar(fila.getString("apellidos"), ColumnaCifrada.PACIENTE_APELLIDOS);
 					return new RelojConPaciente(reloj(fila), idPaciente, nombre);
 				})
 				.list();
