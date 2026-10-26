@@ -1,0 +1,20 @@
+package cl.ucn.alertacuida.application.alerta.modelo;
+
+import cl.ucn.alertacuida.domain.alerta.Severidad;
+import cl.ucn.alertacuida.domain.alerta.TipoEvento;
+import java.time.Instant;
+import java.util.UUID;
+
+/**
+ * Una alerta, o una alerta que el paciente canceló, tal como la envió el reloj.
+ *
+ * @param eventId              lo genera el reloj y la identifica de aquí en adelante
+ * @param versionConfiguracion la configuración con que el reloj la evaluó
+ * @param envio                fin de la ventana de 30 s; null si se canceló
+ * @param esperaDiaHabil       leve fuera del horario hábil: el reloj no avisará a nadie
+ * @param cancelacion          cuándo la canceló el paciente; null si no la canceló
+ * @param evidencia            lo que llevó a alertar, como documento JSON; puede ser null
+ */
+public record AlertaRecibida(UUID eventId, TipoEvento tipo, Severidad severidad, String versionConfiguracion,
+		Instant deteccion, Instant envio, boolean esperaDiaHabil, Instant cancelacion, String evidencia) {
+}

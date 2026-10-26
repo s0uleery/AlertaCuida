@@ -2,6 +2,7 @@ import { NavLink, Outlet } from 'react-router';
 import { useSesion } from '../features/sesion/SesionContext';
 import { SECCIONES } from './menu';
 
+/** Cómo se muestra cada rol en la barra superior. */
 const NOMBRE_ROL: Record<string, string> = {
   ADMINISTRADOR: 'Administrador',
   COORDINADOR: 'Coordinador',

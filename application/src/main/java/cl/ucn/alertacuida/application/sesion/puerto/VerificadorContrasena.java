@@ -1,5 +1,6 @@
 package cl.ucn.alertacuida.application.sesion.puerto;
 
+/** Compara la contraseña escrita al iniciar sesión con el hash guardado (puerto del inicio de sesión). */
 public interface VerificadorContrasena {
 
 	/**

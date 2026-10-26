@@ -1,7 +1,7 @@
 package cl.ucn.alertacuida.adapters.seguridad;
 
-import cl.ucn.alertacuida.application.sesion.TokenAcceso;
-import cl.ucn.alertacuida.application.sesion.UsuarioSesion;
+import cl.ucn.alertacuida.application.sesion.modelo.TokenAcceso;
+import cl.ucn.alertacuida.application.sesion.modelo.UsuarioSesion;
 import cl.ucn.alertacuida.application.sesion.puerto.EmisorToken;
 import java.time.Clock;
 import java.time.Instant;
@@ -33,12 +33,23 @@ public class TokenJwt implements EmisorToken {
 	private final PropiedadesSeguridad propiedades;
 	private final Clock reloj;
 
+	/**
+	 * @param encoder     firma con la clave de {@link ConfiguracionSeguridad}
+	 * @param propiedades de ahí sale la duración del token
+	 * @param reloj       hora actual
+	 */
 	public TokenJwt(JwtEncoder encoder, PropiedadesSeguridad propiedades, Clock reloj) {
 		this.encoder = encoder;
 		this.propiedades = propiedades;
 		this.reloj = reloj;
 	}
 
+	/**
+	 * Arma y firma el token: el "sub" es el id del usuario, y lleva su nombre, rol y permisos.
+	 *
+	 * @param usuario quién inició sesión
+	 * @return el token firmado (HS256) y su vencimiento
+	 */
 	@Override
 	public TokenAcceso emitir(UsuarioSesion usuario) {
 		Instant ahora = reloj.instant();

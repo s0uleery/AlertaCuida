@@ -1,4 +1,4 @@
-/** Lugar reservado para las secciones que aún no se construyen (3.3 en adelante). */
+/** Lugar reservado para las secciones que aún no se construyen. */
 export function PaginaPendiente({ titulo }: { titulo: string }) {
   return (
     <section className="rounded-xl bg-white p-6 shadow-sm">

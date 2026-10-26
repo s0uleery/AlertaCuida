@@ -1,0 +1,34 @@
+package cl.ucn.alertacuida.configuracion;
+
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
+import java.math.BigDecimal;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
+
+/**
+ * Valores base del sistema (alertacuida.clinica.* en application.properties), que rigen cuando el
+ * paciente no tiene ajustes propios. Son los del Anexo B; los actuales son provisionales hasta que
+ * los valide el equipo clínico.
+ *
+ * @param umbralFc      umbral base de la frecuencia cardíaca, en latidos por minuto
+ * @param umbralSpo2    umbral base de la saturación de oxígeno, en %
+ * @param minutosEspera antes de pasar al siguiente contacto
+ */
+@Validated
+@ConfigurationProperties("alertacuida.clinica")
+public record PropiedadesClinicas(@NotNull @Valid Fc umbralFc, @NotNull @Valid Spo2 umbralSpo2,
+		@Min(1) @Max(60) int minutosEspera) {
+
+	/** Límites de la FC: grave bajo &lt; mínimo normal &lt; máximo normal &lt; grave alto. */
+	public record Fc(@NotNull BigDecimal graveBajo, @NotNull BigDecimal normalMin, @NotNull BigDecimal normalMax,
+			@NotNull BigDecimal graveAlto) {
+	}
+
+	/** Límites de la SpO2, que no tiene límite alto: grave bajo &lt; mínimo normal. */
+	public record Spo2(@NotNull BigDecimal graveBajo, @NotNull BigDecimal normalMin) {
+	}
+
+}
