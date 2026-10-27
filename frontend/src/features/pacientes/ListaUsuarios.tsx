@@ -1,22 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { CLASE_BOTON_PRINCIPAL, CLASE_CAMPO, CLASE_ERROR, CLASE_TARJETA } from '../../comun/estilos';
-import { limpiarRun } from '../../comun/run';
 import { useDatos } from '../../comun/useDatos';
 import { useSesion } from '../sesion/SesionContext';
+import { coincide } from './busqueda';
 import { pacientesApi } from './pacientesApi';
-import type { ResumenPaciente } from './tipos';
 
 /** Cómo se muestra cada nivel de dependencia. */
 const NIVEL: Record<string, string> = { MODERADA: 'Moderada', SEVERA: 'Severa' };
-
-/** true si el paciente coincide con lo buscado: por nombre, alias o RUN (con o sin puntos). */
-function coincide(fila: ResumenPaciente, busqueda: string): boolean {
-  const d = fila.paciente.datos;
-  const texto = `${d.nombres} ${d.apellidos} ${d.alias ?? ''}`.toLowerCase();
-  const runBuscado = limpiarRun(busqueda);
-  return texto.includes(busqueda.toLowerCase()) || (runBuscado.length > 2 && limpiarRun(d.run).includes(runBuscado));
-}
 
 /**
  * Lista de usuarios del programa con búsqueda. Se filtra aquí y no en el backend: los
