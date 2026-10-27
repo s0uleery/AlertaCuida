@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { ErrorApi } from '../../api/cliente';
+import { useConfirmar } from '../../comun/Confirmacion';
 import { CLASE_BOTON_SECUNDARIO, CLASE_CAMPO, CLASE_ERROR } from '../../comun/estilos';
 import { useDatos } from '../../comun/useDatos';
 import { useSesion } from '../sesion/SesionContext';
@@ -55,6 +56,7 @@ interface Props {
  */
 export function CondicionesDelUsuario({ idPaciente }: Props) {
   const { puede } = useSesion();
+  const confirmar = useConfirmar();
   const { datos, error, recargar } = useDatos(() => pacientesApi.condiciones(idPaciente), idPaciente);
   const [errorCambio, setErrorCambio] = useState<string | null>(null);
   const editable = puede('USUARIOS:EDITAR');
@@ -90,10 +92,13 @@ export function CondicionesDelUsuario({ idPaciente }: Props) {
             condiciones={datos.filter((condicion) => condicion.tipo === tipo)}
             editable={editable}
             alAgregar={(descripcion) => cambiar(() => pacientesApi.agregarCondicion(idPaciente, tipo, descripcion))}
-            alQuitar={(condicion) => {
-              if (window.confirm(`¿Quitar "${condicion.descripcion}"?`)) {
-                cambiar(() => pacientesApi.quitarCondicion(idPaciente, condicion.id));
-              }
+            alQuitar={async (condicion) => {
+              const confirmado = await confirmar({
+                titulo: `¿Quitar "${condicion.descripcion}"?`,
+                textoConfirmar: 'Quitar',
+                peligro: true,
+              });
+              if (confirmado) cambiar(() => pacientesApi.quitarCondicion(idPaciente, condicion.id));
             }}
           />
         ))}
