@@ -1,37 +1,24 @@
-import { useState } from 'react';
-import { CLASE_TARJETA } from '../../comun/estilos';
-import { useSesion } from '../sesion/SesionContext';
-import { EnlaceGenerado } from './EnlaceGenerado';
-import { FormularioCuenta } from './FormularioCuenta';
-import type { RespuestaEnlace } from './tipos';
+import { Route, Routes } from 'react-router';
+import { RutaProtegida } from '../../navegacion/RutaProtegida';
+import { NuevaCuenta } from './NuevaCuenta';
+import { PanelAdministracion } from './PanelAdministracion';
 
 /**
- * Sección Administración. Por ahora, el alta de cuentas del equipo; aquí irán también la lista de
- * cuentas y la edición de permisos de los roles.
+ * Sección Administración. Rutas dentro de /administracion: el panel con sus pestañas (perfiles,
+ * permisos y auditoría) y el alta de una cuenta del equipo ("Agregar perfil").
  */
 export function PaginaAdministracion() {
-  const { puede } = useSesion();
-  const [creada, setCreada] = useState<{ enlace: RespuestaEnlace; nombre: string } | null>(null);
-
   return (
-    <div className="space-y-6">
-      <h1 className="text-xl font-semibold text-slate-900">Administración</h1>
-
-      {puede('ADMINISTRACION:CREAR') && (
-        <section className={`${CLASE_TARJETA} space-y-4`}>
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">Nueva cuenta del equipo</h2>
-            <p className="text-sm text-slate-500">
-              La persona recibe un enlace para elegir su propia contraseña. Nadie más la conoce.
-            </p>
-          </div>
-          {creada ? (
-            <EnlaceGenerado enlace={creada.enlace} nombre={creada.nombre} alTerminar={() => setCreada(null)} />
-          ) : (
-            <FormularioCuenta alCrear={(enlace, nombre) => setCreada({ enlace, nombre })} />
-          )}
-        </section>
-      )}
-    </div>
+    <Routes>
+      <Route index element={<PanelAdministracion />} />
+      <Route
+        path="nuevo"
+        element={
+          <RutaProtegida permiso="ADMINISTRACION:CREAR">
+            <NuevaCuenta />
+          </RutaProtegida>
+        }
+      />
+    </Routes>
   );
 }
