@@ -8,6 +8,8 @@ Resumen del backend a la fecha (22-10-2026). Hoy hace cuatro cosas:
 
 Cómo levantarlo: [README](../README.md). Cada clase tiene Javadoc con el detalle.
 
+Referencia rápida de los endpoints disponibles, con ejemplos JSON: [para el dashboard](endpoints-dashboard.md) y [para el reloj](endpoints-reloj.md). En formato OpenAPI: [api-dashboard.yaml](api-dashboard.yaml) y [api-reloj.yaml](api-reloj.yaml).
+
 ## Capas (arquitectura hexagonal)
 
 Un módulo Maven por capa. Cada capa solo conoce a la de adentro.
@@ -23,7 +25,7 @@ Así, las reglas del login se prueban sin base de datos ni Spring (`IniciarSesio
 
 ## Carpetas
 
-Dentro de cada capa, una carpeta por funcionalidad: `sesion`, `personal` (cuentas del equipo), `paciente`, `condicion` (enfermedades y situaciones del paciente), `clinica` (perfil clínico: módulos y umbrales), `contacto` (contactos de cada paciente), `reloj` (inventario), `asignacion` (vínculo reloj-paciente), `telemetria` (lotes que envía el reloj), `alerta` y `auditoria`. Los controladores y la seguridad de la API del reloj van en `adapters/web/dispositivo` y `adapters/seguridad/dispositivo`. Cada una tiene estas subcarpetas:
+Dentro de cada capa, una carpeta por funcionalidad: `sesion`, `personal` (cuentas del equipo), `paciente`, `condicion` (enfermedades y situaciones del paciente), `clinica` (perfil clínico: módulos y umbrales), `contacto` (contactos de cada paciente), `reloj` (inventario), `asignacion` (vínculo reloj-paciente), `telemetria` (lotes que envía el reloj), `alerta`, `calendario` (horario hábil, feriados y enrutamiento por gravedad) y `auditoria`. Los controladores y la seguridad de la API del reloj van en `adapters/web/dispositivo` y `adapters/seguridad/dispositivo`. Cada una tiene estas subcarpetas:
 
 ```
 application/<funcionalidad>/        casos de uso (las clases que "hacen" algo)
@@ -211,6 +213,21 @@ Contactos (`ContactosPaciente`):
 - **Horario**: en hora de Chile; si el inicio es posterior al término, cruza la medianoche; vacío = todo el día. Se pide inicio y término, distintos.
 - **Horas sin cobertura (aviso, no bloqueo)**: `Cobertura.sinCubrir` calcula los tramos del día sin ningún contacto **disponible** (activo, con correo o con WhatsApp aceptado). Las alertas medias y graves avisan a toda hora, así que la ficha los muestra en rojo. Se puede guardar igual, porque los contactos se cargan de a uno; exigirlo queda para cuando se entregue el reloj o para la configuración (1.7).
 - **Desactivar, no borrar**: los avisos del contacto quedan en el historial (`registro_intento`).
+
+## Calendario hábil y enrutamiento por gravedad
+
+Deciden si una alerta leve avisa o espera al día hábil, y a quién se avisa.
+
+| Endpoint | Permiso | Qué hace |
+|---|---|---|
+| `GET /api/calendario` | Solo sesión | Horario de cada día hábil y feriados, para la sección "Calendario" del dashboard (solo lectura). |
+
+- **Dónde está**: en `app/src/main/resources/calendario.yml`, que importa `application.properties`. Es YAML porque Spring lee los `.properties` en Latin-1 y los nombres de los feriados llevan tildes. Cambiarlo requiere reiniciar el backend; si está mal escrito, no arranca y el error dice qué propiedad revisar (`ConfiguracionCalendario`).
+- **Horario**: lunes a jueves de 08:30 a 17:30 y viernes de 08:30 a 16:30, en hora de Chile. El inicio cuenta y el fin ya no: a las 17:30 en punto es fuera de horario. Los días que no aparecen (sábado y domingo) no son hábiles.
+- **Feriados**: los nacionales de 2026 y 2027 (sin los regionales), según feriados.cl, que cita la BCN. Los de 2027 son provisionales hasta que se publique el calendario oficial. Hay que agregarlos cada año: el reloj recibe el año en curso y el siguiente.
+- **`CalendarioHabil`** (dominio): un momento es hábil si su día tiene horario, no es feriado y la hora cae dentro. Todo se calcula en `America/Santiago`, así que los cambios de hora de abril y septiembre no corren el horario.
+- **`ReglaEnrutamiento`** (aplicación), fija en el código: una alerta leve fuera de horario o en feriado espera al día hábil; en cualquier otro caso se avisa a los contactos activos, con algún canal y cuyo horario cubre ese momento, por prioridad. El horario de cada contacto se respeta siempre, también en horario hábil.
+- **Quién la usa**: el reloj, porque escala (recibirá el calendario con la configuración, 1.7); el servidor, para revisar el `esperaDiaHabil` de las alertas que recibe (2.1.2) y para sus alertas técnicas (2.2).
 
 ## API del reloj
 

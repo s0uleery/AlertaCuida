@@ -15,6 +15,11 @@ info:
     - Lo que el reloj puede reintentar lleva un `eventId`: repetirlo devuelve la misma respuesta
       sin duplicar nada.
     - Los errores siguen RFC 9457 (`application/problem+json`) con un `codigo` estable.
+
+    **Estado al 26-10-2026.** Ya los atiende el servidor: sincronización, alerta, cancelación y
+    estado de una alerta. Los demás llevan "[Pendiente X.Y]" en su resumen, con la tarea del
+    cronograma que los implementa. Mientras no exista la configuración (1.7), la sincronización
+    responde siempre `configuracionNueva: false` y sin `versionConfiguracion`.
 servers:
   - url: http://localhost:8080
     description: Desarrollo local
@@ -70,7 +75,7 @@ paths:
     get:
       tags: [Configuración]
       operationId: obtenerConfiguracion
-      summary: Descarga la configuración vigente del paciente
+      summary: "[Pendiente 1.7] Descarga la configuración vigente del paciente"
       description: |
         El reloj la pide cuando la sincronización responde `configuracionNueva: true` o al recibir
         el aviso FCM `CONFIGURACION_NUEVA`. Con `If-None-Match` y la versión que ya tiene, el
@@ -177,7 +182,7 @@ paths:
     post:
       tags: [Alertas]
       operationId: agravarAlerta
-      summary: Una caída leve o media pasa a grave por inmovilidad posterior
+      summary: "[Pendiente 2.1.3] Una caída leve o media pasa a grave por inmovilidad posterior"
       description: Repetirlo no cambia la hora ya registrada.
       requestBody:
         required: true
@@ -201,7 +206,7 @@ paths:
     post:
       tags: [Escalamiento]
       operationId: solicitarAviso
-      summary: Pide avisar a un contacto por WhatsApp o correo
+      summary: "[Pendiente 2.10] Pide avisar a un contacto por WhatsApp o correo"
       description: |
         El reloj elige el contacto (prioridad, horario, gravedad) y el servidor lo envía. Si el
         servidor no puede enviarlo, responde `RECHAZADO` con el motivo y el reloj pasa al siguiente
@@ -233,7 +238,7 @@ paths:
     post:
       tags: [Escalamiento]
       operationId: informarSinRespuesta
-      summary: El reloj recorrió la lista dos veces sin confirmación
+      summary: "[Pendiente 2.10] El reloj recorrió la lista dos veces sin confirmación"
       description: La alerta pasa a `SIN_RESPUESTA` y queda con prioridad máxima en el dashboard.
       requestBody:
         required: true
@@ -254,7 +259,7 @@ paths:
     put:
       tags: [Avisos FCM]
       operationId: registrarTokenFcm
-      summary: Registra o renueva el token de Firebase del reloj
+      summary: "[Pendiente 1.7] Registra o renueva el token de Firebase del reloj"
       description: El reloj lo envía al instalarse y cada vez que Firebase se lo cambia.
       requestBody:
         required: true
@@ -280,7 +285,7 @@ paths:
     post:
       tags: [Avisos FCM]
       operationId: acusarAvisoFcm
-      summary: Confirma que el reloj recibió un aviso FCM de una alerta
+      summary: "[Pendiente 2.3] Confirma que el reloj recibió un aviso FCM de una alerta"
       description: |
         Apenas lo recibe. Si no llega en el plazo, el servidor reintenta el aviso. Repetirlo no
         cambia la hora ya registrada. Los avisos `CONFIGURACION_NUEVA` no se acusan: el reloj
@@ -307,7 +312,7 @@ paths:
     get:
       tags: [Webhook de WhatsApp]
       operationId: verificarWebhook
-      summary: Verificación inicial que hace Meta al configurar el webhook
+      summary: "[Pendiente 2.9] Verificación inicial que hace Meta al configurar el webhook"
       security: []
       parameters:
         - { name: hub.mode, in: query, required: true, schema: { type: string, const: subscribe } }
@@ -327,7 +332,7 @@ paths:
     post:
       tags: [Webhook de WhatsApp]
       operationId: recibirWebhook
-      summary: Respuestas de los contactos (botones) y estados de entrega
+      summary: "[Pendiente 2.9] Respuestas de los contactos (botones) y estados de entrega"
       description: |
         Formato definido por Meta (Cloud API, objeto `whatsapp_business_account`); el servidor lee
         `messages[].interactive.button_reply.id` ("VOY_EN_CAMINO" o "NO_PUEDO") y `statuses[]`

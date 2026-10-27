@@ -290,16 +290,16 @@ Depende de: 1.5, 1.9. Listo cuando: el reloj descarga su configuración solo si 
 ### 1.8 Módulo de presión arterial. Eliminada.
 El Samsung Health Sensor SDK no entrega presión arterial, por lo que el módulo se elimina (−16 h).
 
-### 1.9 Enrutamiento por gravedad y calendario hábil (10 h). Cambia en v7.
+### 1.9 Enrutamiento por gravedad y calendario hábil (10 h). Cambia en v7. Hecha.
 Definir a quién se avisa según la gravedad y el horario hábil con feriados. Viaja al reloj en la configuración, porque el reloj escala; el servidor lo usa para validar las alertas recibidas y para las alertas técnicas.
 
 Depende de: 1.5. Listo cuando: la regla de enrutamiento está configurada, cada paciente tiene contactos con prioridad y horario, y el reloj y el servidor conocen el horario hábil y los feriados.
 
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
-| [ ] | 1.9.1 | Regla de enrutamiento base (Anexo B): una alerta leve fuera del horario hábil queda pendiente; una media o grave avisa siempre a los contactos disponibles a esa hora, por prioridad | 4 |
-| [ ] | 1.9.2 | Calendario hábil (horario y feriados del año) administrable, en zona `America/Santiago` | 3 |
-| [ ] | 1.9.3 | Pruebas, incluidos los días de cambio de hora | 3 |
+| [x] | 1.9.1 | Regla de enrutamiento base (Anexo B): una alerta leve fuera del horario hábil queda pendiente; una media o grave avisa siempre a los contactos disponibles a esa hora, por prioridad | 4 |
+| [x] | 1.9.2 | Calendario hábil (horario y feriados nacionales del año en curso y el siguiente) en la configuración del backend (`calendario.yml`), en zona `America/Santiago`; cambiarlo requiere reiniciar el backend. Solo lectura en el dashboard | 3 |
+| [x] | 1.9.3 | Pruebas, incluidos los días de cambio de hora | 3 |
  
 ---
 
@@ -683,7 +683,7 @@ Depende de: 3.3. Listo cuando: el personal del PRLAC puede configurar y operar e
 | [ ] | 5.2.1 | Manual de configuración por paciente, incluido el registro del opt-in de los contactos | 6 |
 | [ ] | 5.2.2 | Manual de operación diaria del dashboard y de las alertas | 5 |
 | [ ] | 5.2.3 | Manual de entrega en terreno (reloj, SIM y plan de datos, verificación de señal) | 2 |
-| [ ] | 5.2.4 | Guía de qué hacer ante fallas (no llegan datos, no llegan WhatsApp, reloj sin señal, apagado o con el plan vencido) | 3 |
+| [ ] | 5.2.4 | Guía de qué hacer ante fallas (no llegan datos, no llegan WhatsApp, reloj sin señal, apagado o con el plan vencido) y de mantenimiento: actualizar los feriados de `calendario.yml` cada año y cuando una ley agregue uno | 3 |
 | [ ] | 5.2.5 | Revisión con el PRLAC | 2 |
 
 ### 5.3 Capacitación (8 h)

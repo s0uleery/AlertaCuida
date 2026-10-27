@@ -25,7 +25,7 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
 - Las columnas marcadas "cifrado" guardan datos personales cifrados (1.6.3). Las que hay que buscar tienen además un hash (`rut_hash`, `whatsapp_hash`, `correo_hash`), que el backend calcula sobre el dato ya normalizado.
 - Tablas en MAYÚSCULAS y claves `id_tabla`.
 - Los `Enum` se dibujan como `Enum`, pero en las migraciones van como `varchar` con `CHECK` (los `ENUM` de PostgreSQL no permiten quitar ni renombrar valores).
-- **Fuera de la base**, en la configuración del backend (`application.yml`): umbrales base, matriz de riesgo FC × SpO2 (con su versión), enrutamiento por gravedad, horario hábil, feriados, plazos y la política de bloqueo de sesión (intentos y minutos). Son valores del sistema, no datos de un paciente. Cambiarlos requiere un despliegue.
+- **Fuera de la base**, en la configuración del backend (`application.properties`, y el horario hábil y los feriados en `calendario.yml`): umbrales base, matriz de riesgo FC × SpO2 (con su versión), horario hábil, feriados, plazos y la política de bloqueo de sesión (intentos y minutos). Son valores del sistema, no datos de un paciente. Cambiarlos requiere reiniciar el backend. La regla de enrutamiento por gravedad está fija en el código (`ReglaEnrutamiento`).
 
 ## Tablas (28)
 
@@ -106,7 +106,7 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
   - Clínicos, que escalan a los contactos: caída, FC, SpO2, FC+SpO2, tendencia e inactividad.
   - Técnicos, que avisan por correo a los profesionales con `recibe_avisos`: silencio de datos (sin señal, reloj apagado o plan vencido), batería baja y reloj no puesto.
   - El servidor solo crea alertas técnicas y simulacros, y el silencio de datos solo lo crea el servidor (`CHECK`).
-- **Gravedad y enrutamiento.** Hay tres niveles. La regla está en `application.yml`:
+- **Gravedad y enrutamiento.** Hay tres niveles. La regla está fija en el código (`ReglaEnrutamiento`); el horario de cada contacto se respeta siempre, también en horario hábil:
 
   | Gravedad | En horario hábil | Fuera del horario hábil |
   |---|---|---|
