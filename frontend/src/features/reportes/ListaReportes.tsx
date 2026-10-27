@@ -13,10 +13,13 @@ export function ListaReportes() {
   const [pestana, setPestana] = useState<Pestana>('usuarios');
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-xl font-semibold text-slate-900">Reportes</h1>
+    <section className={CLASE_TARJETA}>
+      <h1 className="text-2xl font-medium text-tinta">Reportes</h1>
+      <p className="mb-4 text-tinta">
+        Revisa la evolución de cada persona usuaria y cómo se han gestionado las alertas.
+      </p>
 
-      <div className="flex border-b border-slate-300" role="tablist">
+      <div className="mb-4 flex border-b border-slate-300" role="tablist">
         {(
           [
             ['usuarios', 'Reporte por usuario'],
@@ -40,11 +43,9 @@ export function ListaReportes() {
       {pestana === 'usuarios' ? (
         <ReportesPorUsuario />
       ) : (
-        <section className={CLASE_TARJETA}>
-          <p className="text-slate-500">Esta pestaña todavía no está construida.</p>
-        </section>
+        <p className="text-slate-500">Esta pestaña todavía no está construida.</p>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -63,8 +64,8 @@ function ReportesPorUsuario() {
   );
 
   return (
-    <>
-      <p className="text-slate-600">
+    <div className="space-y-4">
+      <p className="text-sm text-slate-500">
         Evolución de signos vitales, alertas y uso del reloj de cada persona usuaria.
       </p>
 
@@ -84,7 +85,7 @@ function ReportesPorUsuario() {
 
       {error && <p className={CLASE_ERROR}>{error}</p>}
 
-      <section className={`${CLASE_TARJETA} overflow-x-auto p-0`}>
+      <div className="overflow-x-auto rounded-lg border border-slate-200">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-slate-200 text-slate-500">
             <tr>
@@ -130,7 +131,7 @@ function ReportesPorUsuario() {
             {busqueda ? 'Nadie coincide con la búsqueda.' : 'Todavía no hay usuarios registrados.'}
           </p>
         )}
-      </section>
-    </>
+      </div>
+    </div>
   );
 }

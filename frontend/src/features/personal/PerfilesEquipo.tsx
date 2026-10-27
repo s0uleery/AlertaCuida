@@ -92,29 +92,29 @@ export function PerfilesEquipo() {
         </p>
       )}
 
-      <div className="overflow-x-auto rounded-lg border border-prlac">
-        <table className="w-full min-w-[720px] border-collapse text-left text-sm">
-          <thead className="bg-prlac text-white">
+      <div className="overflow-x-auto rounded-lg border border-slate-200">
+        <table className="w-full text-left text-sm">
+          <thead className="border-b border-slate-200 text-slate-500">
             <tr>
-              <th className="px-3 py-2.5 font-bold">Nombre</th>
-              <th className="px-3 py-2.5 font-bold">Cargo</th>
-              <th className="px-3 py-2.5 font-bold">Rol</th>
-              <th className="px-3 py-2.5 font-bold">Estado</th>
-              <th className="px-3 py-2.5 font-bold">Último acceso</th>
+              <th className="px-4 py-3 font-medium">Nombre</th>
+              <th className="px-4 py-3 font-medium">Cargo</th>
+              <th className="px-4 py-3 font-medium">Rol</th>
+              <th className="px-4 py-3 font-medium">Estado</th>
+              <th className="px-4 py-3 font-medium">Último acceso</th>
             </tr>
           </thead>
           <tbody>
             {visibles.map((perfil) => {
               const propio = perfil.id === usuario?.id;
               return (
-                <tr key={perfil.id} className="border-t border-slate-300 odd:bg-slate-50">
-                  <td className="px-3 py-2.5">
-                    <span className="font-medium text-tinta">{perfil.nombre}</span>
+                <tr key={perfil.id} className="border-b border-slate-100 last:border-0">
+                  <td className="px-4 py-3">
+                    <span className="font-medium text-slate-900">{perfil.nombre}</span>
                     {propio && <span className="ml-1 text-slate-500">(tú)</span>}
                     <span className="block text-xs text-slate-500">{perfil.correo}</span>
                   </td>
-                  <td className="px-3 py-2.5">{perfil.cargo || <span className="text-slate-400">—</span>}</td>
-                  <td className="px-3 py-2.5">
+                  <td className="px-4 py-3">{perfil.cargo || <span className="text-slate-400">—</span>}</td>
+                  <td className="px-4 py-3">
                     {editable ? (
                       <select
                         value={perfil.rol}
@@ -122,7 +122,7 @@ export function PerfilesEquipo() {
                         disabled={propio || guardando === perfil.id}
                         title={propio ? 'No puedes cambiar tu propio rol' : undefined}
                         aria-label={`Rol de ${perfil.nombre}`}
-                        className="w-full max-w-48 rounded-sm border border-slate-300 bg-white px-2 py-1.5 disabled:bg-slate-100"
+                        className="w-full max-w-48 rounded-md border border-slate-300 bg-white px-2 py-1.5 focus:border-sky-600 focus:outline-none disabled:bg-slate-100"
                       >
                         {ROLES.map((rol) => (
                           <option key={rol.valor} value={rol.valor}>
@@ -134,14 +134,14 @@ export function PerfilesEquipo() {
                       nombreRol(perfil.rol)
                     )}
                   </td>
-                  <td className="px-3 py-2.5">
+                  <td className="px-4 py-3">
                     <span
-                      className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${ESTADO[perfil.estado].clase}`}
+                      className={`inline-block rounded-full px-2 py-0.5 text-xs ${ESTADO[perfil.estado].clase}`}
                     >
                       {ESTADO[perfil.estado].texto}
                     </span>
                   </td>
-                  <td className="px-3 py-2.5">
+                  <td className="px-4 py-3">
                     {perfil.ultimoAcceso ? (
                       formatearHoraReciente(perfil.ultimoAcceso)
                     ) : (
@@ -153,9 +153,9 @@ export function PerfilesEquipo() {
             })}
           </tbody>
         </table>
-        {cargando && <p className="px-3 py-2.5 text-slate-500">Cargando…</p>}
+        {cargando && <p className="px-4 py-3 text-slate-500">Cargando…</p>}
         {!cargando && !error && visibles.length === 0 && (
-          <p className="px-3 py-2.5 text-slate-500">
+          <p className="px-4 py-3 text-slate-500">
             {busqueda ? 'Nadie coincide con la búsqueda.' : 'Todavía no hay cuentas del equipo.'}
           </p>
         )}

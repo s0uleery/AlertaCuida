@@ -109,13 +109,13 @@ export function PermisosRoles() {
             </p>
           )}
 
-          <div className="overflow-x-auto rounded-lg border border-prlac">
-            <table className="w-full min-w-[560px] border-collapse text-sm">
-              <thead className="bg-prlac text-white">
+          <div className="overflow-x-auto rounded-lg border border-slate-200">
+            <table className="w-full text-sm">
+              <thead className="border-b border-slate-200 text-slate-500">
                 <tr>
-                  <th className="px-3 py-2.5 text-left font-bold">Módulo</th>
+                  <th className="px-4 py-3 text-left font-medium">Módulo</th>
                   {ACCIONES.map((accion) => (
-                    <th key={accion.valor} className="px-3 py-2.5 text-center font-bold">
+                    <th key={accion.valor} className="px-4 py-3 text-center font-medium">
                       {accion.etiqueta}
                     </th>
                   ))}
@@ -123,12 +123,12 @@ export function PermisosRoles() {
               </thead>
               <tbody>
                 {MODULOS.map((modulo) => (
-                  <tr key={modulo.valor} className="border-t border-slate-300 odd:bg-slate-50">
-                    <td className="px-3 py-2.5">{modulo.etiqueta}</td>
+                  <tr key={modulo.valor} className="border-b border-slate-100 last:border-0">
+                    <td className="px-4 py-3">{modulo.etiqueta}</td>
                     {ACCIONES.map((accion) => {
                       const permiso: Permiso = `${modulo.valor}:${accion.valor}`;
                       return (
-                        <td key={accion.valor} className="px-3 py-2.5 text-center">
+                        <td key={accion.valor} className="px-4 py-3 text-center">
                           <input
                             type="checkbox"
                             checked={marcados.has(permiso)}
