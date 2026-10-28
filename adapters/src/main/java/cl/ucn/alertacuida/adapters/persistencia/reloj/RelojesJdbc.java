@@ -10,6 +10,8 @@ import cl.ucn.alertacuida.application.reloj.puerto.Relojes;
 import cl.ucn.alertacuida.domain.reloj.EstadoReloj;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -114,6 +116,15 @@ public class RelojesJdbc implements Relojes {
 					return new RelojConPaciente(reloj(fila), idPaciente, nombre);
 				})
 				.list();
+	}
+
+	@Override
+	public void guardarTokenFcm(UUID id, String token, Instant fecha) {
+		jdbc.sql("UPDATE smartwatch SET token_fcm = :token, fecha_token_fcm = :fecha WHERE id_dispositivo = :id")
+				.param("token", token)
+				.param("fecha", Timestamp.from(fecha))
+				.param("id", id)
+				.update();
 	}
 
 	/** Los mismos parámetros para el INSERT y el UPDATE. */

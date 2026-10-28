@@ -16,10 +16,9 @@ info:
       sin duplicar nada.
     - Los errores siguen RFC 9457 (`application/problem+json`) con un `codigo` estable.
 
-    **Estado al 26-10-2026.** Ya los atiende el servidor: sincronización, alerta, cancelación y
-    estado de una alerta. Los demás llevan "[Pendiente X.Y]" en su resumen, con la tarea del
-    cronograma que los implementa. Mientras no exista la configuración (1.7), la sincronización
-    responde siempre `configuracionNueva: false` y sin `versionConfiguracion`.
+    **Estado al 27-10-2026.** Ya los atiende el servidor: sincronización, alerta, cancelación,
+    estado de una alerta, configuración y token de Firebase. Los demás llevan "[Pendiente X.Y]" en
+    su resumen, con la tarea del cronograma que los implementa.
 servers:
   - url: http://localhost:8080
     description: Desarrollo local
@@ -75,7 +74,7 @@ paths:
     get:
       tags: [Configuración]
       operationId: obtenerConfiguracion
-      summary: "[Pendiente 1.7] Descarga la configuración vigente del paciente"
+      summary: Descarga la configuración vigente del paciente
       description: |
         El reloj la pide cuando la sincronización responde `configuracionNueva: true` o al recibir
         el aviso FCM `CONFIGURACION_NUEVA`. Con `If-None-Match` y la versión que ya tiene, el
@@ -259,7 +258,7 @@ paths:
     put:
       tags: [Avisos FCM]
       operationId: registrarTokenFcm
-      summary: "[Pendiente 1.7] Registra o renueva el token de Firebase del reloj"
+      summary: Registra o renueva el token de Firebase del reloj
       description: El reloj lo envía al instalarse y cada vez que Firebase se lo cambia.
       requestBody:
         required: true
@@ -536,7 +535,7 @@ components:
           description: true si `estado.versionConfiguracion` no es la vigente; el reloj debe descargarla.
         versionConfiguracion:
           type: string
-          description: Versión vigente en el servidor. No viene mientras no exista la configuración del reloj (tarea 1.7).
+          description: Versión vigente en el servidor (la misma que el ETag de GET /configuracion).
         desfaseRelojSegundos:
           type: integer
           description: |
@@ -552,7 +551,10 @@ components:
       properties:
         version:
           type: string
-          description: Hash del contenido. Cambia si cambia cualquier dato, aunque sea de un contacto.
+          description: |
+            Hash del contenido: los primeros 16 caracteres hexadecimales de su SHA-256. Cambia si
+            cambia cualquier dato, aunque sea de un contacto, un valor base o el calendario.
+          example: 9f2c4e1a7b3d5e60
         modulos:
           type: object
           required: [caidas, fc, spo2, inactividad, tendencia]
@@ -591,7 +593,7 @@ components:
             contenido se define con el equipo clínico (Anexo B); por ahora solo la versión.
           required: [versionMatriz]
           properties:
-            versionMatriz: { type: string }
+            versionMatriz: { type: string, example: PROVISIONAL, description: PROVISIONAL hasta recibir el Anexo B. }
         escalamiento:
           type: object
           required: [minutosEspera, rondas]
@@ -600,7 +602,7 @@ components:
             rondas: { type: integer, const: 2, description: La lista se recorre dos veces. }
         contactos:
           type: array
-          description: Ordenados por prioridad. Solo los activos.
+          description: Ordenados por prioridad. Solo los activos con algún canal que el servidor pueda usar hoy; por eso puede haber saltos en la prioridad.
           items:
             type: object
             required: [idContacto, nombre, prioridad, canales]
@@ -637,7 +639,7 @@ components:
                   fin: { type: string, example: '17:30' }
             feriados:
               type: array
-              description: Del año en curso y el siguiente.
+              description: Del año en curso y el siguiente (por año calendario, en hora de Chile).
               items: { type: string, format: date }
 
     Evidencia:

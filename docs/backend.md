@@ -227,11 +227,11 @@ Deciden si una alerta leve avisa o espera al día hábil, y a quién se avisa.
 - **Feriados**: los nacionales de 2026 y 2027 (sin los regionales), según feriados.cl, que cita la BCN. Los de 2027 son provisionales hasta que se publique el calendario oficial. Hay que agregarlos cada año: el reloj recibe el año en curso y el siguiente.
 - **`CalendarioHabil`** (dominio): un momento es hábil si su día tiene horario, no es feriado y la hora cae dentro. Todo se calcula en `America/Santiago`, así que los cambios de hora de abril y septiembre no corren el horario.
 - **`ReglaEnrutamiento`** (aplicación), fija en el código: una alerta leve fuera de horario o en feriado espera al día hábil; en cualquier otro caso se avisa a los contactos activos, con algún canal y cuyo horario cubre ese momento, por prioridad. El horario de cada contacto se respeta siempre, también en horario hábil.
-- **Quién la usa**: el reloj, porque escala (recibirá el calendario con la configuración, 1.7); el servidor, para revisar el `esperaDiaHabil` de las alertas que recibe (2.1.2) y para sus alertas técnicas (2.2).
+- **Quién la usa**: el reloj, porque escala (lo recibe en su configuración); el servidor, para revisar el `esperaDiaHabil` de las alertas que recibe (2.1.2) y para sus alertas técnicas (2.2).
 
 ## API del reloj
 
-Lo que llama el reloj (o el simulador), según el contrato de [api-reloj.md](api-reloj.md). Implementado: sincronización, alertas, cancelaciones y estado de una alerta. Falta: configuración y token de Firebase (1.7), agravamiento (2.1.3), solicitud de aviso y fin del escalamiento (2.10), acuse de avisos FCM (2.3) y webhook de WhatsApp (2.9).
+Lo que llama el reloj (o el simulador), según el contrato de [api-reloj.md](api-reloj.md). Implementado: sincronización, alertas, cancelaciones, estado de una alerta, configuración y token de Firebase. Falta: agravamiento (2.1.3), solicitud de aviso y fin del escalamiento (2.10), acuse de avisos FCM (2.3) y webhook de WhatsApp (2.9).
 
 | Endpoint | Caso de uso | Guarda en |
 |---|---|---|
@@ -239,6 +239,8 @@ Lo que llama el reloj (o el simulador), según el contrato de [api-reloj.md](api
 | `POST /api/reloj/v1/alertas` | `RecibirAlerta.recibir` | `alerta` (origen `RELOJ`, evidencia en `jsonb`) |
 | `POST /api/reloj/v1/cancelaciones` | `RecibirAlerta.registrarCancelacion` | `alerta` con `fecha_hora_cancelacion` |
 | `GET /api/reloj/v1/alertas/{eventId}` | `RecibirAlerta.estado` | — (lee la vista `alerta_estado`) |
+| `GET /api/reloj/v1/configuracion` | `ConfiguracionDelReloj.armar` | — (se calcula de lo vigente) |
+| `PUT /api/reloj/v1/token-fcm` | `RegistrarTokenFcm` | `smartwatch.token_fcm` y `fecha_token_fcm` |
 
 **Autenticación (cadena de seguridad aparte).** `/api/reloj/**` tiene su propia `SecurityFilterChain`, que va antes que la del dashboard. Solo acepta el token del reloj: Spring lo trata como token "opaco" y `IntrospectorTokenReloj` lo busca por su SHA-256 entre los vínculos **vigentes** (`AutenticarReloj`). Un token de un vínculo cerrado, desconocido o ausente responde 401 `TOKEN_INVALIDO`. El token del reloj no abre el dashboard (no es un JWT) y el del dashboard no abre la API del reloj. El controlador recibe el vínculo (`PrincipalReloj`), nunca un id de paciente enviado por el reloj.
 
@@ -250,6 +252,19 @@ Reglas:
 - **Errores:** `ErroresApiReloj` responde en RFC 9457 con `codigo` (`MENSAJE_INVALIDO`, `ALERTA_DESCONOCIDA`, `NO_APLICA`, `LOTE_GRANDE`), solo para los controladores del reloj.
 - **Hora del reloj:** si difiere más de 120 s de la del servidor, se acepta igual y la respuesta informa `desfaseRelojSegundos`.
 - **Sin auditoría:** lo que escribe el reloj no va a `registro_auditoria`; queda en sus propias tablas con la hora de recepción.
+
+### Configuración del reloj
+
+Todo lo que el reloj necesita para evaluar y escalar sin conexión: módulos, GPS, modo conservador, umbrales, `versionMatriz`, minutos de espera, 2 rondas, contactos y calendario hábil.
+
+- **No se guarda: se calcula.** `ConfiguracionDelReloj` (paquete `application/configuracion`) la arma cada vez con `PerfilClinicoPaciente.consultar` (con los valores base donde el paciente no tiene ajustes), `ContactosPaciente.listar` y el `CalendarioHabil` de `calendario.yml`. Así no hay que "publicar" una configuración: cualquier cambio en la base, en `application.properties` o en `calendario.yml` cambia la versión sola.
+- **Versión:** `ContenidoConfiguracion.huella()` = primeros 16 caracteres hexadecimales del SHA-256 de un texto canónico armado campo por campo (no de `toString()`, cuyo formato puede cambiar entre versiones de Java). Es la que el reloj informa en `estado.versionConfiguracion` y la que guarda `sincronizacion.hash_configuracion`.
+- **Solo si cambió:** la versión viaja como ETag. Con `If-None-Match` igual a la vigente, `WebRequest.checkNotModified` responde 304 sin cuerpo. La sincronización responde `configuracionNueva: true` si la versión que informa el reloj no es la vigente (o no informa ninguna), también en un lote repetido. `RecibirSincronizacion` la pide a través de la interfaz `VersionVigente`, sin conocer cómo se arma.
+- **Contactos:** solo los activos con algún canal usable (WhatsApp con opt-in vigente o correo), por prioridad, con id del vínculo, nombre, horario y canales. Sin número ni correo. Puede haber saltos en la prioridad si un contacto no tiene canal.
+- **Feriados:** los del año en curso y el siguiente, por año calendario en hora de Chile. Así la versión cambia una vez al año (el 1 de enero) y no cada vez que pasa un feriado.
+- **`versionMatriz`:** `alertacuida.clinica.version-matriz` en `application.properties`, `PROVISIONAL` hasta recibir el Anexo B.
+- **Token de Firebase:** `RegistrarTokenFcm` lo guarda en el reloj físico (`smartwatch`), no en el vínculo; el nuevo reemplaza al anterior.
+- **Qué versión aplica cada reloj (dashboard):** `ConsultarConfiguracionAplicada` compara la versión del último lote del reloj **vigente** con la que rige hoy: `AL_DIA`, `PENDIENTE`, `SIN_SINCRONIZAR` o `SIN_RELOJ`. "Aplicada desde" es el primer lote de la racha actual con esa versión (`SincronizacionesJdbc.versionInformada`). `GET /api/pacientes/{id}/reloj/configuracion` (`USUARIOS:VER`) lo entrega y la ficha lo muestra en la sección del reloj.
 
 ## Cifrado de datos personales
 

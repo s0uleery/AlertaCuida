@@ -10,7 +10,7 @@ Archivos relacionados: `tecnologias_plataforma_prlac_v3.md` y el [modelo de dato
 |---|---|
 | Tareas | 49 tareas activas y sus subtareas, en 6 fases (2 eliminadas respecto de la v5) |
 | Esfuerzo total | 774 horas-persona (unas 1.006 con 30 % de margen) |
-| Ya hecho | 162 horas al 25-10-2026 (0.1, 0.2, 0.3, casi toda 0.4, casi toda 1.1, 1.2, parte de 1.3, casi toda 1.4, 1.5, 3.2 y 3.3) |
+| Ya hecho | 185 horas al 27-10-2026 (0.1, 0.2, 0.3, casi toda 0.4, casi toda 1.1, 1.2, parte de 1.3, casi toda 1.4, 1.5, 1.7, 1.9, 3.2 y 3.3) |
 | Capacidad del equipo | 60 a 90 horas por semana (3 personas, 20 a 30 h cada una) |
 | Duración estimada | 7 sprints de 2 semanas, unas 14 semanas |
 | Fuera de alcance | App del reloj (ver la sección correspondiente) |
@@ -273,19 +273,21 @@ Depende de: 1.1, 1.3. Listo cuando: toda lectura o cambio de datos queda registr
 | [ ] | 1.6.4 | Gestión de la llave de cifrado en local y en el servidor municipal (acceso restringido, acordado con TI) | 2 |
 | [ ] | 1.6.5 | Pruebas | 2 |
 
-### 1.7 API de configuración del reloj (13 h). Cambia en v7.
+### 1.7 API de configuración del reloj (13 h). Cambia en v7. Hecha.
 Entregar al reloj su configuración solo cuando cambia y controlar qué versión aplica cada reloj. Vuelve a incluir los contactos y los plazos, porque el reloj escala. Los números y correos no viajan: el reloj pide los avisos por identificador de contacto.
 
 Depende de: 1.5, 1.9. Listo cuando: el reloj descarga su configuración solo si cambió, con sus contactos y el calendario hábil, y la plataforma sabe qué versión aplica cada reloj.
 
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
-| [ ] | 1.7.1 | Endpoint que entrega umbrales, reglas de tendencia, GPS sí o no, contactos (sin números ni correos), plazo de espera, horario hábil, feriados y versión, sin reenviar si no cambió | 4 |
-| [ ] | 1.7.2 | Incluir módulos activos y modo conservador | 1 |
-| [ ] | 1.7.3 | Versionado de la configuración y registro de cuándo la aplicó cada reloj | 3 |
-| [ ] | 1.7.4 | Registro del token de Firebase de cada reloj (se renueva cuando el reloj lo informa) | 2 |
-| [ ] | 1.7.5 | Valores base cuando el paciente no tiene ajustes propios | 1 |
-| [ ] | 1.7.6 | Pruebas | 2 |
+| [x] | 1.7.1 | Endpoint que entrega umbrales, reglas de tendencia, GPS sí o no, contactos (sin números ni correos), plazo de espera, horario hábil, feriados y versión, sin reenviar si no cambió | 4 |
+| [x] | 1.7.2 | Incluir módulos activos y modo conservador | 1 |
+| [x] | 1.7.3 | Versionado de la configuración y registro de cuándo la aplicó cada reloj | 3 |
+| [x] | 1.7.4 | Registro del token de Firebase de cada reloj (se renueva cuando el reloj lo informa) | 2 |
+| [x] | 1.7.5 | Valores base cuando el paciente no tiene ajustes propios | 1 |
+| [x] | 1.7.6 | Pruebas | 2 |
+
+Nota (27-10-2026): de las reglas de tendencia por ahora solo viaja `reglas.versionMatriz` (`PROVISIONAL`); sus parámetros esperan el Anexo B. El estado de la configuración de cada reloj se ve en la ficha del usuario.
 
 ### 1.8 Módulo de presión arterial. Eliminada.
 El Samsung Health Sensor SDK no entrega presión arterial, por lo que el módulo se elimina (−16 h).

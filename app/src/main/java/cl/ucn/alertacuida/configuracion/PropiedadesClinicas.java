@@ -3,6 +3,7 @@ package cl.ucn.alertacuida.configuracion;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -16,11 +17,12 @@ import org.springframework.validation.annotation.Validated;
  * @param umbralFc      umbral base de la frecuencia cardíaca, en latidos por minuto
  * @param umbralSpo2    umbral base de la saturación de oxígeno, en %
  * @param minutosEspera antes de pasar al siguiente contacto
+ * @param versionMatriz versión de la matriz FC × SpO2 que aplica el reloj (PROVISIONAL hasta el Anexo B)
  */
 @Validated
 @ConfigurationProperties("alertacuida.clinica")
 public record PropiedadesClinicas(@NotNull @Valid Fc umbralFc, @NotNull @Valid Spo2 umbralSpo2,
-		@Min(1) @Max(60) int minutosEspera) {
+		@Min(1) @Max(60) int minutosEspera, @NotBlank String versionMatriz) {
 
 	/** Límites de la FC: grave bajo &lt; mínimo normal &lt; máximo normal &lt; grave alto. */
 	public record Fc(@NotNull BigDecimal graveBajo, @NotNull BigDecimal normalMin, @NotNull BigDecimal normalMax,

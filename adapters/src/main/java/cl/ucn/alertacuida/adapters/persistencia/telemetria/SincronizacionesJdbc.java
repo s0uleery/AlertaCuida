@@ -6,6 +6,7 @@ import cl.ucn.alertacuida.application.telemetria.modelo.LecturaRecibida;
 import cl.ucn.alertacuida.application.telemetria.modelo.LoteRecibido;
 import cl.ucn.alertacuida.application.telemetria.modelo.SincronizacionGuardada;
 import cl.ucn.alertacuida.application.telemetria.modelo.UbicacionRecibida;
+import cl.ucn.alertacuida.application.telemetria.modelo.VersionInformada;
 import cl.ucn.alertacuida.application.telemetria.puerto.Sincronizaciones;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -131,6 +132,32 @@ public class SincronizacionesJdbc implements Sincronizaciones {
 					.param("cantidad", descartado.cantidad())
 					.update();
 		}
+	}
+
+	/**
+	 * El último lote da la versión; "desde" es el primer lote posterior al último que informó otra
+	 * versión (o ninguna). Si el reloj pasó de A a B y volvió a A, cuenta desde que volvió a A.
+	 */
+	@Override
+	public Optional<VersionInformada> versionInformada(UUID idAsignacion) {
+		return jdbc.sql("""
+				SELECT u.hash_configuracion, u.fecha_hora_recepcion AS ultima,
+					(SELECT min(s.fecha_hora_recepcion) FROM sincronizacion s
+					WHERE s.id_asignacion = u.id_asignacion
+						AND s.hash_configuracion IS NOT DISTINCT FROM u.hash_configuracion
+						AND s.fecha_hora_recepcion > COALESCE(
+							(SELECT max(o.fecha_hora_recepcion) FROM sincronizacion o
+							WHERE o.id_asignacion = u.id_asignacion
+								AND o.hash_configuracion IS DISTINCT FROM u.hash_configuracion),
+							'-infinity')) AS desde
+				FROM sincronizacion u
+				WHERE u.id_asignacion = :asignacion
+				ORDER BY u.fecha_hora_recepcion DESC
+				LIMIT 1""")
+				.param("asignacion", idAsignacion)
+				.query((fila, n) -> new VersionInformada(fila.getString("hash_configuracion"),
+						fila.getTimestamp("ultima").toInstant(), fila.getTimestamp("desde").toInstant()))
+				.optional();
 	}
 
 }

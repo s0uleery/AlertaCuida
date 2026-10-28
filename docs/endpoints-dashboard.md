@@ -63,6 +63,7 @@ Los tipos de TypeScript de cada respuesta ya están en `frontend/src/features/*/
 | `POST /api/pacientes/{id}/reloj/reemplazo` | `USUARIOS:EDITAR` | 200 `TokenReloj` |
 | `DELETE /api/pacientes/{id}/reloj` | `USUARIOS:EDITAR` | 204 |
 | `POST /api/pacientes/{id}/reloj/token` | `USUARIOS:EDITAR` | 200 `TokenReloj` |
+| `GET /api/pacientes/{id}/reloj/configuracion` | `USUARIOS:VER` | 200 `ConfiguracionAplicada` |
 | **Inventario de relojes** | | |
 | `GET /api/relojes` | `USUARIOS:VER` | 200 `RelojConPaciente[]` |
 | `POST /api/relojes` | `USUARIOS:CREAR` | 201 `{id}` |
@@ -261,6 +262,21 @@ Retira el reloj y su token deja de servir. 409 si el paciente no tenía reloj.
 
 ### `POST /api/pacientes/{id}/reloj/token`
 Emite otro token para el mismo reloj (por ejemplo, si se perdió). El anterior deja de servir.
+
+### `GET /api/pacientes/{id}/reloj/configuracion`
+Si el reloj ya aplica la configuración vigente (contactos, umbrales, calendario), según la versión que informó en su último lote.
+```json
+{
+  "estado": "AL_DIA",
+  "versionVigente": "9f2c4e1a7b3d5e60",
+  "versionReloj": "9f2c4e1a7b3d5e60",
+  "aplicadaDesde": "2026-10-27T14:05:00Z",
+  "ultimaSincronizacion": "2026-10-27T16:05:00Z"
+}
+```
+- `estado`: `AL_DIA`, `PENDIENTE` (el reloj aún no descarga los últimos cambios), `SIN_SINCRONIZAR` (reloj recién entregado) o `SIN_RELOJ`.
+- `aplicadaDesde`: primer lote de la racha actual con esa versión. Vacío si no ha sincronizado.
+- Solo cuenta el reloj vigente. 404 si el paciente no existe.
 
 ## Inventario de relojes
 

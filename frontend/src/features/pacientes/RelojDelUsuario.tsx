@@ -6,6 +6,7 @@ import { useDatos } from '../../comun/useDatos';
 import { relojesApi } from '../relojes/relojesApi';
 import { NOMBRE_ESTADO, type EstadoReloj } from '../relojes/tipos';
 import { useSesion } from '../sesion/SesionContext';
+import { ConfiguracionDelReloj } from './ConfiguracionDelReloj';
 import { pacientesApi } from './pacientesApi';
 import { TokenRelojMostrado } from './TokenRelojMostrado';
 import type { DetallePaciente, TokenReloj } from './tipos';
@@ -57,10 +58,13 @@ export function RelojDelUsuario({ detalle, alCambiar }: Props) {
       {token && <TokenRelojMostrado token={token} alCerrar={() => setToken(null)} />}
 
       {vigente ? (
-        <p className="text-slate-700">
-          Usa el reloj <strong className="font-mono">{vigente.identificadorReloj}</strong> desde el{' '}
-          {formatearFechaHora(vigente.inicio)}.
-        </p>
+        <>
+          <p className="text-slate-700">
+            Usa el reloj <strong className="font-mono">{vigente.identificadorReloj}</strong> desde el{' '}
+            {formatearFechaHora(vigente.inicio)}.
+          </p>
+          <ConfiguracionDelReloj idPaciente={paciente.id} idAsignacion={vigente.idAsignacion} />
+        </>
       ) : (
         <p className="text-slate-500">No tiene reloj.</p>
       )}

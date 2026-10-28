@@ -5,6 +5,7 @@ import cl.ucn.alertacuida.application.reloj.modelo.Reloj;
 import cl.ucn.alertacuida.application.reloj.modelo.RelojConPaciente;
 import cl.ucn.alertacuida.application.reloj.puerto.Relojes;
 import cl.ucn.alertacuida.domain.reloj.EstadoReloj;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,6 +16,8 @@ import java.util.UUID;
 public final class RelojesEnMemoria implements Relojes {
 
 	private final Map<UUID, Reloj> guardados = new LinkedHashMap<>();
+	/** Token de Firebase de cada reloj, por su identificador. */
+	public final Map<UUID, String> tokensFcm = new LinkedHashMap<>();
 
 	/** Atajo de las pruebas: registra un reloj con ese identificador y estado. */
 	public UUID agregar(String identificador, EstadoReloj estado) {
@@ -54,6 +57,11 @@ public final class RelojesEnMemoria implements Relojes {
 	@Override
 	public List<RelojConPaciente> listar() {
 		return guardados.values().stream().map(r -> new RelojConPaciente(r, null, null)).toList();
+	}
+
+	@Override
+	public void guardarTokenFcm(UUID id, String token, Instant fecha) {
+		tokensFcm.put(id, token);
 	}
 
 }

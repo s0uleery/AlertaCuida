@@ -40,8 +40,10 @@ class RecibirSincronizacionTest {
 
 	private final SincronizacionesEnMemoria guardadas = new SincronizacionesEnMemoria();
 	private final Transacciones enTransaccion = Supplier::get;
-	private final RecibirSincronizacion recibir = new RecibirSincronizacion(guardadas, enTransaccion,
-			Clock.fixed(AHORA, ZoneOffset.UTC));
+	/** Versión de configuración vigente en el servidor; los lotes de prueba informan "v1". */
+	private String vigente = "v1";
+	private final RecibirSincronizacion recibir = new RecibirSincronizacion(guardadas, idPaciente -> vigente,
+			enTransaccion, Clock.fixed(AHORA, ZoneOffset.UTC));
 
 	/** Guarda el estado, las lecturas válidas, las ubicaciones y los contadores (sumados por tipo). */
 	@Test
@@ -129,10 +131,47 @@ class RecibirSincronizacionTest {
 	}
 
 	/** @return un lote con una ubicación y el estado de un reloj normal */
+	/** Si el reloj ya aplica la versión vigente no la descarga; si informa otra o ninguna, sí. */
+	@Test
+	void avisaCuandoElRelojDebeDescargarLaConfiguracion() {
+		ResultadoSincronizacion alDia = recibir.recibir(RELOJ, lote(UUID.randomUUID(), AHORA, List.of(), List.of()));
+		assertThat(alDia.configuracionNueva()).isFalse();
+		assertThat(alDia.versionConfiguracion()).isEqualTo("v1");
+
+		vigente = "v2";
+		ResultadoSincronizacion cambiada = recibir.recibir(RELOJ,
+				lote(UUID.randomUUID(), AHORA, List.of(), List.of()));
+		assertThat(cambiada.configuracionNueva()).isTrue();
+		assertThat(cambiada.versionConfiguracion()).isEqualTo("v2");
+
+		ResultadoSincronizacion sinNinguna = recibir.recibir(RELOJ, lote(UUID.randomUUID(), null));
+		assertThat(sinNinguna.configuracionNueva()).isTrue();
+	}
+
+	/** Un lote reenviado responde con la versión que rige ahora, aunque haya cambiado desde el primer envío. */
+	@Test
+	void unLoteReenviadoTraeLaVersionDeAhora() {
+		LoteRecibido lote = lote(UUID.randomUUID(), AHORA, List.of(), List.of());
+		recibir.recibir(RELOJ, lote);
+
+		vigente = "v2";
+		ResultadoSincronizacion repetido = recibir.recibir(RELOJ, lote);
+
+		assertThat(repetido.loteRepetido()).isTrue();
+		assertThat(repetido.configuracionNueva()).isTrue();
+		assertThat(repetido.versionConfiguracion()).isEqualTo("v2");
+	}
+
 	private static LoteRecibido lote(UUID eventId, Instant envio, List<LecturaRecibida> lecturas,
 			List<EventoDescartado> descartados) {
 		return new LoteRecibido(eventId, envio, new EstadoInformado(80, true, 120, TipoConexion.LTE, "1.0", "v1"),
 				lecturas, List.of(new UbicacionRecibida(-23.65, -70.4, 10.0, AHORA.minusSeconds(600))), descartados);
+	}
+
+	/** @return un lote sin lecturas cuyo reloj informa esa versión de configuración (o ninguna) */
+	private static LoteRecibido lote(UUID eventId, String version) {
+		return new LoteRecibido(eventId, AHORA, new EstadoInformado(80, true, 120, TipoConexion.LTE, "1.0", version),
+				List.of(), List.of(), List.of());
 	}
 
 	/** @return una lectura de FC medida hace tantos minutos (negativo = en el futuro) */

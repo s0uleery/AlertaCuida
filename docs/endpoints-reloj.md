@@ -33,6 +33,8 @@ Lo que el backend **ya atiende** para el reloj (o el simulador), al 26 de octubr
 | `POST /api/reloj/v1/alertas` | Al terminar la ventana de 30 s sin cancelación | 201 nueva, 200 reenvío |
 | `POST /api/reloj/v1/cancelaciones` | Si el paciente canceló dentro de los 30 s (solo métricas) | 201 nueva, 200 reenvío |
 | `GET /api/reloj/v1/alertas/{eventId}` | Antes de pasar al siguiente contacto | 200 |
+| `GET /api/reloj/v1/configuracion` | Si la sincronización responde `configuracionNueva: true` | 200, 304 si no cambió |
+| `PUT /api/reloj/v1/token-fcm` | Al instalarse y cada vez que Firebase renueva el token | 204 |
 
 ## `POST /api/reloj/v1/sincronizaciones`
 
@@ -85,14 +87,15 @@ Respuesta 200:
   "lecturasRepetidas": 0,
   "lecturasRechazadas": [ { "indice": 1, "motivo": "FUERA_DE_RANGO" } ],
   "loteRepetido": false,
-  "configuracionNueva": false
+  "configuracionNueva": false,
+  "versionConfiguracion": "9f2c4e1a7b3d5e60"
 }
 ```
 - **Una lectura mala no rechaza el lote:** se descarta solo esa y aparece en `lecturasRechazadas`, con su posición en `lecturas` (desde 0). Motivos: `FUERA_DE_RANGO`, `HORA_FUTURA`, `ANTERIOR_A_LA_ASIGNACION`.
 - `lecturasRepetidas`: lecturas que ya habían llegado en otro lote. No es un error.
 - `loteRepetido: true`: ese `eventId` ya había llegado. La respuesta repite los contadores de la primera vez.
 - `desfaseRelojSegundos`: solo aparece si la hora del reloj difiere en más de 120 s de la del servidor.
-- **Por ahora `configuracionNueva` siempre es `false` y no viene `versionConfiguracion`**: la descarga de la configuración (`GET /configuracion`) llega con la tarea 1.7.
+- **`configuracionNueva: true`** si la versión que informó el reloj (`estado.versionConfiguracion`) no es la vigente, o si no informó ninguna: el reloj debe descargarla con `GET /configuracion`. `versionConfiguracion` trae la vigente. También en un lote repetido, con la versión de ahora.
 
 ## `POST /api/reloj/v1/alertas`
 
@@ -173,14 +176,51 @@ El reloj la consulta antes de avisar al siguiente contacto, para saber si alguie
 - **Si `detenerEscalamiento` es `true`** (confirmada, resuelta o cancelada), el reloj deja de avisar.
 - 404 `ALERTA_DESCONOCIDA` si este reloj no envió una alerta con ese `eventId`.
 
+## `GET /api/reloj/v1/configuracion`
+
+Todo lo que el reloj necesita para evaluar y escalar sin conexión. Con `If-None-Match` y la versión que ya tiene, responde **304 sin cuerpo** si no cambió. La versión viaja también en la cabecera `ETag` (entre comillas).
+
+```json
+{
+  "version": "9f2c4e1a7b3d5e60",
+  "modulos": { "caidas": true, "fc": true, "spo2": true, "inactividad": true, "tendencia": false },
+  "gpsActivo": false,
+  "modoConservador": false,
+  "umbrales": {
+    "fc": { "graveBajo": 40, "normalMin": 50, "normalMax": 110, "graveAlto": 130 },
+    "spo2": { "graveBajo": 88, "normalMin": 92 }
+  },
+  "reglas": { "versionMatriz": "PROVISIONAL" },
+  "escalamiento": { "minutosEspera": 5, "rondas": 2 },
+  "contactos": [
+    { "idContacto": "…", "nombre": "Ana Rojas", "prioridad": 1, "horario": null, "canales": ["WHATSAPP", "CORREO"] },
+    { "idContacto": "…", "nombre": "Seguridad Ciudadana", "prioridad": 2, "horario": { "inicio": "20:00", "fin": "08:00" }, "canales": ["CORREO"] }
+  ],
+  "calendario": {
+    "zonaHoraria": "America/Santiago",
+    "horarioHabil": [ { "dia": "LUNES", "inicio": "08:30", "fin": "17:30" } ],
+    "feriados": [ "2026-11-01", "2026-12-08" ]
+  }
+}
+```
+- **Umbrales y espera**: los del paciente, o los valores base si no tiene ajustes.
+- **Contactos**: solo los activos con algún canal que el servidor pueda usar hoy (WhatsApp con opt-in vigente, o correo), por prioridad. Sin número ni correo: el reloj pide los avisos por `idContacto`. `horario: null` = todo el día; si `inicio` > `fin`, cruza la medianoche.
+- **Feriados**: del año en curso y el siguiente. Las horas van en hora de Chile.
+- **`versionMatriz`**: `PROVISIONAL` hasta recibir el Anexo B.
+
+## `PUT /api/reloj/v1/token-fcm`
+
+```json
+{ "token": "token-que-entrega-firebase" }
+```
+Responde 204. El nuevo token reemplaza al anterior. 400 `MENSAJE_INVALIDO` si viene vacío o supera 4.096 caracteres.
+
 ## Todavía no existen
 
 Están definidos en el contrato ([api-reloj.yaml](api-reloj.yaml)), pero el servidor aún no los atiende.
 
 | Método y ruta | Para qué | Cronograma |
 |---|---|---|
-| `GET /api/reloj/v1/configuracion` | Descargar módulos, umbrales, contactos, horario hábil y feriados | 1.7 |
-| `PUT /api/reloj/v1/token-fcm` | Registrar el token de Firebase del reloj | 1.7 |
 | `POST /api/reloj/v1/alertas/{eventId}/agravamiento` | Caída leve o media que pasa a grave por inmovilidad | 2.1.3 |
 | `POST /api/reloj/v1/avisos-fcm/{idAviso}/recepcion` | Acusar que llegó un aviso FCM | 2.3 |
 | `POST /api/reloj/v1/alertas/{eventId}/avisos` | Pedir al servidor que avise a un contacto | 2.10 |

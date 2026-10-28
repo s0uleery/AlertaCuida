@@ -5,13 +5,16 @@ import cl.ucn.alertacuida.application.telemetria.modelo.LecturaRecibida;
 import cl.ucn.alertacuida.application.telemetria.modelo.LoteRecibido;
 import cl.ucn.alertacuida.application.telemetria.modelo.SincronizacionGuardada;
 import cl.ucn.alertacuida.application.telemetria.modelo.UbicacionRecibida;
+import cl.ucn.alertacuida.application.telemetria.modelo.VersionInformada;
 import cl.ucn.alertacuida.application.telemetria.puerto.Sincronizaciones;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -22,8 +25,8 @@ import java.util.UUID;
  */
 public final class SincronizacionesEnMemoria implements Sincronizaciones {
 
-	/** Un lote guardado. */
-	public record Fila(UUID id, UUID eventId, UUID idAsignacion, Instant recepcion) {
+	/** Un lote guardado, con la versión de configuración que informó el reloj. */
+	public record Fila(UUID id, UUID eventId, UUID idAsignacion, Instant recepcion, String version) {
 	}
 
 	/** Lotes guardados, por su identificador. */
@@ -50,7 +53,7 @@ public final class SincronizacionesEnMemoria implements Sincronizaciones {
 			return Optional.empty();
 		}
 		UUID id = UUID.randomUUID();
-		lotes.put(id, new Fila(id, lote.eventId(), idAsignacion, recepcion));
+		lotes.put(id, new Fila(id, lote.eventId(), idAsignacion, recepcion, lote.estado().versionConfiguracion()));
 		return Optional.of(id);
 	}
 
@@ -71,6 +74,22 @@ public final class SincronizacionesEnMemoria implements Sincronizaciones {
 	@Override
 	public void guardarDescartados(UUID idSincronizacion, List<EventoDescartado> nuevos) {
 		descartados.addAll(nuevos);
+	}
+
+	/** Igual que la base: "desde" cuenta desde el primer lote después del último con otra versión. */
+	@Override
+	public Optional<VersionInformada> versionInformada(UUID idAsignacion) {
+		List<Fila> delReloj = lotes.values().stream().filter(f -> f.idAsignacion().equals(idAsignacion))
+				.sorted(Comparator.comparing(Fila::recepcion)).toList();
+		if (delReloj.isEmpty()) {
+			return Optional.empty();
+		}
+		Fila ultima = delReloj.getLast();
+		Instant desde = ultima.recepcion();
+		for (int i = delReloj.size() - 1; i >= 0 && Objects.equals(delReloj.get(i).version(), ultima.version()); i--) {
+			desde = delReloj.get(i).recepcion();
+		}
+		return Optional.of(new VersionInformada(ultima.version(), ultima.recepcion(), desde));
 	}
 
 }

@@ -19,6 +19,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.Period;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -118,6 +119,28 @@ class PacientesYRelojesTest {
 				.andExpect(jsonPath("$[0].relojActual").value("R-001"));
 		mvc.perform(conToken(get("/api/relojes"), coordinador))
 				.andExpect(jsonPath("$[0].nombrePaciente").value("María Rojas"));
+	}
+
+	/**
+	 * La ficha muestra si el reloj aplica la configuración: sin reloj, o sin sincronizar recién
+	 * entregado. El rol PERSONAL no la ve.
+	 */
+	@Test
+	void laFichaMuestraElEstadoDeLaConfiguracionDelReloj() throws Exception {
+		String maria = crearPaciente("12.345.678-5", "2026-01-10");
+		String ruta = "/api/pacientes/" + maria + "/reloj/configuracion";
+
+		mvc.perform(conToken(get(ruta), coordinador))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.estado").value("SIN_RELOJ"))
+				.andExpect(jsonPath("$.versionVigente").isString());
+		vincular(maria, crearReloj("R-001")).andExpect(status().isCreated());
+		mvc.perform(conToken(get(ruta), coordinador))
+				.andExpect(jsonPath("$.estado").value("SIN_SINCRONIZAR"));
+
+		mvc.perform(conToken(get(ruta), token("22.222.222-2", "Clave-de-Pers1"))).andExpect(status().isForbidden());
+		mvc.perform(conToken(get("/api/pacientes/" + UUID.randomUUID() + "/reloj/configuracion"), coordinador))
+				.andExpect(status().isNotFound());
 	}
 
 	/** Un reloj no puede estar con dos pacientes, ni pasar a "en reparación" mientras se usa. */

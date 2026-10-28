@@ -654,6 +654,26 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problema' }
 
+  /api/pacientes/{idPaciente}/reloj/configuracion:
+    parameters:
+      - $ref: '#/components/parameters/IdPaciente'
+    get:
+      tags: [Reloj del paciente]
+      operationId: configuracionAplicada
+      summary: Si el reloj ya aplica la configuración vigente (contactos, umbrales, calendario)
+      description: |
+        Compara la versión que informó el reloj vigente en su último lote con la que rige hoy.
+        Permiso: `USUARIOS:VER`.
+      responses:
+        '200':
+          description: Estado de la configuración en el reloj.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConfiguracionAplicada' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
   /api/relojes:
     get:
       tags: [Inventario de relojes]
@@ -1079,6 +1099,21 @@ components:
       properties:
         idAsignacion: { type: string, format: uuid }
         token: { type: string, description: Se muestra una sola vez. }
+    ConfiguracionAplicada:
+      type: object
+      required: [estado, versionVigente]
+      properties:
+        estado:
+          type: string
+          enum: [AL_DIA, PENDIENTE, SIN_SINCRONIZAR, SIN_RELOJ]
+          description: PENDIENTE = el reloj aún no descarga los últimos cambios.
+        versionVigente: { type: string, description: La que calcula hoy el servidor. }
+        versionReloj: { type: [string, 'null'], description: La del último lote; null si no informó ninguna. }
+        aplicadaDesde:
+          type: [string, 'null']
+          format: date-time
+          description: Primer lote de la racha actual con esa versión; null si no ha sincronizado.
+        ultimaSincronizacion: { type: [string, 'null'], format: date-time }
     DatosReloj:
       type: object
       required: [identificadorReloj]
