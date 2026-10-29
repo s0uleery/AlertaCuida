@@ -4,6 +4,7 @@ import cl.ucn.alertacuida.application.asignacion.modelo.RelojAutenticado;
 import cl.ucn.alertacuida.application.comun.error.Conflicto;
 import cl.ucn.alertacuida.application.comun.error.SolicitudRechazada;
 import cl.ucn.alertacuida.application.comun.puerto.Transacciones;
+import cl.ucn.alertacuida.application.configuracion.VersionVigente;
 import cl.ucn.alertacuida.application.telemetria.error.LoteGrande;
 import cl.ucn.alertacuida.application.telemetria.modelo.EstadoInformado;
 import cl.ucn.alertacuida.application.telemetria.modelo.EventoDescartado;
@@ -32,6 +33,9 @@ import java.util.UUID;
  * <p>Un mensaje mal formado se rechaza entero (400): es un error del reloj. Pero una lectura mala
  * se descarta sola y se informa, para que la cola del reloj no se trabe reintentando para siempre.
  * Reenviar un lote ya recibido no duplica nada.
+ *
+ * <p>La respuesta dice si el reloj debe descargar la configuración: si la versión que informa no
+ * es la vigente. Así la configuración no viaja en cada sincronización.
  */
 public class RecibirSincronizacion {
 
@@ -43,12 +47,15 @@ public class RecibirSincronizacion {
 	static final Duration DESFASE_AVISADO = Duration.ofSeconds(120);
 
 	private final Sincronizaciones sincronizaciones;
+	private final VersionVigente versiones;
 	private final Transacciones transacciones;
 	private final Clock reloj;
 
-	/** Recibe los puertos que usa; los arma ConfiguracionApiReloj. */
-	public RecibirSincronizacion(Sincronizaciones sincronizaciones, Transacciones transacciones, Clock reloj) {
+	/** Recibe lo que usa; lo arma ConfiguracionApiReloj. */
+	public RecibirSincronizacion(Sincronizaciones sincronizaciones, VersionVigente versiones,
+			Transacciones transacciones, Clock reloj) {
 		this.sincronizaciones = sincronizaciones;
+		this.versiones = versiones;
 		this.transacciones = transacciones;
 		this.reloj = reloj;
 	}
@@ -65,8 +72,9 @@ public class RecibirSincronizacion {
 		validar(lote);
 		Optional<SincronizacionGuardada> anterior = sincronizaciones.buscar(lote.eventId());
 		if (anterior.isPresent()) {
-			return repetido(anterior.get(), quien);
+			return repetido(anterior.get(), quien, lote);
 		}
+		String vigente = versiones.de(quien.idPaciente());
 		Instant ahora = reloj.instant();
 		List<LecturaRecibida> validas = new ArrayList<>();
 		List<LecturaRechazada> rechazadas = new ArrayList<>();
@@ -94,10 +102,11 @@ public class RecibirSincronizacion {
 				.orElse(null));
 		if (guardado == null) {
 			// Otro envío del mismo lote se guardó entre la búsqueda y el INSERT
-			return repetido(sincronizaciones.buscar(lote.eventId()).orElseThrow(), quien);
+			return repetido(sincronizaciones.buscar(lote.eventId()).orElseThrow(), quien, lote);
 		}
 		return new ResultadoSincronizacion(guardado.id(), ahora, guardado.lecturas(),
-				validas.size() - guardado.lecturas(), rechazadas, false, desfase(lote.envio(), ahora), false, null);
+				validas.size() - guardado.lecturas(), rechazadas, false, desfase(lote.envio(), ahora),
+				!vigente.equals(lote.estado().versionConfiguracion()), vigente);
 	}
 
 	/** Identificador del lote recién guardado y cuántas lecturas nuevas trajo. */
@@ -159,15 +168,18 @@ public class RecibirSincronizacion {
 	}
 
 	/**
-	 * @return la respuesta a un lote reenviado: lo que quedó guardado la primera vez
+	 * @return la respuesta a un lote reenviado: lo que quedó guardado la primera vez, con la
+	 *         versión de configuración que rige ahora (pudo cambiar desde el primer envío)
 	 * @throws Conflicto si el lote es de otro reloj
 	 */
-	private static ResultadoSincronizacion repetido(SincronizacionGuardada anterior, RelojAutenticado quien) {
+	private ResultadoSincronizacion repetido(SincronizacionGuardada anterior, RelojAutenticado quien,
+			LoteRecibido lote) {
 		if (!anterior.idAsignacion().equals(quien.idAsignacion())) {
 			throw new Conflicto("Ese eventId ya lo usó otro reloj");
 		}
+		String vigente = versiones.de(quien.idPaciente());
 		return new ResultadoSincronizacion(anterior.id(), anterior.recepcion(), anterior.lecturas(), 0, List.of(),
-				true, null, false, null);
+				true, null, !vigente.equals(lote.estado().versionConfiguracion()), vigente);
 	}
 
 }

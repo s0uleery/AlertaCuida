@@ -104,6 +104,6 @@ Si nadie confirma, el reloj recorre la lista dos veces y termina con `POST /aler
 
 ## Pendiente
 
-- Ya implementados (25-10-2026, tarea 1.4): sincronización, alertas, cancelaciones y estado de una alerta. Detalle en [backend.md](backend.md#api-del-reloj).
-- Por implementar: 1.7 (configuración y token FCM), 2.1.3 (agravamiento), 2.3 (avisos FCM y acuse), 2.9 (webhook) y 2.10 (solicitud de aviso y fin del escalamiento).
+- Ya implementados: sincronización, alertas, cancelaciones y estado de una alerta (25-10-2026, tarea 1.4); configuración y token de Firebase (27-10-2026, tarea 1.7). Detalle en [backend.md](backend.md#api-del-reloj).
+- Por implementar: 2.1.3 (agravamiento), 2.3 (avisos FCM y acuse), 2.9 (webhook) y 2.10 (solicitud de aviso y fin del escalamiento).
 - Definir con TI el subdominio público (0.8); en el contrato figura uno de ejemplo.

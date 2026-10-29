@@ -12,7 +12,7 @@ import java.util.UUID;
  * Los campos vacíos no se envían.
  *
  * @param desfaseRelojSegundos solo si el reloj está más de 120 s adelantado o atrasado
- * @param versionConfiguracion la vigente; no se envía hasta que exista la configuración del reloj
+ * @param versionConfiguracion la vigente en el servidor
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record RespuestaSincronizacion(UUID idSincronizacion, Instant fechaHoraRecepcion, int lecturasGuardadas,

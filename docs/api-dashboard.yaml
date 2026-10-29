@@ -1,0 +1,1168 @@
+openapi: 3.1.0
+info:
+  title: AlertaCuida - API del dashboard
+  version: 0.1.0
+  summary: Endpoints que el dashboard (frontend) puede llamar hoy.
+  description: |
+    Estado al 26 de octubre de 2026: solo trae lo que el backend **ya atiende**. Lo que falta
+    está al final de esta descripción. La API del reloj va aparte, en `docs/api-reloj.yaml`; el
+    porqué de cada regla, en `docs/backend.md`.
+
+    - En desarrollo, el front corre en `http://localhost:5173` y Vite reenvía `/api` al backend.
+      Usuario de ejemplo (perfil `dev`): RUN `11.111.111-1`, contraseña `Admin1234!`.
+    - Todo exige `Authorization: Bearer <token>`, salvo `login` y `activar`. Sin token o con
+      uno vencido, la respuesta es 401; sin el permiso que pide el endpoint, 403.
+    - Los permisos viajan en el token (`usuario.permisos`, por ejemplo `USUARIOS:VER`) y se
+      actualizan al iniciar sesión de nuevo.
+    - El módulo `USUARIOS` son los **pacientes** (las personas mayores). Las cuentas del equipo
+      están en `ADMINISTRACION`, que solo tiene el administrador.
+    - Ids UUID; fechas `AAAA-MM-DD`; instantes ISO 8601 en UTC; horas `HH:mm`.
+    - Los tipos de TypeScript de cada respuesta están en `frontend/src/features/*/tipos.ts`.
+
+    **Errores, en dos formatos:**
+    - Las reglas del negocio (400, 404, 409 y el 401 del login) responden
+      `application/problem+json` (RFC 9457); el texto para mostrar va en `detail`.
+    - Los errores de forma (falta un campo obligatorio, JSON mal escrito, un UUID o un valor de
+      enumeración inválido) responden con el formato por defecto de Spring:
+      `{timestamp, status, error, path}`, sin `detail`.
+
+    **Todavía no existen:** `/api/alertas` (3.4; el formato que espera el front está en
+    `features/alertas/tipos.ts`), panel de estado general (3.4.1), tendencias de FC y SpO2
+    (3.5), reportes (3.6), bandeja de día hábil (3.7), estado técnico de los relojes (3.8),
+    cierre de sesión y renovación del token (1.3.4) y el listado de cuentas del equipo.
+servers:
+  - url: http://localhost:8080
+    description: Backend en desarrollo (desde el front, usar rutas relativas `/api/...`)
+tags:
+  - name: Sesión
+    description: Inicio de sesión y activación de cuentas.
+  - name: Cuentas del equipo
+    description: Alta de cuentas del personal. Solo el administrador.
+  - name: Pacientes
+    description: Personas mayores atendidas (en pantalla, "usuarios").
+  - name: Condiciones
+    description: Enfermedades y situaciones del paciente.
+  - name: Perfil clínico
+    description: Módulos de detección, opciones y umbrales del paciente.
+  - name: Contactos
+    description: Contactos de emergencia del paciente, en orden de aviso.
+  - name: Reloj del paciente
+    description: Vincular, reemplazar o retirar el reloj de un paciente.
+  - name: Inventario de relojes
+    description: Registro y edición de los relojes.
+  - name: Calendario
+    description: Horario hábil y feriados, de solo lectura.
+
+security:
+  - tokenDashboard: []
+
+paths:
+  /api/auth/login:
+    post:
+      tags: [Sesión]
+      operationId: iniciarSesion
+      summary: Inicia sesión con RUN y contraseña
+      description: |
+        Responde 401 con el mismo mensaje ("RUN o contraseña incorrectos") si el RUN no existe,
+        si la contraseña es incorrecta o si la cuenta está bloqueada (5 fallos en 15 minutos).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SolicitudLogin' }
+      responses:
+        '200':
+          description: Sesión iniciada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RespuestaLogin' }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401':
+          description: RUN o contraseña incorrectos, o cuenta bloqueada.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problema' }
+
+  /api/auth/yo:
+    get:
+      tags: [Sesión]
+      operationId: usuarioActual
+      summary: Usuario del token, para recuperar la sesión al recargar la página
+      responses:
+        '200':
+          description: Usuario con sus permisos.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Usuario' }
+        '401': { $ref: '#/components/responses/SinToken' }
+
+  /api/auth/activar:
+    post:
+      tags: [Sesión]
+      operationId: activarCuenta
+      summary: Activa una cuenta con el token del enlace y la contraseña elegida
+      description: La persona llega desde `/activar?token=…`. La contraseña tiene al menos 12 caracteres y no puede ser su RUN.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SolicitudActivacion' }
+      responses:
+        '204': { description: Cuenta activada. }
+        '400':
+          description: El enlace no sirve o venció, o la contraseña no cumple las reglas.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problema' }
+
+  /api/personal:
+    post:
+      tags: [Cuentas del equipo]
+      operationId: crearCuenta
+      summary: Crea una cuenta del equipo y devuelve su enlace de activación
+      description: 'Permiso: `ADMINISTRACION:CREAR`.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SolicitudCuenta' }
+      responses:
+        '201':
+          description: Cuenta creada, pendiente de activación.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RespuestaEnlace' }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '409': { $ref: '#/components/responses/Conflicto' }
+
+  /api/personal/{idUsuario}/enlace-activacion:
+    parameters:
+      - $ref: '#/components/parameters/IdUsuario'
+    post:
+      tags: [Cuentas del equipo]
+      operationId: nuevoEnlaceActivacion
+      summary: Emite otro enlace de activación; el anterior deja de servir
+      description: 'Permiso: `ADMINISTRACION:CREAR`.'
+      responses:
+        '200':
+          description: Enlace nuevo.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RespuestaEnlace' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404':
+          description: La cuenta no existe o ya está activa.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problema' }
+
+  /api/pacientes:
+    get:
+      tags: [Pacientes]
+      operationId: listarPacientes
+      summary: Lista de pacientes con su edad y su reloj actual
+      description: 'Permiso: `USUARIOS:VER`.'
+      parameters:
+        - name: incluirBajas
+          in: query
+          schema: { type: boolean, default: false }
+          description: true para incluir a los dados de baja.
+      responses:
+        '200':
+          description: Pacientes.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ResumenPaciente' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+    post:
+      tags: [Pacientes]
+      operationId: registrarPaciente
+      summary: Registra un paciente
+      description: 'Permiso: `USUARIOS:CREAR`.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DatosPaciente' }
+      responses:
+        '201': { $ref: '#/components/responses/Creado' }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '409':
+          description: Ya existe un paciente con ese RUN.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problema' }
+
+  /api/pacientes/{idPaciente}:
+    parameters:
+      - $ref: '#/components/parameters/IdPaciente'
+    get:
+      tags: [Pacientes]
+      operationId: detallePaciente
+      summary: Ficha del paciente con el historial de relojes
+      description: 'Permiso: `USUARIOS:VER`.'
+      responses:
+        '200':
+          description: Ficha.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetallePaciente' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+    put:
+      tags: [Pacientes]
+      operationId: editarPaciente
+      summary: Reemplaza los datos del paciente (también el RUN, si se escribió mal)
+      description: 'Permiso: `USUARIOS:EDITAR`.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DatosPaciente' }
+      responses:
+        '204': { description: Guardado. }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '409':
+          description: Otro paciente tiene ese RUN, o se quitó el consentimiento a alguien que tiene reloj.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problema' }
+
+  /api/pacientes/{idPaciente}/baja:
+    parameters:
+      - $ref: '#/components/parameters/IdPaciente'
+    post:
+      tags: [Pacientes]
+      operationId: darDeBaja
+      summary: Da de baja al paciente con la fecha de hoy y cierra su reloj
+      description: 'Permiso: `USUARIOS:ELIMINAR`. No borra nada.'
+      responses:
+        '204': { description: Dado de baja. }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '409':
+          description: Ya estaba dado de baja.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problema' }
+
+  /api/pacientes/{idPaciente}/condiciones:
+    parameters:
+      - $ref: '#/components/parameters/IdPaciente'
+    get:
+      tags: [Condiciones]
+      operationId: listarCondiciones
+      summary: Enfermedades y luego situaciones, por orden alfabético
+      description: 'Permiso: `USUARIOS:VER`.'
+      responses:
+        '200':
+          description: Condiciones.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Condicion' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+    post:
+      tags: [Condiciones]
+      operationId: agregarCondicion
+      summary: Agrega una enfermedad o situación (texto libre)
+      description: 'Permiso: `USUARIOS:EDITAR`.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SolicitudCondicion' }
+      responses:
+        '201': { $ref: '#/components/responses/Creado' }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '409':
+          description: El paciente ya la tiene.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problema' }
+
+  /api/pacientes/{idPaciente}/condiciones/{idCondicion}:
+    parameters:
+      - $ref: '#/components/parameters/IdPaciente'
+      - name: idCondicion
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      tags: [Condiciones]
+      operationId: quitarCondicion
+      summary: Quita una condición
+      description: 'Permiso: `USUARIOS:EDITAR`.'
+      responses:
+        '204': { description: Quitada. }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404':
+          description: La condición no existe o es de otro paciente.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problema' }
+
+  /api/pacientes/{idPaciente}/perfil-clinico:
+    parameters:
+      - $ref: '#/components/parameters/IdPaciente'
+    get:
+      tags: [Perfil clínico]
+      operationId: perfilClinico
+      summary: Módulos, opciones y umbrales vigentes, con los valores base donde no hay ajustes
+      description: 'Permiso: `USUARIOS:VER`.'
+      responses:
+        '200':
+          description: Perfil clínico.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PerfilClinico' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
+  /api/pacientes/{idPaciente}/perfil-clinico/ajustes:
+    parameters:
+      - $ref: '#/components/parameters/IdPaciente'
+    put:
+      tags: [Perfil clínico]
+      operationId: cambiarAjustes
+      summary: Cambia módulos, GPS, modo conservador, minutos de espera y motivo
+      description: 'Permiso: `USUARIOS:EDITAR`.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AjustesClinicos' }
+      responses:
+        '204': { description: Guardado. }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
+  /api/pacientes/{idPaciente}/perfil-clinico/umbrales/{variable}:
+    parameters:
+      - $ref: '#/components/parameters/IdPaciente'
+      - name: variable
+        in: path
+        required: true
+        schema: { $ref: '#/components/schemas/VariableUmbral' }
+    put:
+      tags: [Perfil clínico]
+      operationId: ajustarUmbral
+      summary: Ajusta el umbral de FC o de SpO2 del paciente
+      description: |
+        Permiso: `USUARIOS:EDITAR`. Los valores van en orden creciente. Para SpO2 solo se usan
+        `graveBajo` y `normalMin`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Umbral' }
+      responses:
+        '204': { description: Guardado. }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+    delete:
+      tags: [Perfil clínico]
+      operationId: volverAlUmbralBase
+      summary: Vuelve al umbral base
+      description: 'Permiso: `USUARIOS:EDITAR`.'
+      responses:
+        '204': { description: Guardado. }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
+  /api/tipos-contacto:
+    get:
+      tags: [Contactos]
+      operationId: tiposContacto
+      summary: Catálogo de tipos de contacto
+      description: 'Permiso: `USUARIOS:VER`.'
+      responses:
+        '200':
+          description: Tipos.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/TipoContacto' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+
+  /api/pacientes/{idPaciente}/contactos:
+    parameters:
+      - $ref: '#/components/parameters/IdPaciente'
+    get:
+      tags: [Contactos]
+      operationId: listarContactos
+      summary: Contactos activos por prioridad, luego los desactivados, y las horas sin cobertura
+      description: 'Permiso: `USUARIOS:VER`.'
+      responses:
+        '200':
+          description: Contactos.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ListaContactos' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+    post:
+      tags: [Contactos]
+      operationId: agregarContacto
+      summary: Agrega un contacto al final de la lista
+      description: 'Permiso: `USUARIOS:EDITAR`.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DatosContacto' }
+      responses:
+        '201': { $ref: '#/components/responses/Creado' }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '409': { $ref: '#/components/responses/MedioOcupado' }
+
+  /api/pacientes/{idPaciente}/contactos/orden:
+    parameters:
+      - $ref: '#/components/parameters/IdPaciente'
+    put:
+      tags: [Contactos]
+      operationId: reordenarContactos
+      summary: Nuevo orden de aviso
+      description: 'Permiso: `USUARIOS:EDITAR`. Debe traer a todos los contactos activos, cada uno una vez.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SolicitudOrden' }
+      responses:
+        '204': { description: Guardado. }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
+  /api/pacientes/{idPaciente}/contactos/{idContacto}:
+    parameters:
+      - $ref: '#/components/parameters/IdPaciente'
+      - $ref: '#/components/parameters/IdContacto'
+    put:
+      tags: [Contactos]
+      operationId: editarContacto
+      summary: Reemplaza los datos del contacto
+      description: 'Permiso: `USUARIOS:EDITAR`. Si cambia el WhatsApp, se pierde el opt-in.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DatosContacto' }
+      responses:
+        '204': { description: Guardado. }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '409': { $ref: '#/components/responses/MedioOcupado' }
+
+  /api/pacientes/{idPaciente}/contactos/{idContacto}/opt-in:
+    parameters:
+      - $ref: '#/components/parameters/IdPaciente'
+      - $ref: '#/components/parameters/IdContacto'
+    put:
+      tags: [Contactos]
+      operationId: registrarOptIn
+      summary: Registra que el contacto aceptó (o revocó) recibir WhatsApp
+      description: 'Permiso: `USUARIOS:EDITAR`.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SolicitudOptIn' }
+      responses:
+        '204': { description: Guardado. }
+        '400':
+          description: El contacto no tiene WhatsApp.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problema' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
+  /api/pacientes/{idPaciente}/contactos/{idContacto}/desactivar:
+    parameters:
+      - $ref: '#/components/parameters/IdPaciente'
+      - $ref: '#/components/parameters/IdContacto'
+    post:
+      tags: [Contactos]
+      operationId: desactivarContacto
+      summary: Saca al contacto de la lista sin borrarlo
+      description: 'Permiso: `USUARIOS:EDITAR`.'
+      responses:
+        '204': { description: Desactivado. }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
+  /api/pacientes/{idPaciente}/contactos/{idContacto}/reactivar:
+    parameters:
+      - $ref: '#/components/parameters/IdPaciente'
+      - $ref: '#/components/parameters/IdContacto'
+    post:
+      tags: [Contactos]
+      operationId: reactivarContacto
+      summary: Devuelve al contacto al final de la lista
+      description: 'Permiso: `USUARIOS:EDITAR`.'
+      responses:
+        '204': { description: Reactivado. }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
+  /api/pacientes/{idPaciente}/reloj:
+    parameters:
+      - $ref: '#/components/parameters/IdPaciente'
+    post:
+      tags: [Reloj del paciente]
+      operationId: vincularReloj
+      summary: Entrega un reloj a un paciente que no tiene
+      description: |
+        Permiso: `USUARIOS:EDITAR`. **El token se muestra una sola vez**: hay que mostrarlo para
+        cargarlo en el reloj, porque no se puede volver a consultar.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SolicitudVinculo' }
+      responses:
+        '201':
+          description: Reloj vinculado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenReloj' }
+        '400':
+          description: El paciente no tiene registrado el consentimiento informado.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problema' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '409':
+          description: El paciente ya tiene reloj o está de baja, o el reloj no está operativo o lo usa otro paciente.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problema' }
+    delete:
+      tags: [Reloj del paciente]
+      operationId: desvincularReloj
+      summary: Retira el reloj al paciente; su token deja de servir
+      description: 'Permiso: `USUARIOS:EDITAR`.'
+      responses:
+        '204': { description: Retirado. }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '409':
+          description: El paciente no tenía reloj.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problema' }
+
+  /api/pacientes/{idPaciente}/reloj/reemplazo:
+    parameters:
+      - $ref: '#/components/parameters/IdPaciente'
+    post:
+      tags: [Reloj del paciente]
+      operationId: reemplazarReloj
+      summary: Cambia el reloj del paciente por otro; el token del anterior deja de servir
+      description: 'Permiso: `USUARIOS:EDITAR`. `estadoRelojAnterior` indica cómo queda el reloj devuelto.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SolicitudVinculo' }
+      responses:
+        '200':
+          description: Token del reloj nuevo.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenReloj' }
+        '400':
+          description: El reloj nuevo es el mismo que ya tiene.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problema' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '409':
+          description: El paciente no tiene reloj, o el nuevo no está disponible.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problema' }
+
+  /api/pacientes/{idPaciente}/reloj/token:
+    parameters:
+      - $ref: '#/components/parameters/IdPaciente'
+    post:
+      tags: [Reloj del paciente]
+      operationId: nuevoTokenReloj
+      summary: Otro token para el mismo reloj (por ejemplo, si se perdió); el anterior deja de servir
+      description: 'Permiso: `USUARIOS:EDITAR`.'
+      responses:
+        '200':
+          description: Token nuevo.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenReloj' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '409':
+          description: El paciente no tiene reloj.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problema' }
+
+  /api/pacientes/{idPaciente}/reloj/configuracion:
+    parameters:
+      - $ref: '#/components/parameters/IdPaciente'
+    get:
+      tags: [Reloj del paciente]
+      operationId: configuracionAplicada
+      summary: Si el reloj ya aplica la configuración vigente (contactos, umbrales, calendario)
+      description: |
+        Compara la versión que informó el reloj vigente en su último lote con la que rige hoy.
+        Permiso: `USUARIOS:VER`.
+      responses:
+        '200':
+          description: Estado de la configuración en el reloj.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConfiguracionAplicada' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
+  /api/relojes:
+    get:
+      tags: [Inventario de relojes]
+      operationId: listarRelojes
+      summary: Inventario con el paciente que usa cada reloj
+      description: 'Permiso: `USUARIOS:VER`.'
+      responses:
+        '200':
+          description: Relojes.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/RelojConPaciente' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+    post:
+      tags: [Inventario de relojes]
+      operationId: registrarReloj
+      summary: Registra un reloj
+      description: 'Permiso: `USUARIOS:CREAR`.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DatosReloj' }
+      responses:
+        '201': { $ref: '#/components/responses/Creado' }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '409':
+          description: Ya existe un reloj con ese identificador.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problema' }
+
+  /api/relojes/{idReloj}:
+    parameters:
+      - name: idReloj
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    put:
+      tags: [Inventario de relojes]
+      operationId: editarReloj
+      summary: Edita un reloj (modelo, SIM, plan, estado)
+      description: 'Permiso: `USUARIOS:EDITAR`.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DatosReloj' }
+      responses:
+        '204': { description: Guardado. }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '409':
+          description: Otro reloj tiene ese identificador, o se marcó como no operativo un reloj que alguien usa.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problema' }
+
+  /api/calendario:
+    get:
+      tags: [Calendario]
+      operationId: consultarCalendario
+      summary: Horario hábil de cada día y feriados nacionales
+      description: |
+        Lo ve todo el equipo: basta con iniciar sesión, sin un permiso en particular. Viene de
+        `calendario.yml`; cambiarlo requiere reiniciar el backend. Una alerta leve fuera de este
+        horario o en feriado espera al día hábil; las medias y graves avisan siempre.
+      responses:
+        '200':
+          description: Calendario.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Calendario' }
+        '401': { $ref: '#/components/responses/SinToken' }
+
+components:
+  securitySchemes:
+    tokenDashboard:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token que entrega `POST /api/auth/login`. Lleva el id, el nombre, el rol y los permisos.
+
+  parameters:
+    IdPaciente:
+      name: idPaciente
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    IdContacto:
+      name: idContacto
+      in: path
+      required: true
+      description: Id del vínculo del contacto con este paciente.
+      schema: { type: string, format: uuid }
+    IdUsuario:
+      name: idUsuario
+      in: path
+      required: true
+      description: Id de la cuenta del equipo.
+      schema: { type: string, format: uuid }
+
+  responses:
+    Creado:
+      description: Creado. Devuelve el id nuevo.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/RespuestaId' }
+    Invalido:
+      description: |
+        Datos inválidos. Si lo rechaza una regla del negocio, viene como problema con `detail`;
+        si falta un campo obligatorio o el JSON está mal escrito, con el formato por defecto de
+        Spring.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problema' }
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorSpring' }
+    SinToken:
+      description: Falta el token, venció o no es válido. Sin cuerpo; el front debe volver al login.
+    SinPermiso:
+      description: El token no tiene el permiso que exige el endpoint. Sin cuerpo.
+    NoEncontrado:
+      description: El paciente, contacto o reloj no existe.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problema' }
+    Conflicto:
+      description: Choca con el estado actual (por ejemplo, un RUN o correo que ya tiene cuenta).
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problema' }
+    MedioOcupado:
+      description: Ese WhatsApp o correo ya es de otra persona registrada; `detail` dice de quién.
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problema' }
+
+  schemas:
+    Problema:
+      type: object
+      description: Error de una regla del negocio (RFC 9457).
+      properties:
+        title: { type: string, examples: [Conflict] }
+        status: { type: integer, examples: [409] }
+        detail: { type: string, description: Texto para mostrar., examples: ['El usuario ya tiene un reloj: usa reemplazar'] }
+        instance: { type: string, examples: [/api/pacientes/5c5bc0d6-8213-4305-8276-262dffadc82f/reloj] }
+    ErrorSpring:
+      type: object
+      description: Error de forma, con el formato por defecto de Spring (sin `detail`).
+      properties:
+        timestamp: { type: string, format: date-time }
+        status: { type: integer, examples: [400] }
+        error: { type: string, examples: [Bad Request] }
+        path: { type: string }
+    RespuestaId:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string, format: uuid }
+
+    SolicitudLogin:
+      type: object
+      required: [run, contrasena]
+      properties:
+        run: { type: string, examples: [11.111.111-1] }
+        contrasena: { type: string, format: password }
+    Usuario:
+      type: object
+      required: [id, nombre, rol, permisos]
+      properties:
+        id: { type: string, format: uuid }
+        nombre: { type: string, examples: [Administrador de prueba] }
+        rol: { $ref: '#/components/schemas/Rol' }
+        permisos:
+          type: array
+          description: '`MODULO:ACCION`, ordenados. Módulos: ALERTAS, USUARIOS, REPORTES, ADMINISTRACION. Acciones: VER, CREAR, EDITAR, ELIMINAR, EXPORTAR.'
+          items: { type: string, examples: ['USUARIOS:VER'] }
+    RespuestaLogin:
+      type: object
+      required: [token, expiraEn, usuario]
+      properties:
+        token: { type: string, description: JWT para la cabecera `Authorization`. }
+        expiraEn: { type: string, format: date-time }
+        usuario: { $ref: '#/components/schemas/Usuario' }
+    SolicitudActivacion:
+      type: object
+      required: [token, contrasena]
+      properties:
+        token: { type: string, description: El del enlace de activación. }
+        contrasena: { type: string, format: password, minLength: 12 }
+
+    Rol:
+      type: string
+      enum: [ADMINISTRADOR, COORDINADOR, PERSONAL]
+    SolicitudCuenta:
+      type: object
+      required: [run, nombre, correo, rol]
+      properties:
+        run: { type: string }
+        nombre: { type: string, maxLength: 200 }
+        cargo: { type: ['string', 'null'], maxLength: 200 }
+        correo: { type: string, format: email }
+        rol: { $ref: '#/components/schemas/Rol' }
+    RespuestaEnlace:
+      type: object
+      required: [idUsuario, enlaceActivacion, expiraEn]
+      properties:
+        idUsuario: { type: string, format: uuid }
+        enlaceActivacion: { type: string, format: uri, examples: ['http://localhost:5173/activar?token=…'] }
+        expiraEn: { type: string, format: date-time }
+
+    DatosPaciente:
+      type: object
+      required: [run, nombres, apellidos, fechaIngreso]
+      properties:
+        run: { type: string, examples: [9.876.543-2] }
+        nombres: { type: string, maxLength: 200 }
+        apellidos: { type: string, maxLength: 200 }
+        alias: { type: ['string', 'null'], maxLength: 60 }
+        fechaNacimiento: { type: ['string', 'null'], format: date }
+        sexo: { type: ['string', 'null'], enum: [FEMENINO, MASCULINO, null] }
+        direccion: { type: ['string', 'null'], maxLength: 300 }
+        nivelDependencia: { type: ['string', 'null'], enum: [MODERADA, SEVERA, null] }
+        fechaConsentimiento: { type: ['string', 'null'], format: date, description: Sin ella no se le puede entregar un reloj. }
+        fechaIngreso: { type: string, format: date }
+    Paciente:
+      type: object
+      required: [id, datos]
+      properties:
+        id: { type: string, format: uuid }
+        datos: { $ref: '#/components/schemas/DatosPaciente' }
+        fechaBaja: { type: ['string', 'null'], format: date }
+    ResumenPaciente:
+      type: object
+      required: [paciente]
+      properties:
+        paciente: { $ref: '#/components/schemas/Paciente' }
+        edad: { type: ['integer', 'null'] }
+        relojActual: { type: ['string', 'null'], description: Identificador del reloj que usa hoy. }
+    AsignacionHistorial:
+      type: object
+      required: [idAsignacion, idDispositivo, identificadorReloj, inicio]
+      properties:
+        idAsignacion: { type: string, format: uuid }
+        idDispositivo: { type: string, format: uuid }
+        identificadorReloj: { type: string }
+        inicio: { type: string, format: date-time }
+        fin: { type: ['string', 'null'], format: date-time, description: null si es el reloj actual. }
+    DetallePaciente:
+      type: object
+      required: [paciente, historial]
+      properties:
+        paciente: { $ref: '#/components/schemas/Paciente' }
+        edad: { type: ['integer', 'null'] }
+        historial:
+          type: array
+          items: { $ref: '#/components/schemas/AsignacionHistorial' }
+
+    TipoCondicion:
+      type: string
+      enum: [ENFERMEDAD, SITUACION]
+    SolicitudCondicion:
+      type: object
+      required: [tipo, descripcion]
+      properties:
+        tipo: { $ref: '#/components/schemas/TipoCondicion' }
+        descripcion: { type: string, maxLength: 200, examples: [Vive sola] }
+    Condicion:
+      type: object
+      required: [id, tipo, descripcion]
+      properties:
+        id: { type: string, format: uuid }
+        tipo: { $ref: '#/components/schemas/TipoCondicion' }
+        descripcion: { type: string }
+
+    Modulos:
+      type: object
+      required: [caidas, fc, spo2, inactividad, tendencia]
+      properties:
+        caidas: { type: boolean }
+        fc: { type: boolean }
+        spo2: { type: boolean }
+        inactividad: { type: boolean }
+        tendencia: { type: boolean }
+    AjustesClinicos:
+      type: object
+      required: [modulos, gpsActivo, modoConservador]
+      properties:
+        modulos: { $ref: '#/components/schemas/Modulos' }
+        gpsActivo: { type: boolean }
+        modoConservador: { type: boolean }
+        minutosEspera: { type: ['integer', 'null'], minimum: 1, description: null para usar el valor base. }
+        motivo: { type: ['string', 'null'], maxLength: 500 }
+    VariableUmbral:
+      type: string
+      enum: [FC, SPO2]
+    Umbral:
+      type: object
+      required: [graveBajo, normalMin]
+      description: En orden creciente. Para SpO2, `normalMax` y `graveAlto` son null.
+      properties:
+        graveBajo: { type: number, examples: [40] }
+        normalMin: { type: number, examples: [50] }
+        normalMax: { type: ['number', 'null'], examples: [110] }
+        graveAlto: { type: ['number', 'null'], examples: [130] }
+    UmbralVigente:
+      type: object
+      required: [umbral, propio]
+      properties:
+        umbral: { $ref: '#/components/schemas/Umbral' }
+        propio: { type: boolean, description: false si es el valor base (provisional hasta que lo valide el equipo clínico). }
+        desde: { type: ['string', 'null'], format: date-time }
+    PerfilClinico:
+      type: object
+      required: [ajustes, minutosEspera, fc, spo2]
+      properties:
+        ajustes: { $ref: '#/components/schemas/AjustesClinicos' }
+        ajustesDesde: { type: ['string', 'null'], format: date-time }
+        minutosEspera: { type: integer, description: El vigente (el propio o el base). }
+        fc: { $ref: '#/components/schemas/UmbralVigente' }
+        spo2: { $ref: '#/components/schemas/UmbralVigente' }
+
+    TipoContacto:
+      type: object
+      required: [codigo, nombre]
+      properties:
+        codigo: { type: string, examples: [FAMILIA], description: 'PRLAC, FAMILIA, INSTITUCION, SEGURIDAD_CIUDADANA, VECINO u OTRO.' }
+        nombre: { type: string, examples: [Familia] }
+    Canal:
+      type: string
+      enum: [WHATSAPP, CORREO]
+    DatosContacto:
+      type: object
+      required: [nombre, tipo]
+      description: |
+        Al menos WhatsApp o correo. Sin horario, recibe avisos las 24 horas. No se aceptan los
+        números de emergencia (SAMU, 131). Solo un cuidador principal por paciente.
+      properties:
+        nombre: { type: string, maxLength: 120 }
+        whatsapp: { type: ['string', 'null'], maxLength: 30, examples: ['+56912345678'] }
+        correo: { type: ['string', 'null'], maxLength: 254 }
+        tipo: { type: string, description: Código de `GET /api/tipos-contacto`. }
+        parentesco: { type: ['string', 'null'], maxLength: 60, description: Solo si el tipo es FAMILIA. }
+        cuidadorPrincipal: { type: boolean, default: false }
+        horaInicio: { type: ['string', 'null'], examples: ['08:00'] }
+        horaFin: { type: ['string', 'null'], examples: ['22:00'] }
+    Contacto:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        nombre: { type: string }
+        whatsapp: { type: ['string', 'null'] }
+        correo: { type: ['string', 'null'] }
+        optInVigente: { type: boolean }
+        fechaOptIn: { type: ['string', 'null'], format: date-time }
+        fechaRevocacion: { type: ['string', 'null'], format: date-time }
+        tipo: { type: string }
+        parentesco: { type: ['string', 'null'] }
+        cuidadorPrincipal: { type: boolean }
+        prioridad: { type: integer, description: 1 es el primero en recibir el aviso. }
+        horaInicio: { type: ['string', 'null'] }
+        horaFin: { type: ['string', 'null'] }
+        activo: { type: boolean }
+        otrosPacientes: { type: integer, description: De cuántos otros pacientes es contacto esta misma persona. }
+        canales:
+          type: array
+          items: { $ref: '#/components/schemas/Canal' }
+    Tramo:
+      type: object
+      required: [inicio, fin]
+      properties:
+        inicio: { type: string, examples: ['22:00'] }
+        fin: { type: string, examples: ['08:00'] }
+    ListaContactos:
+      type: object
+      required: [contactos, sinCobertura]
+      properties:
+        contactos:
+          type: array
+          items: { $ref: '#/components/schemas/Contacto' }
+        sinCobertura:
+          type: array
+          description: Horas en que ningún contacto activo recibe avisos. Es una advertencia, no un error.
+          items: { $ref: '#/components/schemas/Tramo' }
+    SolicitudOptIn:
+      type: object
+      required: [aceptado]
+      properties:
+        aceptado: { type: boolean, description: false registra que lo revocó. }
+    SolicitudOrden:
+      type: object
+      required: [orden]
+      properties:
+        orden:
+          type: array
+          description: Ids de todos los contactos activos, en el orden de aviso.
+          items: { type: string, format: uuid }
+
+    EstadoReloj:
+      type: string
+      enum: [OPERATIVO, EN_REPARACION, RETIRADO]
+    SolicitudVinculo:
+      type: object
+      required: [idDispositivo]
+      properties:
+        idDispositivo: { type: string, format: uuid, description: Id del reloj en el inventario. }
+        estadoRelojAnterior:
+          description: Solo en el reemplazo, cómo queda el reloj devuelto.
+          oneOf:
+            - $ref: '#/components/schemas/EstadoReloj'
+            - type: 'null'
+    TokenReloj:
+      type: object
+      required: [idAsignacion, token]
+      properties:
+        idAsignacion: { type: string, format: uuid }
+        token: { type: string, description: Se muestra una sola vez. }
+    ConfiguracionAplicada:
+      type: object
+      required: [estado, versionVigente]
+      properties:
+        estado:
+          type: string
+          enum: [AL_DIA, PENDIENTE, SIN_SINCRONIZAR, SIN_RELOJ]
+          description: PENDIENTE = el reloj aún no descarga los últimos cambios.
+        versionVigente: { type: string, description: La que calcula hoy el servidor. }
+        versionReloj: { type: [string, 'null'], description: La del último lote; null si no informó ninguna. }
+        aplicadaDesde:
+          type: [string, 'null']
+          format: date-time
+          description: Primer lote de la racha actual con esa versión; null si no ha sincronizado.
+        ultimaSincronizacion: { type: [string, 'null'], format: date-time }
+    DatosReloj:
+      type: object
+      required: [identificadorReloj]
+      properties:
+        identificadorReloj: { type: string, maxLength: 100, examples: [SM-R910-0001] }
+        modelo: { type: ['string', 'null'], maxLength: 100 }
+        iccid: { type: ['string', 'null'], maxLength: 30 }
+        numeroSim: { type: ['string', 'null'], maxLength: 20 }
+        fechaVencimientoPlan: { type: ['string', 'null'], format: date }
+        estado:
+          description: OPERATIVO si no se indica.
+          oneOf:
+            - $ref: '#/components/schemas/EstadoReloj'
+            - type: 'null'
+    Reloj:
+      type: object
+      required: [id, datos]
+      properties:
+        id: { type: string, format: uuid }
+        datos: { $ref: '#/components/schemas/DatosReloj' }
+    RelojConPaciente:
+      type: object
+      required: [reloj]
+      properties:
+        reloj: { $ref: '#/components/schemas/Reloj' }
+        idPaciente: { type: ['string', 'null'], format: uuid, description: null si no está asignado. }
+        nombrePaciente: { type: ['string', 'null'] }
+
+    Calendario:
+      type: object
+      required: [zonaHoraria, horarioHabil, feriados]
+      properties:
+        zonaHoraria: { type: string, const: America/Santiago }
+        horarioHabil:
+          type: array
+          description: Un tramo por día hábil, de lunes a domingo. Los días que no aparecen no son hábiles.
+          items:
+            type: object
+            required: [dia, inicio, fin]
+            properties:
+              dia: { type: string, enum: [LUNES, MARTES, MIERCOLES, JUEVES, VIERNES, SABADO, DOMINGO] }
+              inicio: { type: string, examples: ['08:30'], description: Incluida. }
+              fin: { type: string, examples: ['17:30'], description: Sin incluirla. }
+        feriados:
+          type: array
+          description: Feriados nacionales, ordenados por fecha.
+          items:
+            type: object
+            required: [fecha, nombre]
+            properties:
+              fecha: { type: string, format: date }
+              nombre: { type: string, examples: [Independencia Nacional] }

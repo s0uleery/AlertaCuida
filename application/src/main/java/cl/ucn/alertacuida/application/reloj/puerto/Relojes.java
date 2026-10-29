@@ -4,6 +4,7 @@ import cl.ucn.alertacuida.application.reloj.modelo.DatosReloj;
 import cl.ucn.alertacuida.application.reloj.modelo.Reloj;
 import cl.ucn.alertacuida.application.reloj.modelo.RelojConPaciente;
 import cl.ucn.alertacuida.domain.reloj.EstadoReloj;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -40,5 +41,8 @@ public interface Relojes {
 
 	/** @return todos los relojes con el paciente que los usa, ordenados por identificador */
 	List<RelojConPaciente> listar();
+
+	/** Reemplaza el token de Firebase del reloj, con la fecha en que lo informó. */
+	void guardarTokenFcm(UUID id, String token, Instant fecha);
 
 }
