@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { ErrorApi } from '../../api/cliente';
+import { useConfirmar } from '../../comun/Confirmacion';
 import {
   CLASE_BOTON_PRINCIPAL,
   CLASE_BOTON_SECUNDARIO,
@@ -198,6 +199,7 @@ interface PropsUmbral {
 function TarjetaUmbral({ variable, vigente, editable, alAjustar, alVolverAlBase }: PropsUmbral) {
   const conAltos = variable === 'FC';
   const unidad = conAltos ? 'lpm' : '%';
+  const confirmar = useConfirmar();
   const [editando, setEditando] = useState(false);
   const [valores, setValores] = useState(vigente.umbral);
   const { graveBajo, normalMin, normalMax, graveAlto } = vigente.umbral;
@@ -271,8 +273,14 @@ function TarjetaUmbral({ variable, vigente, editable, alAjustar, alVolverAlBase 
               </button>
               {vigente.propio && (
                 <button
-                  onClick={() => {
-                    if (window.confirm('¿Volver al valor base? El ajuste queda en el historial.')) alVolverAlBase();
+                  onClick={async () => {
+                    const confirmado = await confirmar({
+                      titulo: '¿Volver al valor base?',
+                      mensaje: 'El ajuste queda en el historial.',
+                      textoConfirmar: 'Volver al valor base',
+                      peligro: true,
+                    });
+                    if (confirmado) alVolverAlBase();
                   }}
                   className="text-red-700 hover:underline"
                 >

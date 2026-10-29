@@ -67,5 +67,9 @@ async function mensajeDeError(respuesta: Response): Promise<string> {
   } catch {
     // Sin cuerpo JSON: se usa el mensaje genérico
   }
+  // 404 o 405 sin mensaje propio: el backend todavía no tiene ese endpoint
+  if (respuesta.status === 404 || respuesta.status === 405) {
+    return 'Esta función todavía no está disponible en el servidor.';
+  }
   return respuesta.status >= 500 ? 'El servidor no respondió. Intenta de nuevo.' : 'No se pudo completar la acción.';
 }

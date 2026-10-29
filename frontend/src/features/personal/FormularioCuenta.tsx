@@ -3,14 +3,8 @@ import { ErrorApi } from '../../api/cliente';
 import { CLASE_BOTON_PRINCIPAL, CLASE_CAMPO, CLASE_ERROR, CLASE_ETIQUETA } from '../../comun/estilos';
 import { formatearRun, runValido } from '../../comun/run';
 import { personalApi } from './personalApi';
-import type { RespuestaEnlace, Rol, SolicitudCuenta } from './tipos';
-
-/** Roles que se pueden elegir, con lo que puede hacer cada uno. */
-const ROLES: { valor: Rol; etiqueta: string; descripcion: string }[] = [
-  { valor: 'PERSONAL', etiqueta: 'Personal', descripcion: 'Ve y atiende alertas' },
-  { valor: 'COORDINADOR', etiqueta: 'Coordinador', descripcion: 'Alertas, usuarios del programa y reportes' },
-  { valor: 'ADMINISTRADOR', etiqueta: 'Administrador', descripcion: 'Todo, incluidas las cuentas del equipo' },
-];
+import { ROLES } from './roles';
+import type { RespuestaEnlace, SolicitudCuenta } from './tipos';
 
 /** Formulario vacío; el rol por defecto es el de menos permisos. */
 const VACIA: SolicitudCuenta = { run: '', nombre: '', cargo: '', correo: '', rol: 'PERSONAL' };

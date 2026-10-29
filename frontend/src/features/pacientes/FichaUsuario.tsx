@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { ErrorApi } from '../../api/cliente';
+import { useConfirmar } from '../../comun/Confirmacion';
 import { CLASE_BOTON_SECUNDARIO, CLASE_ERROR, CLASE_TARJETA } from '../../comun/estilos';
 import { formatearFecha, formatearFechaHora } from '../../comun/fechas';
 import { formatearRun } from '../../comun/run';
@@ -40,6 +41,7 @@ function filas(datos: DatosPaciente, edad: number | null): [string, string][] {
 export function FichaUsuario() {
   const { id = '' } = useParams();
   const { puede } = useSesion();
+  const confirmar = useConfirmar();
   const { datos: detalle, error, cargando, recargar } = useDatos(() => pacientesApi.detalle(id), id);
   const [errorBaja, setErrorBaja] = useState<string | null>(null);
 
@@ -50,7 +52,13 @@ export function FichaUsuario() {
 
   /** Pide confirmación, da de baja al usuario y recarga la ficha. */
   async function darDeBaja() {
-    if (!window.confirm('¿Dar de baja a este usuario? Se le retirará el reloj; su historial se conserva.')) return;
+    const confirmado = await confirmar({
+      titulo: '¿Dar de baja a este usuario?',
+      mensaje: 'Se le retirará el reloj; su historial se conserva.',
+      textoConfirmar: 'Dar de baja',
+      peligro: true,
+    });
+    if (!confirmado) return;
     try {
       await pacientesApi.darDeBaja(paciente.id);
       recargar();

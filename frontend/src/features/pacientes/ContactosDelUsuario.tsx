@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { ErrorApi } from '../../api/cliente';
+import { useConfirmar } from '../../comun/Confirmacion';
 import {
   CLASE_BOTON_PRINCIPAL,
   CLASE_BOTON_SECUNDARIO,
@@ -37,6 +38,7 @@ interface Props {
  */
 export function ContactosDelUsuario({ idPaciente }: Props) {
   const { puede } = useSesion();
+  const confirmar = useConfirmar();
   const { datos, error, recargar } = useDatos(() => pacientesApi.contactos(idPaciente), idPaciente);
   const { datos: tipos } = useDatos(() => pacientesApi.tiposContacto(), 'tipos');
   const [errorCambio, setErrorCambio] = useState<string | null>(null);
@@ -123,11 +125,11 @@ export function ContactosDelUsuario({ idPaciente }: Props) {
                     </button>
                     {contacto.whatsapp && (
                       <button
-                        onClick={() => {
-                          const mensaje = contacto.optInVigente
+                        onClick={async () => {
+                          const titulo = contacto.optInVigente
                             ? `¿Registrar que ${contacto.nombre} ya no quiere recibir WhatsApp?`
                             : `¿Registrar que ${contacto.nombre} aceptó recibir avisos por WhatsApp?`;
-                          if (window.confirm(mensaje)) {
+                          if (await confirmar({ titulo, textoConfirmar: 'Registrar' })) {
                             cambiar(() =>
                               pacientesApi.registrarOptIn(idPaciente, contacto.id, !contacto.optInVigente),
                             );
@@ -142,10 +144,14 @@ export function ContactosDelUsuario({ idPaciente }: Props) {
                       Editar
                     </button>
                     <button
-                      onClick={() => {
-                        if (window.confirm(`¿Desactivar a ${contacto.nombre}? Sus avisos quedan en el historial.`)) {
-                          cambiar(() => pacientesApi.desactivarContacto(idPaciente, contacto.id));
-                        }
+                      onClick={async () => {
+                        const confirmado = await confirmar({
+                          titulo: `¿Desactivar a ${contacto.nombre}?`,
+                          mensaje: 'Sus avisos quedan en el historial.',
+                          textoConfirmar: 'Desactivar',
+                          peligro: true,
+                        });
+                        if (confirmado) cambiar(() => pacientesApi.desactivarContacto(idPaciente, contacto.id));
                       }}
                       className="text-red-700 hover:underline"
                     >

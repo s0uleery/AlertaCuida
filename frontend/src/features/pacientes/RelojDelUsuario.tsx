@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ErrorApi } from '../../api/cliente';
+import { useConfirmar } from '../../comun/Confirmacion';
 import { CLASE_BOTON_PRINCIPAL, CLASE_BOTON_SECUNDARIO, CLASE_CAMPO, CLASE_ERROR, CLASE_ETIQUETA } from '../../comun/estilos';
 import { formatearFechaHora } from '../../comun/fechas';
 import { useDatos } from '../../comun/useDatos';
@@ -27,6 +28,7 @@ type Modo = 'ver' | 'vincular' | 'reemplazar';
  */
 export function RelojDelUsuario({ detalle, alCambiar }: Props) {
   const { puede } = useSesion();
+  const confirmar = useConfirmar();
   const { paciente, historial } = detalle;
   const vigente = historial.find((asignacion) => asignacion.fin === null) ?? null;
   const [modo, setModo] = useState<Modo>('ver');
@@ -98,10 +100,14 @@ export function RelojDelUsuario({ detalle, alCambiar }: Props) {
               </button>
               <button
                 disabled={trabajando}
-                onClick={() => {
-                  if (window.confirm('¿Retirar el reloj? Dejará de enviar datos y alertas de este usuario.')) {
-                    hacer(() => pacientesApi.desvincular(paciente.id));
-                  }
+                onClick={async () => {
+                  const confirmado = await confirmar({
+                    titulo: '¿Retirar el reloj?',
+                    mensaje: 'Dejará de enviar datos y alertas de este usuario.',
+                    textoConfirmar: 'Retirar reloj',
+                    peligro: true,
+                  });
+                  if (confirmado) hacer(() => pacientesApi.desvincular(paciente.id));
                 }}
                 className={CLASE_BOTON_SECUNDARIO}
               >
