@@ -3,6 +3,7 @@ import type { EstadoReloj } from '../relojes/tipos';
 import type {
   AjustesClinicos,
   Condicion,
+  ConfiguracionAplicada,
   DatosContacto,
   DatosPaciente,
   DetallePaciente,
@@ -119,4 +120,7 @@ export const pacientesApi = {
 
   /** Otro token para el mismo reloj; el anterior deja de servir. */
   nuevoToken: (id: string) => pedir<TokenReloj>(`/pacientes/${id}/reloj/token`, { method: 'POST' }),
+
+  /** Si el reloj ya aplica la configuración vigente (contactos, umbrales, calendario). */
+  configuracionReloj: (id: string) => pedir<ConfiguracionAplicada>(`/pacientes/${id}/reloj/configuracion`),
 };

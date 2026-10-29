@@ -11,7 +11,7 @@ import java.util.UUID;
  * @param loteRepetido          el reloj reenvió un lote ya recibido: no se guardó nada nuevo
  * @param desfaseRelojSegundos  hora del reloj menos la del servidor, solo si supera 120 s; si no, null
  * @param configuracionNueva    si el reloj debe descargar la configuración
- * @param versionConfiguracion  la vigente en el servidor; null hasta que exista la configuración del reloj
+ * @param versionConfiguracion  la vigente en el servidor
  */
 public record ResultadoSincronizacion(UUID idSincronizacion, Instant recepcion, int lecturasGuardadas,
 		int lecturasRepetidas, List<LecturaRechazada> lecturasRechazadas, boolean loteRepetido,

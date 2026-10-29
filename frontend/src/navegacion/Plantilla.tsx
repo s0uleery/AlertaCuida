@@ -12,7 +12,7 @@ const NOMBRE_ROL: Record<string, string> = {
 /** Barra superior con el menú según los permisos del rol; cada página se dibuja en <Outlet />. */
 export function Plantilla() {
   const { usuario, puede, salir } = useSesion();
-  const visibles = SECCIONES.filter((seccion) => puede(seccion.permiso));
+  const visibles = SECCIONES.filter((seccion) => !seccion.permiso || puede(seccion.permiso));
 
   return (
     <div className="min-h-screen bg-slate-100">

@@ -10,7 +10,7 @@ Archivos relacionados: `tecnologias_plataforma_prlac_v3.md` y el [modelo de dato
 |---|---|
 | Tareas | 49 tareas activas y sus subtareas, en 6 fases (2 eliminadas respecto de la v5) |
 | Esfuerzo total | 774 horas-persona (unas 1.006 con 30 % de margen) |
-| Ya hecho | 162 horas al 25-10-2026 (0.1, 0.2, 0.3, casi toda 0.4, casi toda 1.1, 1.2, parte de 1.3, casi toda 1.4, 1.5, 3.2 y 3.3) |
+| Ya hecho | 185 horas al 27-10-2026 (0.1, 0.2, 0.3, casi toda 0.4, casi toda 1.1, 1.2, parte de 1.3, casi toda 1.4, 1.5, 1.7, 1.9, 3.2 y 3.3) |
 | Capacidad del equipo | 60 a 90 horas por semana (3 personas, 20 a 30 h cada una) |
 | Duración estimada | 7 sprints de 2 semanas, unas 14 semanas |
 | Fuera de alcance | App del reloj (ver la sección correspondiente) |
@@ -273,33 +273,35 @@ Depende de: 1.1, 1.3. Listo cuando: toda lectura o cambio de datos queda registr
 | [ ] | 1.6.4 | Gestión de la llave de cifrado en local y en el servidor municipal (acceso restringido, acordado con TI) | 2 |
 | [ ] | 1.6.5 | Pruebas | 2 |
 
-### 1.7 API de configuración del reloj (13 h). Cambia en v7.
+### 1.7 API de configuración del reloj (13 h). Cambia en v7. Hecha.
 Entregar al reloj su configuración solo cuando cambia y controlar qué versión aplica cada reloj. Vuelve a incluir los contactos y los plazos, porque el reloj escala. Los números y correos no viajan: el reloj pide los avisos por identificador de contacto.
 
 Depende de: 1.5, 1.9. Listo cuando: el reloj descarga su configuración solo si cambió, con sus contactos y el calendario hábil, y la plataforma sabe qué versión aplica cada reloj.
 
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
-| [ ] | 1.7.1 | Endpoint que entrega umbrales, reglas de tendencia, GPS sí o no, contactos (sin números ni correos), plazo de espera, horario hábil, feriados y versión, sin reenviar si no cambió | 4 |
-| [ ] | 1.7.2 | Incluir módulos activos y modo conservador | 1 |
-| [ ] | 1.7.3 | Versionado de la configuración y registro de cuándo la aplicó cada reloj | 3 |
-| [ ] | 1.7.4 | Registro del token de Firebase de cada reloj (se renueva cuando el reloj lo informa) | 2 |
-| [ ] | 1.7.5 | Valores base cuando el paciente no tiene ajustes propios | 1 |
-| [ ] | 1.7.6 | Pruebas | 2 |
+| [x] | 1.7.1 | Endpoint que entrega umbrales, reglas de tendencia, GPS sí o no, contactos (sin números ni correos), plazo de espera, horario hábil, feriados y versión, sin reenviar si no cambió | 4 |
+| [x] | 1.7.2 | Incluir módulos activos y modo conservador | 1 |
+| [x] | 1.7.3 | Versionado de la configuración y registro de cuándo la aplicó cada reloj | 3 |
+| [x] | 1.7.4 | Registro del token de Firebase de cada reloj (se renueva cuando el reloj lo informa) | 2 |
+| [x] | 1.7.5 | Valores base cuando el paciente no tiene ajustes propios | 1 |
+| [x] | 1.7.6 | Pruebas | 2 |
+
+Nota (27-10-2026): de las reglas de tendencia por ahora solo viaja `reglas.versionMatriz` (`PROVISIONAL`); sus parámetros esperan el Anexo B. El estado de la configuración de cada reloj se ve en la ficha del usuario.
 
 ### 1.8 Módulo de presión arterial. Eliminada.
 El Samsung Health Sensor SDK no entrega presión arterial, por lo que el módulo se elimina (−16 h).
 
-### 1.9 Enrutamiento por gravedad y calendario hábil (10 h). Cambia en v7.
+### 1.9 Enrutamiento por gravedad y calendario hábil (10 h). Cambia en v7. Hecha.
 Definir a quién se avisa según la gravedad y el horario hábil con feriados. Viaja al reloj en la configuración, porque el reloj escala; el servidor lo usa para validar las alertas recibidas y para las alertas técnicas.
 
 Depende de: 1.5. Listo cuando: la regla de enrutamiento está configurada, cada paciente tiene contactos con prioridad y horario, y el reloj y el servidor conocen el horario hábil y los feriados.
 
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
-| [ ] | 1.9.1 | Regla de enrutamiento base (Anexo B): una alerta leve fuera del horario hábil queda pendiente; una media o grave avisa siempre a los contactos disponibles a esa hora, por prioridad | 4 |
-| [ ] | 1.9.2 | Calendario hábil (horario y feriados del año) administrable, en zona `America/Santiago` | 3 |
-| [ ] | 1.9.3 | Pruebas, incluidos los días de cambio de hora | 3 |
+| [x] | 1.9.1 | Regla de enrutamiento base (Anexo B): una alerta leve fuera del horario hábil queda pendiente; una media o grave avisa siempre a los contactos disponibles a esa hora, por prioridad | 4 |
+| [x] | 1.9.2 | Calendario hábil (horario y feriados nacionales del año en curso y el siguiente) en la configuración del backend (`calendario.yml`), en zona `America/Santiago`; cambiarlo requiere reiniciar el backend. Solo lectura en el dashboard | 3 |
+| [x] | 1.9.3 | Pruebas, incluidos los días de cambio de hora | 3 |
  
 ---
 
@@ -683,7 +685,7 @@ Depende de: 3.3. Listo cuando: el personal del PRLAC puede configurar y operar e
 | [ ] | 5.2.1 | Manual de configuración por paciente, incluido el registro del opt-in de los contactos | 6 |
 | [ ] | 5.2.2 | Manual de operación diaria del dashboard y de las alertas | 5 |
 | [ ] | 5.2.3 | Manual de entrega en terreno (reloj, SIM y plan de datos, verificación de señal) | 2 |
-| [ ] | 5.2.4 | Guía de qué hacer ante fallas (no llegan datos, no llegan WhatsApp, reloj sin señal, apagado o con el plan vencido) | 3 |
+| [ ] | 5.2.4 | Guía de qué hacer ante fallas (no llegan datos, no llegan WhatsApp, reloj sin señal, apagado o con el plan vencido) y de mantenimiento: actualizar los feriados de `calendario.yml` cada año y cuando una ley agregue uno | 3 |
 | [ ] | 5.2.5 | Revisión con el PRLAC | 2 |
 
 ### 5.3 Capacitación (8 h)

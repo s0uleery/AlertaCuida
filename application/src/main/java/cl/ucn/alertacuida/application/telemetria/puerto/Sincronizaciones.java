@@ -5,6 +5,7 @@ import cl.ucn.alertacuida.application.telemetria.modelo.LecturaRecibida;
 import cl.ucn.alertacuida.application.telemetria.modelo.LoteRecibido;
 import cl.ucn.alertacuida.application.telemetria.modelo.SincronizacionGuardada;
 import cl.ucn.alertacuida.application.telemetria.modelo.UbicacionRecibida;
+import cl.ucn.alertacuida.application.telemetria.modelo.VersionInformada;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -36,5 +37,8 @@ public interface Sincronizaciones {
 
 	/** Guarda los contadores, uno por tipo de evento. */
 	void guardarDescartados(UUID idSincronizacion, List<EventoDescartado> descartados);
+
+	/** @return la versión de configuración del último lote de esa asignación, o vacío si no ha enviado ninguno */
+	Optional<VersionInformada> versionInformada(UUID idAsignacion);
 
 }

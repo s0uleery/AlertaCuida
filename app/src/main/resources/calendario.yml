@@ -1,0 +1,53 @@
+# Calendario hábil del PRLAC, en hora de Chile (America/Santiago). Lo importa application.properties.
+# Está en YAML y no en application.properties porque Spring lee los .properties en Latin-1, y los
+# nombres de los feriados llevan tildes.
+#
+# Una alerta leve fuera de este horario o en feriado espera al día hábil; las medias y graves avisan siempre.
+# Cambiarlo requiere reiniciar el backend, y cambia la configuración de todos los relojes.
+# Las horas y las fechas van entre comillas: sin ellas, YAML las lee como números o fechas.
+alertacuida:
+  calendario:
+    # Desde el inicio (incluido) hasta el fin (sin incluirlo). Los días que no aparecen no son hábiles.
+    horario:
+      lunes: { inicio: "08:30", fin: "17:30" }
+      martes: { inicio: "08:30", fin: "17:30" }
+      miercoles: { inicio: "08:30", fin: "17:30" }
+      jueves: { inicio: "08:30", fin: "17:30" }
+      viernes: { inicio: "08:30", fin: "16:30" }
+    # Feriados nacionales (fecha: nombre), según feriados.cl, que cita la BCN. Sin los regionales.
+    # Actualizar cada año y cuando una ley agregue uno: el reloj recibe el año en curso y el siguiente.
+    feriados:
+      "2026-01-01": Año Nuevo
+      "2026-04-03": Viernes Santo
+      "2026-04-04": Sábado Santo
+      "2026-05-01": Día Nacional del Trabajo
+      "2026-05-21": Día de las Glorias Navales
+      "2026-06-21": Día Nacional de los Pueblos Indígenas
+      "2026-06-29": San Pedro y San Pablo
+      "2026-07-16": Día de la Virgen del Carmen
+      "2026-08-15": Asunción de la Virgen
+      "2026-09-18": Independencia Nacional
+      "2026-09-19": Día de las Glorias del Ejército
+      "2026-10-12": Encuentro de Dos Mundos
+      "2026-10-31": Día de las Iglesias Evangélicas y Protestantes
+      "2026-11-01": Día de Todos los Santos
+      "2026-12-08": Inmaculada Concepción
+      "2026-12-25": Navidad
+      # 2027: PROVISIONALES, calculados según las leyes vigentes. Revisar cuando se publique el calendario oficial.
+      "2027-01-01": Año Nuevo
+      "2027-03-26": Viernes Santo
+      "2027-03-27": Sábado Santo
+      "2027-05-01": Día Nacional del Trabajo
+      "2027-05-21": Día de las Glorias Navales
+      "2027-06-21": Día Nacional de los Pueblos Indígenas
+      "2027-06-28": San Pedro y San Pablo
+      "2027-07-16": Día de la Virgen del Carmen
+      "2027-08-15": Asunción de la Virgen
+      "2027-09-17": Feriado adicional de Fiestas Patrias
+      "2027-09-18": Independencia Nacional
+      "2027-09-19": Día de las Glorias del Ejército
+      "2027-10-11": Encuentro de Dos Mundos
+      "2027-10-31": Día de las Iglesias Evangélicas y Protestantes
+      "2027-11-01": Día de Todos los Santos
+      "2027-12-08": Inmaculada Concepción
+      "2027-12-25": Navidad

@@ -58,6 +58,22 @@ export interface DetallePaciente {
   historial: AsignacionHistorial[];
 }
 
+/** Si el reloj ya aplica la configuración vigente, según su última sincronización. */
+export type EstadoConfiguracion = 'AL_DIA' | 'PENDIENTE' | 'SIN_SINCRONIZAR' | 'SIN_RELOJ';
+
+/** Qué configuración aplica el reloj del usuario. */
+export interface ConfiguracionAplicada {
+  estado: EstadoConfiguracion;
+  /** La que calcula hoy el servidor */
+  versionVigente: string;
+  /** La que informó el reloj en su último lote; null si no ha informado ninguna */
+  versionReloj: string | null;
+  /** Instante ISO desde el que el reloj informa esa versión; null si no ha sincronizado */
+  aplicadaDesde: string | null;
+  /** Instante ISO de su último lote; null si no ha sincronizado */
+  ultimaSincronizacion: string | null;
+}
+
 /** Llave del reloj: se muestra una sola vez para ingresarla en la app del reloj. */
 export interface TokenReloj {
   idAsignacion: string;
