@@ -1,6 +1,9 @@
-// Formatos de los endpoints de cuentas del personal (PersonalController y ActivacionController).
+// Formatos de los endpoints de la sección Administración: cuentas del personal (PersonalController y
+// ActivacionController), roles y auditoría.
 
-/** Roles que se pueden asignar a una cuenta nueva. */
+import type { Permiso } from '../sesion/tipos';
+
+/** Roles de la tabla rol (V6__catalogos_iniciales.sql). */
 export type Rol = 'ADMINISTRADOR' | 'COORDINADOR' | 'PERSONAL';
 
 /** Cuerpo de POST /api/personal. */
@@ -21,4 +24,67 @@ export interface RespuestaEnlace {
   enlaceActivacion: string;
   /** Fecha ISO en UTC */
   expiraEn: string;
+}
+
+/** ACTIVA: ya eligió su contraseña. PENDIENTE: no ha usado su enlace. DESACTIVADA: tenía contraseña y se le quitó el acceso. */
+export type EstadoCuenta = 'ACTIVA' | 'PENDIENTE' | 'DESACTIVADA';
+
+/** Fila de GET /api/personal: una cuenta del equipo. */
+export interface PerfilEquipo {
+  id: string;
+  nombre: string;
+  cargo: string | null;
+  correo: string;
+  rol: Rol;
+  estado: EstadoCuenta;
+  /** Último LOGIN en la auditoría, fecha ISO en UTC; null si nunca ha entrado */
+  ultimoAcceso: string | null;
+}
+
+/** Fila de GET /api/roles: un rol con los permisos que tiene hoy. */
+export interface RolConPermisos {
+  codigo: Rol;
+  nombre: string;
+  /** El administrador: sus permisos no se editan */
+  esSistema: boolean;
+  permisos: Permiso[];
+}
+
+/** Valores de registro_auditoria.accion. */
+export type AccionAuditoria = 'LEER' | 'CREAR' | 'MODIFICAR' | 'ELIMINAR' | 'EXPORTAR' | 'LOGIN' | 'LOGIN_FALLIDO';
+
+/** Valores de registro_auditoria.entidad. */
+export type EntidadAuditoria =
+  | 'PACIENTE'
+  | 'FICHA_PACIENTE'
+  | 'CONDICION_PACIENTE'
+  | 'CONTACTO'
+  | 'CONTACTO_PACIENTE'
+  | 'CONFIGURACION'
+  | 'UMBRAL'
+  | 'DOCUMENTO'
+  | 'SMARTWATCH'
+  | 'ASIGNACION_RELOJ'
+  | 'ALERTA'
+  | 'ATENCION_ALERTA'
+  | 'SEGUIMIENTO'
+  | 'USUARIO'
+  | 'ROL'
+  | 'PERMISO_ROL'
+  | 'REPORTE';
+
+/** Fila de GET /api/auditoria. No trae datos personales del objeto, solo su identificador. */
+export interface RegistroAuditoria {
+  id: string;
+  /** Fecha ISO en UTC */
+  fechaHora: string;
+  accion: AccionAuditoria;
+  /** null en LOGIN y LOGIN_FALLIDO */
+  entidad: EntidadAuditoria | null;
+  idEntidad: string | null;
+  /** Ej. valor anterior y nuevo */
+  detalle: Record<string, unknown> | null;
+  /** Quién lo hizo; null en un login fallido con un RUN que no existe */
+  usuario: { id: string; nombre: string } | null;
+  ip: string | null;
 }

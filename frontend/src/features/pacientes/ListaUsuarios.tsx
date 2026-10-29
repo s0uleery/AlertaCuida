@@ -1,22 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { CLASE_BOTON_PRINCIPAL, CLASE_CAMPO, CLASE_ERROR, CLASE_TARJETA } from '../../comun/estilos';
-import { limpiarRun } from '../../comun/run';
+import { CLASE_BOTON_PRINCIPAL, CLASE_CAMPO, CLASE_ERROR, CLASE_ETIQUETA, CLASE_TARJETA } from '../../comun/estilos';
 import { useDatos } from '../../comun/useDatos';
 import { useSesion } from '../sesion/SesionContext';
+import { coincide } from './busqueda';
 import { pacientesApi } from './pacientesApi';
-import type { ResumenPaciente } from './tipos';
 
 /** Cómo se muestra cada nivel de dependencia. */
 const NIVEL: Record<string, string> = { MODERADA: 'Moderada', SEVERA: 'Severa' };
-
-/** true si el paciente coincide con lo buscado: por nombre, alias o RUN (con o sin puntos). */
-function coincide(fila: ResumenPaciente, busqueda: string): boolean {
-  const d = fila.paciente.datos;
-  const texto = `${d.nombres} ${d.apellidos} ${d.alias ?? ''}`.toLowerCase();
-  const runBuscado = limpiarRun(busqueda);
-  return texto.includes(busqueda.toLowerCase()) || (runBuscado.length > 2 && limpiarRun(d.run).includes(runBuscado));
-}
 
 /**
  * Lista de usuarios del programa con búsqueda. Se filtra aquí y no en el backend: los
@@ -34,9 +25,12 @@ export function ListaUsuarios() {
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-xl font-semibold text-slate-900">Usuarios</h1>
+    <section className={`${CLASE_TARJETA} space-y-4`}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-medium text-tinta">Usuarios</h1>
+          <p className="text-tinta">Personas mayores incorporadas al piloto de teleasistencia.</p>
+        </div>
         {puede('USUARIOS:CREAR') && (
           <Link to="/usuarios/nuevo" className={CLASE_BOTON_PRINCIPAL}>
             Nuevo usuario
@@ -44,23 +38,32 @@ export function ListaUsuarios() {
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-4">
-        <input
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          placeholder="Buscar por nombre, alias o RUN"
-          aria-label="Buscar"
-          className={`${CLASE_CAMPO} mt-0 max-w-sm`}
-        />
-        <label className="flex items-center gap-2 text-sm text-slate-600">
-          <input type="checkbox" checked={incluirBajas} onChange={(e) => setIncluirBajas(e.target.checked)} />
-          Mostrar dados de baja
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="block min-w-52 flex-1">
+          <span className={CLASE_ETIQUETA}>Buscar por usuario</span>
+          <input
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Nombre, alias o RUN"
+            className={CLASE_CAMPO}
+          />
+        </label>
+        <label className="block w-52">
+          <span className={CLASE_ETIQUETA}>Estado</span>
+          <select
+            value={String(incluirBajas)}
+            onChange={(e) => setIncluirBajas(e.target.value === 'true')}
+            className={CLASE_CAMPO}
+          >
+            <option value="false">Vigentes</option>
+            <option value="true">Incluir dados de baja</option>
+          </select>
         </label>
       </div>
 
       {error && <p className={CLASE_ERROR}>{error}</p>}
 
-      <section className={`${CLASE_TARJETA} overflow-x-auto p-0`}>
+      <div className="overflow-x-auto rounded-lg border border-slate-200">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-slate-200 text-slate-500">
             <tr>
@@ -103,7 +106,7 @@ export function ListaUsuarios() {
             {busqueda ? 'Nadie coincide con la búsqueda.' : 'Todavía no hay usuarios registrados.'}
           </p>
         )}
-      </section>
-    </div>
+      </div>
+    </section>
   );
 }
