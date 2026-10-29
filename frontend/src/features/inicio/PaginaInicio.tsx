@@ -24,7 +24,7 @@ export function PaginaInicio() {
     <div className="space-y-5">
       <section className="rounded-2xl bg-marino px-10 py-11 text-white">
         <h1 className="text-3xl font-bold">¡Hola {primerNombre}!</h1>
-        <p className="mt-1.5 max-w-md">
+        <p className="mt-1.5">
           Te damos la bienvenida al monitoreo de alertas. Revisa y gestiona los casos de las personas mayores de
           manera más rápida y eficiente.
         </p>
