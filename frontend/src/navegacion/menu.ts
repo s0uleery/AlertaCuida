@@ -26,9 +26,10 @@ export const SECCIONES: Seccion[] = [
   { ruta: '/usuarios', etiqueta: 'Usuarios', permiso: 'USUARIOS:VER', pagina: PaginaUsuarios },
   // Los relojes usan los permisos de USUARIOS: quien inscribe al usuario le entrega el reloj
   { ruta: '/relojes', etiqueta: 'Relojes', permiso: 'USUARIOS:VER', pagina: PaginaRelojes },
-   { ruta: '/reportes', etiqueta: 'Reportes', permiso: 'REPORTES:VER' },
   // Horario hábil y feriados: lo ve todo el equipo, para entender por qué una alerta leve espera
   { ruta: '/calendario', etiqueta: 'Calendario', pagina: PaginaCalendario },
+  // La lista de reportes lee /api/pacientes, que exige USUARIOS:VER (hoy lo tienen los mismos roles)
+  { ruta: '/reportes', etiqueta: 'Reportes', permiso: 'REPORTES:VER', pagina: PaginaReportes },
   // Aquí van las cuentas del equipo
   { ruta: '/administracion', etiqueta: 'Administración', permiso: 'ADMINISTRACION:VER', pagina: PaginaAdministracion },
 ];
