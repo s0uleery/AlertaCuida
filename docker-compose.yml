@@ -1,10 +1,13 @@
-# Base de datos para desarrollo local (tarea 0.6.2). Requisitos y versiones: Versiones.md.
+# Base de datos, backend y dashboard para desarrollo y demos, con el perfil dev:
+# claves de desarrollo y datos de ejemplo, nunca datos reales. Requisitos y versiones: Versiones.md.
 #
 # Primera vez: copiar .env.example como .env (credenciales locales, no se sube al repositorio).
-# Levantar:            docker compose up -d
-# Ver si está lista:   docker compose ps          (estado "healthy")
-# Detener:             docker compose down        (los datos se conservan en el volumen)
-# Empezar de cero:     docker compose down -v     (borra los datos; Flyway recrea todo al arrancar el backend)
+# Levantar todo:       docker compose up -d --build     (dashboard en http://localhost:5173)
+# Solo la base:        docker compose up -d postgres    (para correr el backend con Maven o IntelliJ)
+# Ver si está listo:   docker compose ps                (estado "healthy")
+# Ver los registros:   docker compose logs -f backend
+# Detener:             docker compose down              (los datos se conservan en el volumen)
+# Empezar de cero:     docker compose down -v           (borra los datos; Flyway recrea todo al arrancar el backend)
 
 # Nombre fijo: el contenedor y el volumen se llaman igual en cualquier computador, sin importar la carpeta
 name: alertacuida
@@ -31,6 +34,42 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  backend:
+    build:
+      # El contexto es la raíz porque compila todos los módulos de Maven
+      context: .
+      dockerfile: app/Dockerfile
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      # Reemplaza la dirección del perfil dev: dentro de Docker la base está en "postgres", no en localhost
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${DB_NOMBRE:-alertacuida}
+      DB_USUARIO: ${DB_USUARIO:-alertacuida}
+      DB_CLAVE: "${DB_CLAVE:?Falta DB_CLAVE, copiar .env.example como .env}"
+      # Dirección de los enlaces de activación del personal nuevo
+      DASHBOARD_URL: http://localhost:${FRONT_PUERTO:-5173}
+    ports:
+      - "${BACK_PUERTO:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/actuator/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      # Tiempo para arrancar y aplicar las migraciones, sin contar los fallos como definitivos
+      start_period: 60s
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONT_PUERTO:-5173}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
 
 volumes:
   datos-postgres:
