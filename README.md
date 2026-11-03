@@ -22,9 +22,23 @@ java -jar app/target/alertacuida-app-0.0.1-SNAPSHOT.jar
 
 Necesita Docker Desktop abierto. La primera vez, copiar `.env.example` como `.env` (credenciales de la base local, no se sube al repositorio): `Copy-Item .env.example .env` en PowerShell o `cp .env.example .env` en Mac y Linux.
 
+### Todo en Docker
+
+Para usar o mostrar el sistema sin instalar Java ni Node. Levanta la base, el backend y el dashboard:
+
+```
+docker compose up -d --build
+```
+
+Dashboard en `http://localhost:5173` y backend en `http://localhost:8080`, con el perfil `dev` (claves de desarrollo y datos de ejemplo, nunca datos reales). Después de cambiar código, hay que volver a correr el mismo comando. Para detener: `docker compose down`. Si los puertos están ocupados, cambiar `BACK_PUERTO` y `FRONT_PUERTO` en `.env`.
+
+### Para programar
+
+Con recarga en vivo del dashboard. Si los contenedores del backend o del dashboard están corriendo, detenerlos antes, porque usan los mismos puertos.
+
 1. **Base de datos** (PostgreSQL 18 en Docker). Esperar a que `docker compose ps` diga `healthy`:
    ```
-   docker compose up -d
+   docker compose up -d postgres
    ```
 2. **Backend** en `http://localhost:8080`, con el perfil `dev` (claves de desarrollo y datos de ejemplo):
    ```

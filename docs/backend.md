@@ -317,6 +317,8 @@ En `app/src/main/resources/application.properties`:
 
 Sin las claves, el backend no arranca. El perfil `dev` trae claves de desarrollo y lee la base desde el `.env`.
 
+`docker-compose.yml` levanta el backend (`app/Dockerfile`) con el perfil `dev`. Recibe las credenciales por variables de entorno, y `SPRING_DATASOURCE_URL` reemplaza la dirección del perfil porque dentro de Docker la base está en `postgres` y no en `localhost`. El dashboard (`frontend/Dockerfile`) se sirve con nginx, que reenvía `/api` al backend (`frontend/nginx.conf`). Esta configuración es solo para desarrollo y demos: producción necesita sus propias claves y no debe cargar los datos de ejemplo.
+
 Valores base del Anexo B (`alertacuida.clinica.*`), **provisionales** hasta que los valide el equipo clínico. Cambiarlos cambia la configuración de todos los relojes que no tienen ajustes propios:
 
 | Propiedad | Valor |

@@ -1,0 +1,5 @@
+# Lo que no entra a la imagen del dashboard: se instala y se compila dentro del contenedor
+node_modules
+dist
+Dockerfile
+.dockerignore
