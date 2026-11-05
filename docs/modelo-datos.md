@@ -27,14 +27,14 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
 - Los `Enum` se dibujan como `Enum`, pero en las migraciones van como `varchar` con `CHECK` (los `ENUM` de PostgreSQL no permiten quitar ni renombrar valores).
 - **Fuera de la base**, en la configuración del backend (`application.properties`, y el horario hábil y los feriados en `calendario.yml`): umbrales base, matriz de riesgo FC × SpO2 (con su versión), horario hábil, feriados, plazos y la política de bloqueo de sesión (intentos y minutos). Son valores del sistema, no datos de un paciente. Cambiarlos requiere reiniciar el backend. La regla de enrutamiento por gravedad está fija en el código (`ReglaEnrutamiento`).
 
-## Tablas (28)
+## Tablas (29)
 
 | Área | Tablas |
 |---|---|
 | 1. Paciente (identidad) | `PACIENTE` |
 | 2. Salud y documentos | `FICHA_PACIENTE`, `CONDICION_PACIENTE`, `DOCUMENTO` |
 | 3. Contactos | `TIPO_CONTACTO`, `CONTACTO`, `CONTACTO_PACIENTE` |
-| 4. Configuración clínica | `CONFIGURACION`, `UMBRAL` |
+| 4. Configuración clínica | `CONFIGURACION`, `UMBRAL`, `ZONA_SEGURA` |
 | 5. Relojes y telemetría | `SMARTWATCH`, `ASIGNACION_RELOJ`, `SINCRONIZACION`, `EVENTO_DESCARTADO`, `REGISTRO_VITAL`, `UBICACION` |
 | 6. Alertas | `ALERTA`, `ATENCION_ALERTA`, `REGISTRO_INTENTO`, `AVISO_FCM` |
 | 7. Seguimiento | `DESTINO_DERIVACION`, `SEGUIMIENTO` |
@@ -77,8 +77,13 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
 ### 4. Configuración clínica
 
 - **`CONFIGURACION`**: historial de los módulos del paciente. Cada fila rige desde `vigente_desde` hasta la siguiente; **la vigente es la más reciente**. Cada cambio agrega una fila y las anteriores no se modifican.
-  - Un módulo por columna (caídas, FC, SpO2, inactividad, tendencia, GPS), además del modo conservador, los minutos de espera entre contactos (vacío = valor base) y el motivo del cambio (cifrado). Son pocos y fijos, y cada uno depende de la clave completa.
-  - El GPS solo sirve para ubicar a la persona; no genera alertas.
+  - Un módulo por columna (caídas, FC, SpO2, inactividad, tendencia, zona segura, botón de ayuda, GPS), además del modo conservador, los minutos de espera entre contactos (vacío = valor base) y el motivo del cambio (cifrado). Son pocos y fijos, y cada uno depende de la clave completa.
+  - El GPS ubica a la persona y, con `zona_segura_activa`, permite revisar la zona: `CHECK (NOT zona_segura_activa OR gps_activo)`. Que exista una zona guardada lo valida el backend, porque está en otra tabla.
+  - El botón de ayuda viene activo por defecto (V9). Las filas anteriores a V9 quedan con el botón apagado, porque entonces no existía; cada paciente configurado recibió una versión nueva con el botón activo, auditada como cambio del sistema.
+- **`ZONA_SEGURA`** (v8, migración V9): el círculo que el reloj revisa con su GPS, con **historial propio**, como el umbral: cambiar el radio no agrega una versión de `CONFIGURACION`.
+  - Centro (latitud y longitud, **cifradas** como texto porque suelen ser el domicilio), radio en metros (el backend exige de 50 a 5000) y la gravedad de la alerta al salir (media por defecto). Todos dependen de la clave completa `(id_paciente, vigente_desde)`, así que cumple la FNBC.
+  - Guardar una zona no la activa: el interruptor es `CONFIGURACION.zona_segura_activa`. Así se puede dejar definida y apagada sin perderla.
+  - No va dentro de `CONFIGURACION` para no repetir el círculo en cada versión de los módulos, ni dejar columnas vacías en quienes no tienen zona.
 - **`UMBRAL`**: rangos personalizados por variable (FC, SpO2), con **historial propio**. Cambiar el GPS no duplica umbrales, y cambiar un umbral no duplica la configuración.
   - Cada fila define cuatro límites: `grave_bajo < normal_min < normal_max < grave_alto`. Cada variable queda NORMAL, LEVE o GRAVE, y la matriz de riesgo del backend cruza FC y SpO2 para dar la severidad.
   - **Una fila va completa o vacía; no se mezcla con el umbral base:**
@@ -103,8 +108,8 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
 ### 6. Alertas
 
 - **Tipos de evento.**
-  - Clínicos, que escalan a los contactos: caída, FC, SpO2, FC+SpO2, tendencia e inactividad.
-  - Técnicos, que avisan por correo a los profesionales con `recibe_avisos`: silencio de datos (sin señal, reloj apagado o plan vencido), batería baja y reloj no puesto.
+  - Clínicos, que escalan a los contactos: caída, FC, SpO2, FC+SpO2, tendencia, inactividad, salida de la zona segura (con la gravedad de su zona) y botón de ayuda (siempre leve; avisa primero a los `VECINO`, regla `alerta_boton_leve`).
+  - Técnicos, que avisan a todos los coordinadores (por WhatsApp, en horario laboral) y por correo a las demás cuentas con `recibe_avisos`: silencio de datos (sin señal, reloj apagado o plan vencido), batería baja y reloj no puesto.
   - El servidor solo crea alertas técnicas y simulacros, y el silencio de datos solo lo crea el servidor (`CHECK`).
 - **Gravedad y enrutamiento.** Hay tres niveles. La regla está fija en el código (`ReglaEnrutamiento`); el horario de cada contacto se respeta siempre, también en horario hábil:
 
@@ -165,11 +170,13 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
 - **`USUARIO`**: lo crea el administrador. El usuario recibe un enlace de activación y define su contraseña, y ahí queda activo.
   - Inactivo sin contraseña = pendiente de activar; inactivo con contraseña = desactivado. Los usuarios no se borran.
   - RUN cifrado con `rut_hash` para el inicio de sesión, correo (único y en minúsculas), TOTP, `recibe_avisos` y `recibe_resumen_diario`.
+  - Teléfono (cifrado, número de WhatsApp normalizado) y opt-in de WhatsApp (`fecha_opt_in`, `fecha_revocacion_opt_in`, como en `CONTACTO`). El aviso a la oficina PRLAC llega por WhatsApp a todas las cuentas activas con rol `COORDINADOR` y opt-in vigente, solo en horario laboral; si falla, por correo. El teléfono es obligatorio para ese rol: lo valida el backend al crear la cuenta, porque una regla en la base rechazaría las cuentas que ya existían sin teléfono.
   - **El último acceso y el bloqueo no se guardan**: salen de `REGISTRO_AUDITORIA`. Está bloqueado si tiene N `LOGIN_FALLIDO` en los últimos M minutos sin un `LOGIN` posterior (N y M en el yml).
 - **`CODIGO_RESPALDO`** (1.3.5), **`TOKEN_SESION`** (renovación del dashboard, 1.3.4) y **`TOKEN_ACCION`** (enlaces de activación y recuperación por correo, de un solo uso): tablas propias porque son varios por usuario y tienen ciclos de vida distintos.
 - **`REGISTRO_AUDITORIA`**: quién leyó o cambió qué y cuándo, sin datos personales (1.6, 1.5.2).
   - `id_entidad` no tiene clave foránea a propósito, para que el registro sobreviva al borrado de lo auditado. Es texto porque los catálogos usan código.
-  - En las claves compuestas, `id_entidad` une sus partes con `|` en el orden de la clave: `CONFIGURACION` "id_paciente|vigente_desde", `UMBRAL` "id_paciente|variable|vigente_desde", `PERMISO_ROL` "codigo_rol|modulo|accion" (`vigente_desde` en ISO 8601 UTC).
+  - En las claves compuestas, `id_entidad` une sus partes con `|` en el orden de la clave: `CONFIGURACION` "id_paciente|vigente_desde", `UMBRAL` "id_paciente|variable|vigente_desde", `ZONA_SEGURA` "id_paciente|vigente_desde", `PERMISO_ROL` "codigo_rol|modulo|accion" (`vigente_desde` en ISO 8601 UTC).
+  - En `LEER`, `id_entidad` es el id del paciente cuya información se consultó, o `LISTA`; `entidad` dice qué parte se leyó. En las demás acciones es el id del objeto cambiado. Por eso, el historial de un objeto específico no incluye sus lecturas: están en el historial del paciente.
   - Las frases del dashboard ("Cambio de dependencia de …") se arman al mostrar.
 
 ### Lo que se calcula con consultas
@@ -182,6 +189,7 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
 | Edad | El backend, al descifrar `fecha_nacimiento` (va cifrada, por eso es texto y no `date`) |
 | Configuración vigente | Fila de `CONFIGURACION` con el mayor `vigente_desde` |
 | Umbral vigente (o el que regía en una fecha) | Fila de `UMBRAL` de esa variable con el mayor `vigente_desde` que no supere la fecha; vacía o sin fila = umbral base |
+| Zona segura vigente | Fila de `ZONA_SEGURA` con el mayor `vigente_desde`; rige solo con `zona_segura_activa` |
 | Configuración pendiente del reloj | El hash del último lote no coincide con el que calcula el backend |
 | Validez del token del reloj | La asignación está vigente (`fecha_fin` vacía) |
 | Relojes libres | `OPERATIVO` y sin asignación vigente |
@@ -195,11 +203,11 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
 
 ## Relaciones
 
-31 relaciones, todas 1 a muchos (dos de ellas uno a uno):
+32 relaciones, todas 1 a muchos (dos de ellas uno a uno):
 
 | Tabla padre | Tablas hijas |
 |---|---|
-| `PACIENTE` | `FICHA_PACIENTE` (1 a 1), `CONDICION_PACIENTE`, `DOCUMENTO`, `CONFIGURACION`, `UMBRAL`, `CONTACTO_PACIENTE`, `ASIGNACION_RELOJ` |
+| `PACIENTE` | `FICHA_PACIENTE` (1 a 1), `CONDICION_PACIENTE`, `DOCUMENTO`, `CONFIGURACION`, `UMBRAL`, `ZONA_SEGURA`, `CONTACTO_PACIENTE`, `ASIGNACION_RELOJ` |
 | `CONTACTO` | `CONTACTO_PACIENTE` |
 | `TIPO_CONTACTO` | `CONTACTO_PACIENTE` |
 | `SMARTWATCH` | `ASIGNACION_RELOJ` |
@@ -248,6 +256,8 @@ Las tablas las crea Flyway con las migraciones de [`adapters/src/main/resources/
 | `V4__relojes_y_telemetria` | Extensión `btree_gist`, `smartwatch`, `asignacion_reloj`, `sincronizacion`, `evento_descartado`, `registro_vital`, `ubicacion` |
 | `V5__alertas_y_seguimiento` | `alerta`, `atencion_alerta`, `registro_intento`, `aviso_fcm`, `destino_derivacion`, `seguimiento` y la vista `alerta_estado` |
 | `V6__catalogos_iniciales` | Roles (el `ADMINISTRADOR` con todos los permisos), tipos de contacto y destinos de derivación |
+| `V7__auditoria_token_reutilizado` | Agrega la acción `TOKEN_REUTILIZADO` a `REGISTRO_AUDITORIA` |
+| `V8__tendencia_activa_por_defecto` | Activa el módulo de tendencia por defecto y agrega una versión nueva, auditada, a quienes lo tenían apagado |
 
 Una migración ya aplicada no se edita: los cambios van en una migración nueva (`V7__...`).
 

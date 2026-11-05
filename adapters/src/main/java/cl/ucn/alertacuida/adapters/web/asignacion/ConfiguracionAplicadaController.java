@@ -1,6 +1,7 @@
 package cl.ucn.alertacuida.adapters.web.asignacion;
 
 import cl.ucn.alertacuida.adapters.web.Permisos;
+import cl.ucn.alertacuida.adapters.web.auditoria.LecturaAuditada;
 import cl.ucn.alertacuida.application.configuracion.ConsultarConfiguracionAplicada;
 import cl.ucn.alertacuida.application.configuracion.modelo.ConfiguracionAplicada;
 import java.util.UUID;
@@ -23,6 +24,7 @@ public class ConfiguracionAplicadaController {
 	/** @return al día, pendiente, sin sincronizar o sin reloj, con las fechas. 404 si el paciente no existe */
 	@GetMapping("/api/pacientes/{idPaciente}/reloj/configuracion")
 	@PreAuthorize(Permisos.USUARIOS_VER)
+	@LecturaAuditada(entidad = "ASIGNACION_RELOJ", idVariable = "idPaciente")
 	public ConfiguracionAplicada consultar(@PathVariable UUID idPaciente) {
 		return consultar.consultar(idPaciente);
 	}

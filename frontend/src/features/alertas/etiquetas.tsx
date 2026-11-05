@@ -8,6 +8,8 @@ export const CONDICION: Record<TipoEvento, string> = {
   FC_SPO2: 'Frecuencia cardíaca y saturación fuera de rango',
   TENDENCIA: 'Tendencia de signos vitales',
   INACTIVIDAD: 'Inactividad prolongada',
+  ZONA_SEGURA: 'Salió de su zona segura',
+  BOTON_AYUDA: 'Pidió ayuda con el botón del reloj',
   SILENCIO_DATOS: 'Reloj sin enviar datos',
   BATERIA_BAJA: 'Batería baja del reloj',
   RELOJ_NO_PUESTO: 'Reloj no puesto',

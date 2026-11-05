@@ -11,11 +11,13 @@ import java.util.UUID;
  *
  * @param idContacto el vínculo contacto_paciente, el mismo que usa la solicitud de aviso
  * @param nombre     para la pantalla "Alerta recibida por ..."
+ * @param tipo       código de tipo_contacto (FAMILIA, VECINO...): con el botón de ayuda, el reloj
+ *                   avisa primero a los VECINO
  * @param prioridad  orden en que el reloj avisa (1 = primero)
  * @param horario    cuándo recibe avisos, en hora de Chile; vacío = todo el día
  * @param canales    los que el servidor puede usar hoy (WhatsApp solo con opt-in vigente)
  */
-public record ContactoConfigurado(UUID idContacto, String nombre, int prioridad, Horario horario,
+public record ContactoConfigurado(UUID idContacto, String nombre, String tipo, int prioridad, Horario horario,
 		List<Canal> canales) {
 
 	public ContactoConfigurado {

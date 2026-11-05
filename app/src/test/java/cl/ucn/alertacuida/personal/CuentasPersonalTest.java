@@ -113,6 +113,26 @@ class CuentasPersonalTest {
 		altaCon(admin, cuenta("12.345.678-0")).andExpect(status().isBadRequest());
 	}
 
+	/** Un coordinador sin teléfono responde 400; con teléfono y opt-in se guarda cifrado y con la fecha. */
+	@Test
+	void elCoordinadorNecesitaTelefonoQueSeGuardaCifradoConSuOptIn() throws Exception {
+		String admin = tokenAdmin();
+		String sinTelefono = """
+				{"run": "12.345.678-5", "nombre": "Rosa", "correo": "rosa@muni.cl", "rol": "COORDINADOR"}""";
+		altaCon(admin, sinTelefono).andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.detail").value(containsString("WhatsApp")));
+
+		altaCon(admin, """
+				{"run": "12.345.678-5", "nombre": "Rosa", "correo": "rosa@muni.cl", "rol": "COORDINADOR",
+				"telefono": "9 1234 5678", "aceptaWhatsapp": true}""").andExpect(status().isCreated());
+
+		String telefono = jdbc.sql("SELECT telefono FROM usuario WHERE correo = 'rosa@muni.cl'").query(String.class)
+				.single();
+		assertThat(telefono).startsWith("v1:").doesNotContain("12345678");
+		assertThat(jdbc.sql("SELECT fecha_opt_in IS NOT NULL FROM usuario WHERE correo = 'rosa@muni.cl'")
+				.query(Boolean.class).single()).isTrue();
+	}
+
 	/** Un enlace nuevo reemplaza al anterior, y una cuenta activa no recibe enlaces (404). */
 	@Test
 	void unEnlaceNuevoReemplazaAlAnteriorYUnaCuentaActivaNoRecibeEnlaces() throws Exception {

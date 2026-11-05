@@ -98,3 +98,10 @@ SELECT a.id_alerta,
   END AS estado_atencion,
   CASE WHEN a.fecha_hora_agravamiento IS NOT NULL THEN 'GRAVE' ELSE a.severidad::text END AS severidad_actual
 FROM "ALERTA" a LEFT JOIN "ATENCION_ALERTA" at USING (id_alerta);
+
+-- Zona segura, botón de ayuda y WhatsApp del equipo (migración V9)
+ALTER TABLE "CONFIGURACION" ADD CONSTRAINT configuracion_zona_gps CHECK (NOT zona_segura_activa OR gps_activo);
+ALTER TABLE "ZONA_SEGURA" ADD CONSTRAINT zona_segura_radio CHECK (radio_metros > 0);
+ALTER TABLE "ALERTA" ADD CONSTRAINT alerta_boton_leve CHECK (tipo_evento <> 'BOTON_AYUDA' OR severidad = 'LEVE');
+ALTER TABLE "USUARIO" ADD CONSTRAINT usuario_opt_in_telefono CHECK (fecha_opt_in IS NULL OR telefono IS NOT NULL);
+ALTER TABLE "USUARIO" ADD CONSTRAINT usuario_revocacion_opt_in CHECK (fecha_revocacion_opt_in IS NULL OR fecha_opt_in IS NOT NULL);

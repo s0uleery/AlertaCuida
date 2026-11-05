@@ -14,6 +14,7 @@ const ACCION: Record<AccionAuditoria, string> = {
   EXPORTAR: 'Exportación',
   LOGIN: 'Inicio de sesión',
   LOGIN_FALLIDO: 'Inicio de sesión fallido',
+  TOKEN_REUTILIZADO: 'Posible robo de sesión',
 };
 
 /** Tipos de acción del filtro, como en el mockup, con su ícono. */
@@ -29,6 +30,7 @@ const ENTIDAD: Record<EntidadAuditoria, { nombre: string; categoria: Categoria }
   CONTACTO_PACIENTE: { nombre: 'contacto de un usuario', categoria: 'Usuarios' },
   CONFIGURACION: { nombre: 'perfil clínico', categoria: 'Usuarios' },
   UMBRAL: { nombre: 'umbral', categoria: 'Usuarios' },
+  ZONA_SEGURA: { nombre: 'zona segura', categoria: 'Usuarios' },
   DOCUMENTO: { nombre: 'documento', categoria: 'Usuarios' },
   SMARTWATCH: { nombre: 'reloj', categoria: 'Usuarios' },
   ASIGNACION_RELOJ: { nombre: 'asignación de reloj', categoria: 'Usuarios' },
@@ -52,9 +54,15 @@ function titulo(registro: RegistroAuditoria): string {
   return registro.entidad ? `${accion} de ${ENTIDAD[registro.entidad].nombre}` : accion;
 }
 
-/** Quién lo hizo; en un login fallido puede no haber cuenta. */
+/** Quién lo hizo. Sin cuenta es un login fallido con un RUN que no existe, o un cambio del sistema. */
 function autor(registro: RegistroAuditoria): string {
-  return registro.usuario?.nombre ?? 'Un RUN no registrado';
+  if (registro.usuario) return registro.usuario.nombre;
+  return registro.accion === 'LOGIN_FALLIDO' ? 'Un RUN no registrado' : 'Sistema';
+}
+
+/** Cómo se rotula el identificador: una consulta guarda el id del usuario del programa, y un cambio, el del objeto. */
+function rotuloObjeto(registro: RegistroAuditoria): string {
+  return registro.accion === 'LEER' && registro.idEntidad !== 'LISTA' ? 'Usuario del programa' : 'Objeto';
 }
 
 /** Un valor del detalle como texto: los objetos y listas van en JSON. */
@@ -73,7 +81,8 @@ function coincide(registro: RegistroAuditoria, busqueda: string): boolean {
  * guarda datos personales, así que del objeto solo se muestra su identificador.
  */
 export function Auditoria() {
-  const { datos, error, cargando } = useDatos(auditoriaApi.recientes);
+  const [incluirLecturas, setIncluirLecturas] = useState(false);
+  const { datos, error, cargando } = useDatos(() => auditoriaApi.recientes(incluirLecturas), String(incluirLecturas));
   const [filtro, setFiltro] = useState<Categoria | ''>('');
   const [busqueda, setBusqueda] = useState('');
   const [abiertos, setAbiertos] = useState<Set<string>>(new Set());
@@ -122,6 +131,14 @@ export function Auditoria() {
             className={CLASE_CAMPO}
           />
         </label>
+        <label className="flex items-center gap-2 py-2">
+          <input
+            type="checkbox"
+            checked={incluirLecturas}
+            onChange={(e) => setIncluirLecturas(e.target.checked)}
+          />
+          <span>Incluir consultas de datos</span>
+        </label>
       </div>
 
       {error && <p className={CLASE_ERROR}>{error}</p>}
@@ -155,7 +172,7 @@ export function Auditoria() {
                       <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-sm bg-slate-100 px-3 py-2 text-[13px]">
                         {registro.idEntidad && (
                           <>
-                            <dt className="text-slate-500">Objeto</dt>
+                            <dt className="text-slate-500">{rotuloObjeto(registro)}</dt>
                             <dd className="font-mono break-all">{registro.idEntidad}</dd>
                           </>
                         )}

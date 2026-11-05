@@ -3,6 +3,7 @@ package cl.ucn.alertacuida.adapters.web.condicion;
 import cl.ucn.alertacuida.adapters.seguridad.TokenJwt;
 import cl.ucn.alertacuida.adapters.web.Permisos;
 import cl.ucn.alertacuida.adapters.web.RespuestaId;
+import cl.ucn.alertacuida.adapters.web.auditoria.LecturaAuditada;
 import cl.ucn.alertacuida.application.condicion.CondicionesPaciente;
 import cl.ucn.alertacuida.application.condicion.modelo.Condicion;
 import jakarta.servlet.http.HttpServletRequest;
@@ -40,6 +41,7 @@ public class CondicionesController {
 	/** @return enfermedades y luego situaciones, por orden alfabético. 404 si el paciente no existe */
 	@GetMapping
 	@PreAuthorize(Permisos.USUARIOS_VER)
+	@LecturaAuditada(entidad = "CONDICION_PACIENTE", idVariable = "idPaciente")
 	public List<Condicion> listar(@PathVariable UUID idPaciente) {
 		return condiciones.listar(idPaciente);
 	}

@@ -19,7 +19,7 @@ import org.springframework.stereotype.Component;
 /**
  * Formato del token de acceso: el único lugar que conoce sus claims. Spring Security valida la firma
  * y la expiración; aquí solo se arma y se lee. Los permisos viajan en el token, así que un cambio de
- * permisos se nota al iniciar sesión de nuevo (como máximo, lo que dura el token).
+ * permisos se nota en la siguiente renovación (como máximo, lo que dura el token).
  */
 @Component
 public class TokenJwt implements EmisorToken {

@@ -120,7 +120,7 @@ Respuesta 200:
 
 | Campo | Obligatorio | Valores |
 |---|---|---|
-| `tipoEvento` | sí | `CAIDA`, `FC`, `SPO2`, `FC_SPO2`, `TENDENCIA`, `INACTIVIDAD`, `BATERIA_BAJA`, `RELOJ_NO_PUESTO`. `SILENCIO_DATOS` no: ese lo detecta solo el servidor |
+| `tipoEvento` | sí | `CAIDA`, `FC`, `SPO2`, `FC_SPO2`, `TENDENCIA`, `INACTIVIDAD`, `ZONA_SEGURA`, `BOTON_AYUDA` (siempre `LEVE`), `BATERIA_BAJA`, `RELOJ_NO_PUESTO`. `SILENCIO_DATOS` no: ese lo detecta solo el servidor |
 | `severidad` | sí | `LEVE`, `MEDIA`, `GRAVE` |
 | `versionConfiguracion` | sí | la configuración con que se detectó |
 | `esperaDiaHabil` | sí | `true` si es leve, fuera del horario hábil, y el reloj no avisará a nadie |
@@ -183,18 +183,21 @@ Todo lo que el reloj necesita para evaluar y escalar sin conexión. Con `If-None
 ```json
 {
   "version": "9f2c4e1a7b3d5e60",
-  "modulos": { "caidas": true, "fc": true, "spo2": true, "inactividad": true, "tendencia": false },
-  "gpsActivo": false,
+  "modulos": { "caidas": true, "fc": true, "spo2": true, "inactividad": true, "tendencia": false,
+               "zonaSegura": true, "botonAyuda": true },
+  "gpsActivo": true,
   "modoConservador": false,
+  "zonaSegura": { "latitud": -23.6509, "longitud": -70.3975, "radioMetros": 200, "severidad": "MEDIA" },
   "umbrales": {
     "fc": { "graveBajo": 40, "normalMin": 50, "normalMax": 110, "graveAlto": 130 },
     "spo2": { "graveBajo": 88, "normalMin": 92 }
   },
-  "reglas": { "versionMatriz": "PROVISIONAL" },
+  "reglas": { "versionMatriz": "PROVISIONAL", "tendencia": { "minutos": 120, "severidad": "MEDIA" } },
   "escalamiento": { "minutosEspera": 5, "rondas": 2 },
   "contactos": [
-    { "idContacto": "…", "nombre": "Ana Rojas", "prioridad": 1, "horario": null, "canales": ["WHATSAPP", "CORREO"] },
-    { "idContacto": "…", "nombre": "Seguridad Ciudadana", "prioridad": 2, "horario": { "inicio": "20:00", "fin": "08:00" }, "canales": ["CORREO"] }
+    { "idContacto": "…", "nombre": "Ana Rojas", "tipo": "FAMILIA", "prioridad": 1, "horario": null, "canales": ["WHATSAPP", "CORREO"] },
+    { "idContacto": "…", "nombre": "Juan Pérez", "tipo": "VECINO", "prioridad": 2, "horario": null, "canales": ["WHATSAPP"] },
+    { "idContacto": "…", "nombre": "Seguridad Ciudadana", "tipo": "SEGURIDAD_CIUDADANA", "prioridad": 3, "horario": { "inicio": "20:00", "fin": "08:00" }, "canales": ["CORREO"] }
   ],
   "calendario": {
     "zonaHoraria": "America/Santiago",
@@ -204,9 +207,12 @@ Todo lo que el reloj necesita para evaluar y escalar sin conexión. Con `If-None
 }
 ```
 - **Umbrales y espera**: los del paciente, o los valores base si no tiene ajustes.
-- **Contactos**: solo los activos con algún canal que el servidor pueda usar hoy (WhatsApp con opt-in vigente, o correo), por prioridad. Sin número ni correo: el reloj pide los avisos por `idContacto`. `horario: null` = todo el día; si `inicio` > `fin`, cruza la medianoche.
+- **Contactos**: solo los activos con algún canal que el servidor pueda usar hoy (WhatsApp con opt-in vigente, o correo), por prioridad, con su `tipo`. Sin número ni correo: el reloj pide los avisos por `idContacto`. Con el botón de ayuda, el reloj avisa primero a los `VECINO` (por prioridad) y después al resto (por prioridad).
+- **`zonaSegura`**: viene solo si `modulos.zonaSegura` es `true` (si no, `null`). El reloj revisa con su GPS si la persona sigue dentro del círculo; al salir envía una alerta `ZONA_SEGURA` con esa `severidad`.
+- **`botonAyuda`**: el botón envía una alerta `BOTON_AYUDA`, siempre `LEVE` (fuera del horario hábil espera, como toda leve). `horario: null` = todo el día; si `inicio` > `fin`, cruza la medianoche.
 - **Feriados**: del año en curso y el siguiente. Las horas van en hora de Chile.
 - **`versionMatriz`**: `PROVISIONAL` hasta recibir el Anexo B.
+- **`tendencia`**: rige para FC y SpO2 si `modulos.tendencia` es `true`. El reloj envía una alerta `TENDENCIA`, con la `severidad` indicada aquí, cuando el signo vital lleva ese tiempo fuera de su rango normal, sin llegar al límite grave. Si una lectura vuelve al rango normal, el tiempo parte de cero. Usa los `umbrales` de esta configuración, que cada paciente puede tener ajustados desde el dashboard: `normalMin` y `normalMax` son normales; `graveBajo` y `graveAlto` son zona intermedia. Más allá del límite grave rige la regla de 2 lecturas consecutivas. El tiempo es un valor único, y todo es provisional hasta que lo valide el equipo clínico ([dónde cambiar cada parte](backend.md#regla-de-tendencia-dónde-cambiar-cada-parte)).
 
 ## `PUT /api/reloj/v1/token-fcm`
 

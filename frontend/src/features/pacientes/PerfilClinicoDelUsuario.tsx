@@ -12,7 +12,16 @@ import { formatearFechaHora } from '../../comun/fechas';
 import { useDatos } from '../../comun/useDatos';
 import { useSesion } from '../sesion/SesionContext';
 import { pacientesApi } from './pacientesApi';
-import type { AjustesClinicos, Modulos, PerfilClinico, Umbral, UmbralVigente, VariableUmbral } from './tipos';
+import type {
+  AjustesClinicos,
+  Modulos,
+  PerfilClinico,
+  SeveridadZona,
+  Umbral,
+  UmbralVigente,
+  VariableUmbral,
+  ZonaSegura,
+} from './tipos';
 
 /** Nombre de cada módulo, en el orden en que se muestran. */
 const MODULOS: [keyof Modulos, string][] = [
@@ -21,6 +30,15 @@ const MODULOS: [keyof Modulos, string][] = [
   ['spo2', 'Saturación de oxígeno'],
   ['inactividad', 'Inactividad prolongada'],
   ['tendencia', 'Tendencia anormal'],
+  ['botonAyuda', 'Botón de ayuda (avisa primero a los vecinos)'],
+  ['zonaSegura', 'Salida de la zona segura'],
+];
+
+/** Cómo se muestra cada gravedad en la zona segura. */
+const GRAVEDADES: [SeveridadZona, string][] = [
+  ['LEVE', 'Leve (fuera del horario hábil espera)'],
+  ['MEDIA', 'Media'],
+  ['GRAVE', 'Grave'],
 ];
 
 /** Propiedades de PerfilClinicoDelUsuario. */
@@ -29,7 +47,7 @@ interface Props {
 }
 
 /**
- * Perfil clínico del usuario: qué vigila el reloj, opciones y umbrales de FC y SpO2. Donde no hay
+ * Perfil clínico del usuario: qué vigila el reloj, opciones, umbrales de FC y SpO2 y zona segura. Donde no hay
  * ajustes propios rigen los valores base del sistema. Cada cambio queda en el historial con quién y
  * cuándo, y el reloj lo recibe en su configuración.
  */
@@ -81,6 +99,12 @@ export function PerfilClinicoDelUsuario({ idPaciente }: Props) {
           />
         ))}
       </div>
+      <TarjetaZona
+        key={datos.zonaSegura?.vigenteDesde ?? 'sin-zona'}
+        perfil={datos}
+        editable={editable}
+        alGuardar={(zona) => cambiar(() => pacientesApi.definirZonaSegura(idPaciente, zona))}
+      />
       <p className="text-xs text-slate-500">
         Los valores base son provisionales hasta que los valide el equipo clínico.
       </p>
@@ -119,21 +143,35 @@ function FormularioAjustes({ perfil, editable, alGuardar }: PropsAjustes) {
                 <input
                   type="checkbox"
                   checked={ajustes.modulos[clave]}
+                  // La zona se activa solo con GPS y una zona definida (el backend también lo revisa)
+                  disabled={clave === 'zonaSegura' && !ajustes.modulos.zonaSegura && (!perfil.zonaSegura || !ajustes.gpsActivo)}
                   onChange={(e) => setAjustes({ ...ajustes, modulos: { ...ajustes.modulos, [clave]: e.target.checked } })}
                 />
                 {nombre}
               </label>
             ))}
           </div>
+          {!ajustes.modulos.zonaSegura && (!perfil.zonaSegura || !ajustes.gpsActivo) && (
+            <p className="mt-1 text-xs text-slate-500">
+              Para activar la zona segura, primero define la zona (abajo) y activa el GPS.
+            </p>
+          )}
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
               checked={ajustes.gpsActivo}
-              onChange={(e) => setAjustes({ ...ajustes, gpsActivo: e.target.checked })}
+              onChange={(e) =>
+                setAjustes({
+                  ...ajustes,
+                  gpsActivo: e.target.checked,
+                  // Sin GPS no hay zona segura
+                  modulos: e.target.checked ? ajustes.modulos : { ...ajustes.modulos, zonaSegura: false },
+                })
+              }
             />
-            GPS (solo para ubicar; no genera alertas)
+            GPS (ubica a la persona y revisa la zona segura)
           </label>
           <label className="flex items-center gap-2 text-sm">
             <input
@@ -288,6 +326,138 @@ function TarjetaUmbral({ variable, vigente, editable, alAjustar, alVolverAlBase 
                 </button>
               )}
             </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Propiedades de TarjetaZona. */
+interface PropsZona {
+  perfil: PerfilClinico;
+  editable: boolean;
+  alGuardar: (zona: ZonaSegura) => Promise<boolean>;
+}
+
+/** Valores del formulario de la zona: texto, para no perder lo que la persona escribe a medias. */
+interface FormularioZona {
+  latitud: string;
+  longitud: string;
+  radioMetros: string;
+  severidad: SeveridadZona;
+}
+
+/**
+ * Zona segura: un círculo (centro y radio) que el reloj revisa con su GPS. Al salir envía una alerta con la
+ * gravedad elegida. Guardar la zona no la activa: eso se hace en "Qué vigila el reloj".
+ */
+function TarjetaZona({ perfil, editable, alGuardar }: PropsZona) {
+  const guardada = perfil.zonaSegura?.zona ?? null;
+  const activa = perfil.ajustes.modulos.zonaSegura;
+  const [editando, setEditando] = useState(false);
+  const [valores, setValores] = useState<FormularioZona>({
+    latitud: guardada ? String(guardada.latitud) : '',
+    longitud: guardada ? String(guardada.longitud) : '',
+    radioMetros: guardada ? String(guardada.radioMetros) : '200',
+    severidad: guardada?.severidad ?? 'MEDIA',
+  });
+
+  /** Envía la zona escrita; el backend revisa los rangos. */
+  async function enviar(evento: FormEvent) {
+    evento.preventDefault();
+    const zona: ZonaSegura = {
+      latitud: Number(valores.latitud),
+      longitud: Number(valores.longitud),
+      radioMetros: Number(valores.radioMetros),
+      severidad: valores.severidad,
+    };
+    if (await alGuardar(zona)) setEditando(false);
+  }
+
+  /** Campo numérico de la zona. */
+  function campo(clave: 'latitud' | 'longitud' | 'radioMetros', etiqueta: string, limites: { min: number; max: number }) {
+    return (
+      <label className="block text-sm">
+        <span className={CLASE_ETIQUETA}>{etiqueta}</span>
+        <input
+          type="number"
+          required
+          step="any"
+          min={limites.min}
+          max={limites.max}
+          value={valores[clave]}
+          onChange={(e) => setValores({ ...valores, [clave]: e.target.value })}
+          className={CLASE_CAMPO}
+        />
+      </label>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-200 p-4">
+      <div className="mb-2 flex items-center justify-between">
+        <h3 className="font-medium text-slate-800">Zona segura</h3>
+        <span className={`text-xs ${activa ? 'text-sky-700' : 'text-slate-500'}`}>
+          {activa ? 'Activa' : guardada ? 'Definida, sin activar' : 'Sin definir'}
+        </span>
+      </div>
+      {editando ? (
+        <form onSubmit={enviar} className="space-y-3">
+          <div className="grid gap-2 sm:grid-cols-2">
+            {campo('latitud', 'Latitud del centro (ej. -23.6509)', { min: -90, max: 90 })}
+            {campo('longitud', 'Longitud del centro (ej. -70.3975)', { min: -180, max: 180 })}
+            {campo('radioMetros', 'Radio en metros (50 a 5000)', { min: 50, max: 5000 })}
+            <label className="block text-sm">
+              <span className={CLASE_ETIQUETA}>Gravedad al salir</span>
+              <select
+                value={valores.severidad}
+                onChange={(e) => setValores({ ...valores, severidad: e.target.value as SeveridadZona })}
+                className={CLASE_CAMPO}
+              >
+                {GRAVEDADES.map(([codigo, texto]) => (
+                  <option key={codigo} value={codigo}>
+                    {texto}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <p className="text-xs text-slate-500">
+            Las coordenadas se copian desde un mapa (por ejemplo, el domicilio). Se guardan cifradas.
+          </p>
+          <div className="flex gap-2">
+            <button type="submit" className={CLASE_BOTON_PRINCIPAL}>
+              Guardar zona
+            </button>
+            <button type="button" onClick={() => setEditando(false)} className={CLASE_BOTON_SECUNDARIO}>
+              Cancelar
+            </button>
+          </div>
+        </form>
+      ) : (
+        <>
+          {guardada ? (
+            <>
+              <p className="text-sm text-slate-700">
+                Centro: {guardada.latitud}, {guardada.longitud}
+              </p>
+              <p className="text-sm text-slate-700">
+                Radio: {guardada.radioMetros} m · Al salir: alerta {guardada.severidad.toLowerCase()}
+              </p>
+              {perfil.zonaSegura && (
+                <p className="text-xs text-slate-500">Desde {formatearFechaHora(perfil.zonaSegura.vigenteDesde)}</p>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-slate-500">
+              Sin zona: el reloj no alerta si la persona se aleja. Defínela y luego actívala junto con el GPS.
+            </p>
+          )}
+          {editable && (
+            <button onClick={() => setEditando(true)} className="mt-3 text-sm text-sky-700 hover:underline">
+              {guardada ? 'Cambiar zona' : 'Definir zona'}
+            </button>
           )}
         </>
       )}

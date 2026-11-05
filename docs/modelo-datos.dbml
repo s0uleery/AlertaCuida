@@ -72,6 +72,8 @@ Enum tipo_evento {
   FC_SPO2 [note: 'Clínica']
   TENDENCIA [note: 'Clínica']
   INACTIVIDAD [note: 'Clínica: la persona no mueve el reloj']
+  ZONA_SEGURA [note: 'La persona salió del círculo de su zona segura; gravedad según ZONA_SEGURA.severidad']
+  BOTON_AYUDA [note: 'La persona presionó el botón de ayuda del reloj. Siempre LEVE; avisa primero a los VECINO']
   SILENCIO_DATOS [note: 'Técnica: no llegan datos (sin señal, reloj apagado o plan vencido)']
   BATERIA_BAJA [note: 'Técnica']
   RELOJ_NO_PUESTO [note: 'Técnica']
@@ -142,6 +144,7 @@ Enum entidad_auditoria {
   CONTACTO
   CONFIGURACION
   UMBRAL
+  ZONA_SEGURA
   DOCUMENTO
   SMARTWATCH
   ASIGNACION_RELOJ
@@ -165,6 +168,7 @@ Enum accion_auditoria {
   EXPORTAR
   LOGIN
   LOGIN_FALLIDO
+  TOKEN_REUTILIZADO
 }
 
 // ==========================================
@@ -298,17 +302,38 @@ Table CONFIGURACION {
   fc_activa boolean [not null, default: true]
   spo2_activa boolean [not null, default: true]
   inactividad_activa boolean [not null, default: true]
-  tendencia_activa boolean [not null, default: false, note: 'La regla de tendencia (ventana, pendiente) la define el backend']
-  gps_activo boolean [not null, default: false, note: 'Solo para ubicar a la persona; no genera alertas']
+  tendencia_activa boolean [not null, default: true, note: 'El tiempo de la regla de tendencia lo define el backend, igual para todos']
+  zona_segura_activa boolean [not null, default: false, note: 'Alerta ZONA_SEGURA al salir del círculo. Exige gps_activo y una fila en ZONA_SEGURA']
+  boton_ayuda_activo boolean [not null, default: true, note: 'Botón del reloj para pedir ayuda (alerta BOTON_AYUDA, leve)']
+  gps_activo boolean [not null, default: false, note: 'Ubica a la persona y, con zona_segura_activa, revisa la zona']
   modo_conservador boolean [not null, default: false]
   minutos_espera int [note: 'Espera antes de pasar al siguiente contacto. Vacío = valor base']
   motivo_cambio text [note: 'cifrado. Ej. ajuste por enfermedad de base']
   Note: '''
   Historial de la configuración clínica: cada cambio agrega una fila y nunca se modifican las anteriores.
   Un módulo por columna: son pocos y fijos, y cada uno depende de la clave completa.
-  Los umbrales y los contactos tienen su propio historial y no agregan filas aquí.
+  Los umbrales, la zona segura y los contactos tienen su propio historial y no agregan filas aquí.
   Quién hizo cada cambio queda en REGISTRO_AUDITORIA (1.5.2).
   CHECK (minutos_espera > 0).
+  CHECK (NOT zona_segura_activa OR gps_activo): la zona se revisa con el GPS.
+  Lo valida el backend: activar la zona exige una fila vigente en ZONA_SEGURA (está en otra tabla).
+  '''
+}
+
+Table ZONA_SEGURA {
+  id_paciente uuid [pk]
+  vigente_desde timestamptz [pk, note: 'Rige hasta la fila siguiente del mismo paciente']
+  latitud varchar [not null, note: 'cifrado. Centro del círculo, en grados; suele ser el domicilio']
+  longitud varchar [not null, note: 'cifrado']
+  radio_metros int [not null, note: 'El backend exige de 50 a 5000 m']
+  severidad severidad [not null, default: 'MEDIA', note: 'Gravedad de la alerta ZONA_SEGURA al salir']
+  Note: '''
+  Zona segura del paciente: un círculo que el reloj revisa con su GPS. Historial propio, como UMBRAL:
+  cambiar el radio no agrega una versión de CONFIGURACION, y cada atributo depende de la clave completa (FNBC).
+  Guardar una zona no la activa: el interruptor es CONFIGURACION.zona_segura_activa, así se puede dejar
+  definida y apagada. Las coordenadas van cifradas como texto porque suelen ser el domicilio.
+  La zona viaja al reloj solo con el módulo activo.
+  CHECK (radio_metros > 0).
   '''
 }
 
@@ -492,6 +517,8 @@ Table ALERTA {
   CHECK (tipo_evento <> 'SILENCIO_DATOS' OR origen = 'SERVIDOR'): el silencio de datos solo lo detecta el servidor.
   CHECK (fecha_hora_agravamiento IS NULL OR (tipo_evento = 'CAIDA' AND severidad <> 'GRAVE')).
   CHECK (NOT espera_dia_habil OR severidad = 'LEVE'): solo la leve espera; media y grave avisan siempre.
+  CHECK (tipo_evento <> 'BOTON_AYUDA' OR severidad = 'LEVE'): el botón de ayuda siempre es leve (si el reloj envía otra
+  gravedad, el backend la guarda como LEVE en vez de rechazar el pedido de ayuda).
   '''
 }
 
@@ -630,16 +657,22 @@ Table USUARIO {
   nombre_profesional varchar [not null]
   cargo varchar
   correo varchar [unique, not null, note: 'Recibe los enlaces de activación y recuperación. Se guarda en minúsculas']
-  telefono varchar [note: 'cifrado']
+  telefono varchar [note: 'cifrado. Número de WhatsApp normalizado. Lo valida el backend: obligatorio para el rol COORDINADOR']
+  fecha_opt_in timestamptz [note: 'Aceptó recibir por WhatsApp los avisos de la oficina PRLAC (opt-in de Meta)']
+  fecha_revocacion_opt_in timestamptz
   hash_contrasena varchar [note: 'Vacío hasta que el usuario activa su cuenta']
   totp_secreto varchar [note: 'cifrado']
   totp_activo boolean [not null, default: false]
-  recibe_avisos boolean [not null, default: true, note: 'Recibe por correo las alertas técnicas, medias y graves']
+  recibe_avisos boolean [not null, default: true, note: 'Recibe por correo las alertas técnicas, medias y graves. No aplica al rol COORDINADOR, que recibe por WhatsApp el aviso de la oficina PRLAC. PENDIENTE: decidir si va encendido por defecto']
   recibe_resumen_diario boolean [not null, default: false]
   activo boolean [not null, default: false, note: 'Se activa al definir la contraseña']
   Note: '''
   Lo crea el administrador desde la plataforma; el usuario recibe un TOKEN_ACCION de ACTIVACION.
   Los usuarios no se borran, se desactivan: sus acciones quedan en el historial.
+  Aviso a la oficina PRLAC: en horario laboral, WhatsApp a la vez a todas las cuentas activas con rol COORDINADOR
+  y opt-in vigente; si un WhatsApp falla, va un correo de respaldo. Fuera del horario laboral no se envía nada.
+  CHECK (fecha_opt_in IS NULL OR telefono IS NOT NULL).
+  CHECK (fecha_revocacion_opt_in IS NULL OR fecha_opt_in IS NOT NULL).
   El último acceso no se guarda: sale del último LOGIN en REGISTRO_AUDITORIA.
   El bloqueo tampoco: está bloqueado si tiene N LOGIN_FALLIDO en los últimos M minutos sin un LOGIN posterior
   (N y M en el yml). Índice recomendado en REGISTRO_AUDITORIA: (id_usuario, accion, fecha_hora).
@@ -724,6 +757,7 @@ Ref: DOCUMENTO.id_paciente > PACIENTE.id_paciente [delete: cascade]
 Ref: DOCUMENTO.id_usuario > USUARIO.id_usuario
 Ref: CONFIGURACION.id_paciente > PACIENTE.id_paciente [delete: cascade]
 Ref: UMBRAL.id_paciente > PACIENTE.id_paciente [delete: cascade]
+Ref: ZONA_SEGURA.id_paciente > PACIENTE.id_paciente [delete: cascade]
 
 // 2. Contactos
 Ref: CONTACTO_PACIENTE.id_paciente > PACIENTE.id_paciente [delete: cascade]

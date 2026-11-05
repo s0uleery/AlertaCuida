@@ -9,10 +9,8 @@ export const auditoriaApi = {
   /**
    * Los últimos registros, del más nuevo al más antiguo.
    *
-   * Falta en el backend: GET /api/auditoria?limite=N con @PreAuthorize(ADMINISTRACION:VER) que lea
-   * registro_auditoria (hoy solo se escribe, con RegistroAuditoriaJdbc) unida a usuario para el nombre
-   * de quien hizo la acción. Devuelve RegistroAuditoria[]. Conviene no incluir las acciones LEER,
-   * que son muchas, o agregar un parámetro para pedirlas aparte.
+   * @param incluirLecturas si también se traen las consultas de datos, que son muchas más que los cambios
    */
-  recientes: () => pedir<RegistroAuditoria[]>(`/auditoria?limite=${LIMITE}`),
+  recientes: (incluirLecturas: boolean) =>
+    pedir<RegistroAuditoria[]>(`/auditoria?limite=${LIMITE}&incluirLecturas=${incluirLecturas}`),
 };

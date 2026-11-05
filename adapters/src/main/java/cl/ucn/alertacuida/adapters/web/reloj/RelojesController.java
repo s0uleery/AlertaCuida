@@ -3,6 +3,7 @@ package cl.ucn.alertacuida.adapters.web.reloj;
 import cl.ucn.alertacuida.adapters.seguridad.TokenJwt;
 import cl.ucn.alertacuida.adapters.web.Permisos;
 import cl.ucn.alertacuida.adapters.web.RespuestaId;
+import cl.ucn.alertacuida.adapters.web.auditoria.LecturaAuditada;
 import cl.ucn.alertacuida.application.reloj.ConsultarRelojes;
 import cl.ucn.alertacuida.application.reloj.EditarReloj;
 import cl.ucn.alertacuida.application.reloj.RegistrarReloj;
@@ -40,9 +41,14 @@ public class RelojesController {
 		this.editar = editar;
 	}
 
-	/** @return todos los relojes con el paciente que usa cada uno */
+	/**
+	 * Se audita porque la lista muestra quién usa cada reloj, así que también revela datos de pacientes.
+	 *
+	 * @return todos los relojes con el paciente que usa cada uno
+	 */
 	@GetMapping
 	@PreAuthorize(Permisos.USUARIOS_VER)
+	@LecturaAuditada(entidad = "SMARTWATCH")
 	public List<RelojConPaciente> listar() {
 		return consultar.listar();
 	}

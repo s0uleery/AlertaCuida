@@ -2,6 +2,8 @@ package cl.ucn.alertacuida.adapters.persistencia.sesion;
 
 import cl.ucn.alertacuida.application.sesion.modelo.CuentaUsuario;
 import cl.ucn.alertacuida.application.sesion.puerto.CuentaUsuarioRepository;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
@@ -13,6 +15,13 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class CuentaUsuarioJdbc implements CuentaUsuarioRepository {
 
+	/** Consulta común; cada búsqueda agrega su condición al final. */
+	private static final String SELECCION = """
+			SELECT u.id_usuario, u.nombre_profesional, u.codigo_rol, u.hash_contrasena,
+				u.activo AND r.activo activo
+			FROM usuario u JOIN rol r ON r.codigo = u.codigo_rol
+			WHERE\s""";
+
 	private final JdbcClient jdbc;
 
 	/** @param jdbc cliente de Spring sobre la conexión a PostgreSQL */
@@ -23,16 +32,25 @@ public class CuentaUsuarioJdbc implements CuentaUsuarioRepository {
 	/** Un usuario de un rol desactivado tampoco entra. */
 	@Override
 	public Optional<CuentaUsuario> buscarPorRunHash(String runHash) {
-		return jdbc.sql("""
-				SELECT u.id_usuario, u.nombre_profesional, u.codigo_rol, u.hash_contrasena,
-					u.activo AND r.activo activo
-				FROM usuario u JOIN rol r ON r.codigo = u.codigo_rol
-				WHERE u.rut_hash = :runHash""")
+		return jdbc.sql(SELECCION + "u.rut_hash = :runHash")
 				.param("runHash", runHash)
-				.query((fila, n) -> new CuentaUsuario(fila.getObject("id_usuario", UUID.class),
-						fila.getString("nombre_profesional"), fila.getString("codigo_rol"),
-						fila.getString("hash_contrasena"), fila.getBoolean("activo")))
+				.query(CuentaUsuarioJdbc::cuenta)
 				.optional();
+	}
+
+	/** Un usuario de un rol desactivado tampoco renueva su sesión. */
+	@Override
+	public Optional<CuentaUsuario> buscarPorId(UUID id) {
+		return jdbc.sql(SELECCION + "u.id_usuario = :id")
+				.param("id", id)
+				.query(CuentaUsuarioJdbc::cuenta)
+				.optional();
+	}
+
+	/** Arma la cuenta desde una fila de {@link #SELECCION}. */
+	private static CuentaUsuario cuenta(ResultSet fila, int numero) throws SQLException {
+		return new CuentaUsuario(fila.getObject("id_usuario", UUID.class), fila.getString("nombre_profesional"),
+				fila.getString("codigo_rol"), fila.getString("hash_contrasena"), fila.getBoolean("activo"));
 	}
 
 	@Override

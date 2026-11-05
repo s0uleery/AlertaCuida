@@ -58,6 +58,19 @@ class RecibirAlertaTest {
 		assertThat(media.respuesta().estado().estado()).isEqualTo(EstadoContacto.RECIBIDA);
 	}
 
+	/** El botón de ayuda siempre es leve: si llega con otra gravedad se guarda como leve, sin rechazarlo. */
+	@Test
+	void elBotonDeAyudaSeGuardaComoLeve() {
+		UUID eventId = UUID.randomUUID();
+		AlertaRecibida boton = new AlertaRecibida(eventId, TipoEvento.BOTON_AYUDA, Severidad.GRAVE, "v1", AHORA,
+				AHORA, true, null, null);
+
+		ResultadoAlerta resultado = recibir.recibir(RELOJ, boton);
+
+		assertThat(alertas.filas.get(eventId).alerta().severidad()).isEqualTo(Severidad.LEVE);
+		assertThat(resultado.respuesta().estado().estado()).isEqualTo(EstadoContacto.PENDIENTE_DIA_HABIL);
+	}
+
 	/** Una cancelación queda CANCELADA y detiene el escalamiento; el mismo eventId no puede ser alerta. */
 	@Test
 	void laCancelacionQuedaCanceladaYNoSeConfundeConUnaAlerta() {

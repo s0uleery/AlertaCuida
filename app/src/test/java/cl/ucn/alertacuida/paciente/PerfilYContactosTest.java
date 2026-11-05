@@ -70,7 +70,7 @@ class PerfilYContactosTest {
 		mvc.perform(conToken(get(perfil()), coordinador))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.ajustes.modulos.caidas").value(true))
-				.andExpect(jsonPath("$.ajustes.modulos.tendencia").value(false))
+				.andExpect(jsonPath("$.ajustes.modulos.tendencia").value(true))
 				.andExpect(jsonPath("$.minutosEspera").value(5))
 				.andExpect(jsonPath("$.fc.propio").value(false))
 				.andExpect(jsonPath("$.fc.umbral.graveBajo").value(40))
@@ -81,8 +81,9 @@ class PerfilYContactosTest {
 	@Test
 	void ajustesYUmbralesQuedanEnElHistorialConAuditoria() throws Exception {
 		conJson(put(perfil() + "/ajustes"), """
-				{"modulos": {"caidas": true, "fc": true, "spo2": true, "inactividad": false, "tendencia": false},
-				"gpsActivo": true, "modoConservador": false, "minutosEspera": 8, "motivo": "Sale a caminar sola"}""")
+				{"modulos": {"caidas": true, "fc": true, "spo2": true, "inactividad": false, "tendencia": false,
+				"zonaSegura": false, "botonAyuda": true}, "gpsActivo": true, "modoConservador": false,
+				"minutosEspera": 8, "motivo": "Sale a caminar sola"}""")
 				.andExpect(status().isNoContent());
 		conJson(put(perfil() + "/umbrales/SPO2"), "{\"graveBajo\": 85, \"normalMin\": 90}")
 				.andExpect(status().isNoContent());
@@ -106,6 +107,30 @@ class PerfilYContactosTest {
 				.isEqualTo(2);
 		assertThat(jdbc.sql("SELECT entidad FROM registro_auditoria WHERE accion = 'CREAR' AND entidad <> 'PACIENTE'")
 				.query(String.class).list()).containsExactlyInAnyOrder("CONFIGURACION", "UMBRAL", "UMBRAL");
+	}
+
+	/** La zona se guarda con coordenadas cifradas; activarla exige GPS y queda en el perfil. */
+	@Test
+	void laZonaSeguraSeGuardaCifradaYSeActivaConGps() throws Exception {
+		String conZonaSinGps = """
+				{"modulos": {"caidas": true, "fc": true, "spo2": true, "inactividad": true, "tendencia": true,
+				"zonaSegura": true, "botonAyuda": true}, "gpsActivo": false, "modoConservador": false}""";
+		conJson(put(perfil() + "/zona-segura"), "{\"latitud\": -23.6509, \"longitud\": -70.3975, \"radioMetros\": 20}")
+				.andExpect(status().isBadRequest());
+		conJson(put(perfil() + "/zona-segura"), "{\"latitud\": -23.6509, \"longitud\": -70.3975, \"radioMetros\": 200}")
+				.andExpect(status().isNoContent());
+		conJson(put(perfil() + "/ajustes"), conZonaSinGps).andExpect(status().isBadRequest());
+		conJson(put(perfil() + "/ajustes"), conZonaSinGps.replace("\"gpsActivo\": false", "\"gpsActivo\": true"))
+				.andExpect(status().isNoContent());
+
+		mvc.perform(conToken(get(perfil()), coordinador))
+				.andExpect(jsonPath("$.ajustes.modulos.zonaSegura").value(true))
+				.andExpect(jsonPath("$.ajustes.modulos.botonAyuda").value(true))
+				.andExpect(jsonPath("$.zonaSegura.zona.latitud").value(-23.6509))
+				.andExpect(jsonPath("$.zonaSegura.zona.radioMetros").value(200))
+				.andExpect(jsonPath("$.zonaSegura.zona.severidad").value("MEDIA"));
+		assertThat(jdbc.sql("SELECT latitud FROM zona_segura").query(String.class).single()).startsWith("v1:")
+				.doesNotContain("23.65");
 	}
 
 	/** Los contactos se guardan cifrados y con hash; la lista muestra canales y horas sin cobertura. */

@@ -229,7 +229,9 @@ class PacientesYRelojesTest {
 		mvc.perform(conToken(delete(ruta + "/" + epoc), coordinador)).andExpect(status().isNoContent());
 		mvc.perform(conToken(delete(ruta + "/" + epoc), coordinador)).andExpect(status().isNotFound());
 		mvc.perform(conToken(get(ruta), coordinador)).andExpect(jsonPath("$", hasSize(1)));
-		Long cambios = jdbc.sql("SELECT count(*) FROM registro_auditoria WHERE entidad = 'CONDICION_PACIENTE'")
+		Long cambios = jdbc.sql("""
+				SELECT count(*) FROM registro_auditoria
+				WHERE entidad = 'CONDICION_PACIENTE' AND accion <> 'LEER'""")
 				.query(Long.class).single();
 		assertThat(cambios).isEqualTo(3);
 	}
