@@ -83,7 +83,7 @@ class ModeloDatosTest {
 			{"CAIDA_MARIA", 71}, {"LEVE_PEDRO", 72}, {"MEDIA_ROSA", 73}, {"GRAVE_ROSA", 74},
 			{"CANCELADA", 75}, {"SILENCIO", 76}, {"SIMULACRO", 77}, {"SILENCIO_2", 78}, {"GRAVE_ROSA_2", 79},
 			{"ALERTA_X1", 90}, {"ALERTA_X2", 91}, {"ALERTA_X3", 92}, {"ALERTA_X4", 96}, {"ALERTA_X5", 97},
-			{"ALERTA_INEXISTENTE", 98}, {"INEXISTENTE", 99},
+			{"ALERTA_X6", 93}, {"ALERTA_INEXISTENTE", 98}, {"INEXISTENTE", 99},
 		};
 		for (Object[] par : lista) {
 			ids.put((String) par[0], String.format("00000000-0000-0000-0000-%012d", (Integer) par[1]));
@@ -273,13 +273,13 @@ class ModeloDatosTest {
 	private DynamicContainer estructura() {
 		return grupo("1. Estructura de la base (migraciones)",
 			c.vale("Migraciones aplicadas por Flyway", """
-					SELECT count(*) n FROM flyway_schema_history WHERE success AND version IS NOT NULL""", 6),
+					SELECT count(*) n FROM flyway_schema_history WHERE success AND version IS NOT NULL""", 9),
 			c.vale("Cantidad de tablas", """
 					SELECT count(*) n FROM information_schema.tables WHERE table_schema = 'public'
-					AND table_type = 'BASE TABLE' AND table_name <> 'flyway_schema_history'""", 28),
+					AND table_type = 'BASE TABLE' AND table_name <> 'flyway_schema_history'""", 29),
 			c.vale("Cantidad de relaciones (claves foráneas)", """
 					SELECT count(*) n FROM information_schema.table_constraints
-					WHERE table_schema = 'public' AND constraint_type = 'FOREIGN KEY'""", 31),
+					WHERE table_schema = 'public' AND constraint_type = 'FOREIGN KEY'""", 32),
 			c.vale("Tablas sueltas (sin ninguna relación)", """
 					SELECT count(*) n FROM information_schema.tables t
 					WHERE t.table_schema = 'public' AND t.table_type = 'BASE TABLE'
@@ -373,6 +373,17 @@ class ModeloDatosTest {
 			VALUES (gen_random_uuid(), '{LUIS}', 'ACTIVACION', 'act-luis', now(), now() + interval '2 days')"""),
 			c.rechaza("Dos profesionales con el mismo RUN",
 					usuario(null, "PERSONAL", "Otra", "otra@muni.cl", "rut-ana"), UNICO),
+			c.acepta("Coordinadora con teléfono y opt-in de WhatsApp (se deshace)", "BEGIN; "
+					+ usuario(null, "COORDINADOR", "Rosa", "rosa@muni.cl", "rut-rosa", ", telefono, fecha_opt_in",
+							", 'tel-cifrado', now()") + "; ROLLBACK"),
+			c.rechaza("Opt-in de WhatsApp sin teléfono",
+					usuario(null, "COORDINADOR", "Rosa", "rosa@muni.cl", "rut-rosa", ", fecha_opt_in", ", now()"),
+					CHECK),
+			c.rechaza("Revocación del opt-in sin haberlo aceptado",
+					usuario(null, "PERSONAL", "Otra", "otra@muni.cl", "rut-otra", ", telefono, fecha_revocacion_opt_in",
+							", 'tel-cifrado', now()"), CHECK),
+			c.backend("Coordinadora sin teléfono (no recibiría los avisos de la oficina)",
+					"BEGIN; " + usuario(null, "COORDINADOR", "Sin", "sin@muni.cl", "rut-sin") + "; ROLLBACK"),
 			c.rechaza("Profesional sin RUN", """
 					INSERT INTO usuario (id_usuario, codigo_rol, rut_hash, nombre_profesional, correo)
 					VALUES (gen_random_uuid(), 'PERSONAL', 'r', 'X', 'x@muni.cl')""", NULO),
@@ -582,10 +593,31 @@ class ModeloDatosTest {
 					"INSERT INTO configuracion (id_paciente, vigente_desde) VALUES ('{PEDRO}', " + T1 + ");"
 					+ " INSERT INTO configuracion (id_paciente, vigente_desde, modo_conservador)"
 					+ " VALUES ('{ROSA}', " + T1 + ", true)"),
-			c.vale("Módulos por defecto (caídas, FC, SpO2, inactividad sí; tendencia y GPS no)", """
+			c.vale("Módulos por defecto (caídas, FC, SpO2, inactividad, tendencia y botón sí; GPS y zona no)", """
 			SELECT concat_ws(',', caidas_activa::text, fc_activa::text, spo2_activa::text, inactividad_activa::text,
-					tendencia_activa::text, gps_activo::text) n FROM configuracion WHERE id_paciente = '{PEDRO}'""",
-					"true,true,true,true,false,false"),
+					tendencia_activa::text, gps_activo::text, zona_segura_activa::text, boton_ayuda_activo::text) n
+					FROM configuracion WHERE id_paciente = '{PEDRO}'""",
+					"true,true,true,true,true,false,false,true"),
+			c.rechaza("Zona segura activa sin GPS", """
+					INSERT INTO configuracion (id_paciente, vigente_desde, zona_segura_activa)
+					VALUES ('{PEDRO}', now(), true)""", CHECK),
+			c.acepta("Zona segura de Pedro: 200 m, media por defecto, coordenadas cifradas como texto",
+					"INSERT INTO zona_segura (id_paciente, vigente_desde, latitud, longitud, radio_metros)"
+					+ " VALUES ('{PEDRO}', " + T1 + ", 'c-lat', 'c-lon', 200)"),
+			c.vale("La zona sin severidad elegida es media",
+					"SELECT severidad n FROM zona_segura WHERE id_paciente = '{PEDRO}'", "MEDIA"),
+			c.acepta("Pedro activa la zona con el GPS (se deshace)", """
+					BEGIN; INSERT INTO configuracion (id_paciente, vigente_desde, gps_activo, zona_segura_activa)
+					VALUES ('{PEDRO}', now(), true, true); ROLLBACK"""),
+			c.rechaza("Zona segura con radio cero", """
+					INSERT INTO zona_segura (id_paciente, vigente_desde, latitud, longitud, radio_metros)
+					VALUES ('{PEDRO}', now(), 'c-lat', 'c-lon', 0)""", CHECK),
+			c.rechaza("Zona segura con una severidad que no existe", """
+					INSERT INTO zona_segura (id_paciente, vigente_desde, latitud, longitud, radio_metros, severidad)
+					VALUES ('{PEDRO}', now(), 'c-lat', 'c-lon', 200, 'CRITICA')""", CHECK),
+			c.rechaza("Dos zonas de Pedro con la misma fecha", """
+					INSERT INTO zona_segura (id_paciente, vigente_desde, latitud, longitud, radio_metros)
+					VALUES ('{PEDRO}', """ + T1 + ", 'c-lat', 'c-lon', 300)", UNICO),
 			c.vale("Configuración vigente de María (la más reciente): GPS activo", """
 					SELECT gps_activo n FROM configuracion WHERE id_paciente = '{MARIA}'
 					ORDER BY vigente_desde DESC LIMIT 1""", true),
@@ -945,6 +977,13 @@ class ModeloDatosTest {
 			c.rechaza("Una grave marcada para esperar el día hábil",
 					alertaReloj("ALERTA_X2", "A_ROSA", "FC", "GRAVE", ", espera_dia_habil", ", true"), CHECK),
 			c.rechaza("Gravedad que no existe (MODERADA)", alertaReloj("ALERTA_X3", "A_ROSA", "FC", "MODERADA"), CHECK),
+			c.rechaza("Un botón de ayuda que no es leve",
+					alertaReloj("ALERTA_X6", "A_ROSA", "BOTON_AYUDA", "MEDIA"), CHECK),
+			c.acepta("Botón de ayuda de madrugada: leve, espera el día hábil (se deshace)", "BEGIN; "
+					+ alertaReloj("ALERTA_X6", "A_ROSA", "BOTON_AYUDA", "LEVE", ", espera_dia_habil", ", true")
+					+ "; ROLLBACK"),
+			c.acepta("Salida de la zona segura con la gravedad de la zona (se deshace)",
+					"BEGIN; " + alertaReloj("ALERTA_X6", "A_ROSA", "ZONA_SEGURA", "GRAVE") + "; ROLLBACK"),
 			c.rechaza("Agravar una alerta que llegó grave",
 					"UPDATE alerta SET fecha_hora_agravamiento = now() WHERE id_alerta = '{GRAVE_ROSA}'", CHECK),
 			c.rechaza("Agravar una alerta que no es caída",
@@ -1134,6 +1173,7 @@ class ModeloDatosTest {
 					+ (SELECT count(*) FROM contacto_paciente WHERE id_paciente = '{MARIA}')
 					+ (SELECT count(*) FROM configuracion WHERE id_paciente = '{MARIA}')
 					+ (SELECT count(*) FROM umbral WHERE id_paciente = '{MARIA}')
+					+ (SELECT count(*) FROM zona_segura WHERE id_paciente = '{MARIA}')
 					+ (SELECT count(*) FROM asignacion_reloj WHERE id_paciente = '{MARIA}')
 					+ (SELECT count(*) FROM sincronizacion WHERE id_asignacion = '{A_MARIA}')
 					+ (SELECT count(*) FROM registro_vital WHERE id_asignacion = '{A_MARIA}')

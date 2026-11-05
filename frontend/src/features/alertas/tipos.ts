@@ -11,6 +11,8 @@ export type TipoEvento =
   | 'FC_SPO2'
   | 'TENDENCIA'
   | 'INACTIVIDAD'
+  | 'ZONA_SEGURA'
+  | 'BOTON_AYUDA'
   | 'SILENCIO_DATOS'
   | 'BATERIA_BAJA'
   | 'RELOJ_NO_PUESTO';

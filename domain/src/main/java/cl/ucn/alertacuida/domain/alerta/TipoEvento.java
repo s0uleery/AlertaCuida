@@ -8,6 +8,10 @@ public enum TipoEvento {
 	FC_SPO2,
 	TENDENCIA,
 	INACTIVIDAD,
+	/** La persona salió del círculo de su zona segura; la severidad la define su zona. */
+	ZONA_SEGURA,
+	/** La persona presionó el botón de ayuda del reloj. Siempre leve: avisa primero a los vecinos. */
+	BOTON_AYUDA,
 	/** El reloj dejó de sincronizar: solo lo detecta el servidor. */
 	SILENCIO_DATOS,
 	BATERIA_BAJA,

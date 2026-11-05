@@ -11,18 +11,22 @@ import jakarta.validation.constraints.Size;
  *
  * @param run   con o sin puntos
  * @param cargo opcional
- * @param rol   código del rol: ADMINISTRADOR, COORDINADOR o PERSONAL
+ * @param rol            código del rol: ADMINISTRADOR, COORDINADOR o PERSONAL
+ * @param telefono       celular con WhatsApp; obligatorio para COORDINADOR (lo revisa el caso de uso)
+ * @param aceptaWhatsapp si la persona aceptó recibir los avisos por WhatsApp; vacío = no
  */
 public record SolicitudCuenta(
 		@NotBlank String run,
 		@NotBlank @Size(max = 200) String nombre,
 		@Size(max = 200) String cargo,
 		@NotBlank @Email String correo,
-		@NotBlank String rol) {
+		@NotBlank String rol,
+		@Size(max = 30) String telefono,
+		Boolean aceptaWhatsapp) {
 
 	/** @return los mismos datos en el formato del caso de uso */
 	DatosCuenta datos() {
-		return new DatosCuenta(run, nombre, cargo, correo, rol);
+		return new DatosCuenta(run, nombre, cargo, correo, rol, telefono, Boolean.TRUE.equals(aceptaWhatsapp));
 	}
 
 }

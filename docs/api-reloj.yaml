@@ -445,7 +445,10 @@ components:
       type: string
       description: |
         Lo que detectó el reloj. `SILENCIO_DATOS` no existe aquí: solo lo detecta el servidor.
-      enum: [CAIDA, FC, SPO2, FC_SPO2, TENDENCIA, INACTIVIDAD, BATERIA_BAJA, RELOJ_NO_PUESTO]
+        `ZONA_SEGURA`: la persona salió del círculo de `zonaSegura`, con la severidad indicada ahí.
+        `BOTON_AYUDA`: la persona presionó el botón de ayuda; siempre `LEVE` (si llega con otra severidad,
+        el servidor la guarda como `LEVE`). Tiene la misma ventana de 30 s para cancelar que las demás.
+      enum: [CAIDA, FC, SPO2, FC_SPO2, TENDENCIA, INACTIVIDAD, ZONA_SEGURA, BOTON_AYUDA, BATERIA_BAJA, RELOJ_NO_PUESTO]
 
     Severidad:
       type: string
@@ -463,7 +466,7 @@ components:
 
     Ubicacion:
       type: object
-      description: Solo si el paciente tiene el GPS activo. No genera alertas.
+      description: Solo si el paciente tiene el GPS activo. Muestra dónde está; la zona segura la revisa el reloj, no el servidor.
       required: [latitud, longitud, fechaHoraMedicion]
       properties:
         latitud: { type: number, minimum: -90, maximum: 90 }
@@ -557,15 +560,34 @@ components:
           example: 9f2c4e1a7b3d5e60
         modulos:
           type: object
-          required: [caidas, fc, spo2, inactividad, tendencia]
+          required: [caidas, fc, spo2, inactividad, tendencia, zonaSegura, botonAyuda]
           properties:
             caidas: { type: boolean }
             fc: { type: boolean }
             spo2: { type: boolean }
             inactividad: { type: boolean }
-            tendencia: { type: boolean }
-        gpsActivo: { type: boolean, description: Solo para ubicar a la persona; no genera alertas. }
+            tendencia: { type: boolean, description: Activa por defecto. }
+            zonaSegura: { type: boolean, description: 'Apagada por defecto. Si es true, viene `zonaSegura` y `gpsActivo` es true.' }
+            botonAyuda:
+              type: boolean
+              description: |
+                Activo por defecto. El botón envía una alerta `BOTON_AYUDA` leve: respeta el horario hábil como
+                toda leve y avisa primero a los contactos de `tipo` VECINO (por prioridad) y después al resto (por
+                prioridad).
+        gpsActivo: { type: boolean, description: Ubica a la persona y, con el módulo zonaSegura, revisa la zona. }
         modoConservador: { type: boolean }
+        zonaSegura:
+          type: [object, 'null']
+          description: |
+            Círculo que el reloj revisa con su GPS. Viene solo si `modulos.zonaSegura` es true; si no, null.
+            Al salir, el reloj envía una alerta `ZONA_SEGURA` con esta `severidad`. Cada cuánto revisa el GPS
+            lo decide la app del reloj (afecta la batería): el servidor no lo envía.
+          required: [latitud, longitud, radioMetros, severidad]
+          properties:
+            latitud: { type: number, minimum: -90, maximum: 90 }
+            longitud: { type: number, minimum: -180, maximum: 180 }
+            radioMetros: { type: integer, minimum: 50, maximum: 5000 }
+            severidad: { $ref: '#/components/schemas/Severidad' }
         umbrales:
           type: object
           required: [fc, spo2]
@@ -588,12 +610,24 @@ components:
                 normalMin: { type: number }
         reglas:
           type: object
-          description: |
-            Versión de la matriz de riesgo FC × SpO2 y parámetros de la regla de tendencia. Su
-            contenido se define con el equipo clínico (Anexo B); por ahora solo la versión.
-          required: [versionMatriz]
+          description: Versión de la matriz de riesgo FC × SpO2 y parámetros de la regla de tendencia.
+          required: [versionMatriz, tendencia]
           properties:
             versionMatriz: { type: string, example: PROVISIONAL, description: PROVISIONAL hasta recibir el Anexo B. }
+            tendencia:
+              type: object
+              description: |
+                Rige para FC y SpO2 si `modulos.tendencia` es true. El reloj envía una alerta
+                `TENDENCIA`, con la `severidad` indicada aquí, cuando el signo vital lleva este tiempo fuera de su
+                rango normal, sin llegar al límite grave. Si una lectura vuelve al rango normal, el
+                tiempo parte de cero. Usa los `umbrales` de esta configuración, que cada paciente puede
+                tener ajustados desde el dashboard. `normalMin` y `normalMax` son normales; `graveBajo`
+                y `graveAlto` son zona intermedia. Más allá del límite grave rige la regla de 2 lecturas
+                consecutivas. Sin el módulo, la zona intermedia no genera alertas por tiempo.
+              required: [minutos, severidad]
+              properties:
+                minutos: { type: integer, minimum: 30, example: 120, description: Valor único para todos los pacientes. Provisional. }
+                severidad: { $ref: '#/components/schemas/Severidad' }
         escalamiento:
           type: object
           required: [minutosEspera, rondas]
@@ -605,10 +639,14 @@ components:
           description: Ordenados por prioridad. Solo los activos con algún canal que el servidor pueda usar hoy; por eso puede haber saltos en la prioridad.
           items:
             type: object
-            required: [idContacto, nombre, prioridad, canales]
+            required: [idContacto, nombre, tipo, prioridad, canales]
             properties:
               idContacto: { type: string, format: uuid, description: Se usa en la solicitud de aviso. }
               nombre: { type: string, description: 'Para la pantalla "Alerta recibida por ...".' }
+              tipo:
+                type: string
+                example: VECINO
+                description: FAMILIA, VECINO, PRLAC, SEGURIDAD_CIUDADANA, INSTITUCION u OTRO. Con el botón de ayuda, los VECINO van primero.
               prioridad: { type: integer, minimum: 1 }
               horario:
                 type: [object, 'null']

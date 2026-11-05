@@ -84,11 +84,71 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problema' }
 
+  /api/auth/renovar:
+    post:
+      tags: [Sesión]
+      operationId: renovarSesion
+      summary: Entrega tokens nuevos a cambio de la cookie de renovación
+      description: |
+        No lleva token de acceso: lo autoriza la cookie `alertacuida_renovacion` (HttpOnly,
+        SameSite=Strict, Path=/api/auth), que se reemplaza en cada renovación. Sirve para recuperar la
+        sesión al recargar la página y para renovar el token antes de que venza.
+      security: []
+      responses:
+        '200':
+          description: Sesión renovada.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RespuestaLogin' }
+        '401':
+          description: >-
+            La sesión terminó (sin cookie, 10 horas desde el login, 15 minutos sin renovar, token
+            reutilizado o cuenta desactivada). Borra la cookie.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problema' }
+
+  /api/auth/salir:
+    post:
+      tags: [Sesión]
+      operationId: cerrarSesion
+      summary: Cierra la sesión de este navegador y borra la cookie de renovación
+      security: []
+      responses:
+        '204':
+          description: Sesión cerrada, o no había sesión.
+
+  /api/auditoria:
+    get:
+      tags: [Cuentas del equipo]
+      operationId: consultarAuditoria
+      summary: Registro de auditoría, del más nuevo al más antiguo
+      description: Exige `ADMINISTRACION:VER`. No trae datos personales del objeto, solo su identificador.
+      parameters:
+        - name: limite
+          in: query
+          description: Se ajusta al rango de 1 a 1000.
+          schema: { type: integer, default: 500 }
+        - name: incluirLecturas
+          in: query
+          description: Si también se traen las acciones `LEER`.
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Registros.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/RegistroAuditoria' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+
   /api/auth/yo:
     get:
       tags: [Sesión]
       operationId: usuarioActual
-      summary: Usuario del token, para recuperar la sesión al recargar la página
+      summary: Usuario del token
       responses:
         '200':
           description: Usuario con sus permisos.
@@ -357,6 +417,29 @@ paths:
             schema: { $ref: '#/components/schemas/AjustesClinicos' }
       responses:
         '204': { description: Guardado. }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
+  /api/pacientes/{idPaciente}/perfil-clinico/zona-segura:
+    parameters:
+      - $ref: '#/components/parameters/IdPaciente'
+    put:
+      tags: [Perfil clínico]
+      operationId: definirZonaSegura
+      summary: Define o cambia la zona segura (centro, radio y gravedad)
+      description: |
+        Permiso: `USUARIOS:EDITAR`. Agrega una fila al historial de la zona, con coordenadas cifradas y su
+        auditoría (entidad ZONA_SEGURA); si es igual a la vigente no agrega nada. No activa la zona: eso se
+        hace en los ajustes, con `modulos.zonaSegura` y el GPS.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ZonaSegura' }
+      responses:
+        '204': { description: Guardada. }
         '400': { $ref: '#/components/responses/Invalido' }
         '401': { $ref: '#/components/responses/SinToken' }
         '403': { $ref: '#/components/responses/SinPermiso' }
@@ -861,11 +944,29 @@ components:
           items: { type: string, examples: ['USUARIOS:VER'] }
     RespuestaLogin:
       type: object
-      required: [token, expiraEn, usuario]
+      required: [token, expiraEn, inactividadSegundos, usuario]
       properties:
         token: { type: string, description: JWT para la cabecera `Authorization`. }
         expiraEn: { type: string, format: date-time }
+        inactividadSegundos: { type: integer, description: Segundos sin usar el dashboard tras los cuales se cierra la sesión. }
         usuario: { $ref: '#/components/schemas/Usuario' }
+    RegistroAuditoria:
+      type: object
+      required: [id, fechaHora, accion]
+      properties:
+        id: { type: string, format: uuid }
+        fechaHora: { type: string, format: date-time }
+        accion: { type: string, enum: [LEER, CREAR, MODIFICAR, ELIMINAR, EXPORTAR, LOGIN, LOGIN_FALLIDO, TOKEN_REUTILIZADO] }
+        entidad: { type: [string, 'null'], description: Tipo de objeto. Vacío en los eventos de sesión (inicios de sesión y token reutilizado). }
+        idEntidad: { type: [string, 'null'], description: 'En `LEER`, id del paciente o `LISTA`. En las demás acciones, id del objeto cambiado.' }
+        detalle: { type: [object, 'null'] }
+        usuario:
+          description: Quién lo hizo. Vacío en un login fallido con un RUN que no existe o en un cambio del sistema.
+          type: [object, 'null']
+          properties:
+            id: { type: string, format: uuid }
+            nombre: { type: string }
+        ip: { type: [string, 'null'] }
     SolicitudActivacion:
       type: object
       required: [token, contrasena]
@@ -885,6 +986,14 @@ components:
         cargo: { type: ['string', 'null'], maxLength: 200 }
         correo: { type: string, format: email }
         rol: { $ref: '#/components/schemas/Rol' }
+        telefono:
+          type: ['string', 'null']
+          maxLength: 30
+          examples: ['+56 9 1234 5678']
+          description: Celular con WhatsApp; obligatorio para COORDINADOR (400 si falta), que recibe los avisos de la oficina PRLAC. Se guarda cifrado.
+        aceptaWhatsapp:
+          type: ['boolean', 'null']
+          description: La persona aceptó recibir esos avisos por WhatsApp (opt-in de Meta). Exige teléfono. null = no.
     RespuestaEnlace:
       type: object
       required: [idUsuario, enlaceActivacion, expiraEn]
@@ -959,13 +1068,26 @@ components:
 
     Modulos:
       type: object
-      required: [caidas, fc, spo2, inactividad, tendencia]
+      required: [caidas, fc, spo2, inactividad, tendencia, zonaSegura, botonAyuda]
       properties:
         caidas: { type: boolean }
         fc: { type: boolean }
         spo2: { type: boolean }
         inactividad: { type: boolean }
         tendencia: { type: boolean }
+        zonaSegura: { type: boolean, description: 'Activarla exige `gpsActivo` y una zona definida (400 si no).' }
+        botonAyuda: { type: boolean, description: Activo por defecto. }
+    ZonaSegura:
+      type: object
+      required: [latitud, longitud, radioMetros]
+      properties:
+        latitud: { type: number, minimum: -90, maximum: 90, examples: [-23.6509] }
+        longitud: { type: number, minimum: -180, maximum: 180, examples: [-70.3975] }
+        radioMetros: { type: integer, minimum: 50, maximum: 5000, examples: [200] }
+        severidad:
+          type: ['string', 'null']
+          enum: [LEVE, MEDIA, GRAVE, null]
+          description: Gravedad de la alerta al salir. null = MEDIA.
     AjustesClinicos:
       type: object
       required: [modulos, gpsActivo, modoConservador]
@@ -1003,6 +1125,13 @@ components:
         minutosEspera: { type: integer, description: El vigente (el propio o el base). }
         fc: { $ref: '#/components/schemas/UmbralVigente' }
         spo2: { $ref: '#/components/schemas/UmbralVigente' }
+        zonaSegura:
+          type: ['object', 'null']
+          description: La zona guardada, aunque el módulo esté apagado; null si nunca se definió.
+          required: [zona, vigenteDesde]
+          properties:
+            zona: { $ref: '#/components/schemas/ZonaSegura' }
+            vigenteDesde: { type: string, format: date-time }
 
     TipoContacto:
       type: object

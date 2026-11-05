@@ -1,4 +1,4 @@
-// Único punto de salida hacia el backend: agrega el token y traduce los errores.
+// Único punto de salida hacia el backend: agrega el token, lo renueva si venció y traduce los errores.
 
 /** Respuesta de error del backend. El mensaje es el "detail" del ProblemDetail, listo para mostrar. */
 export class ErrorApi extends Error {
@@ -13,15 +13,22 @@ export class ErrorApi extends Error {
 
 /** Función que entrega el token actual, o null si no hay sesión. */
 type ProveedorToken = () => string | null;
-/** Qué hacer cuando el backend rechaza el token (sesión vencida o inválida). */
+/** Pide un token nuevo. Responde false si la sesión terminó; lanza un error si no se pudo saber. */
+type Renovador = () => Promise<boolean>;
+/** Qué hacer cuando la sesión terminó y no se puede renovar. */
 type AlSalir = () => void;
 
+/** Rutas públicas: no llevan token, porque uno vencido haría que Spring Security rechazara la petición. */
+const RUTAS_PUBLICAS = new Set(['/auth/login', '/auth/renovar', '/auth/salir', '/auth/activar']);
+
 let tokenActual: ProveedorToken = () => null;
+let renovarToken: Renovador = async () => false;
 let alExpirar: AlSalir = () => {};
 
-/** La sesión le dice al cliente de dónde sacar el token y qué hacer si el backend lo rechaza. */
-export function configurarCliente(token: ProveedorToken, expirada: AlSalir) {
+/** La sesión le dice al cliente de dónde sacar el token, cómo renovarlo y qué hacer si ya no se puede. */
+export function configurarCliente(token: ProveedorToken, renovar: Renovador, expirada: AlSalir) {
   tokenActual = token;
+  renovarToken = renovar;
   alExpirar = expirada;
 }
 
@@ -34,27 +41,37 @@ export function configurarCliente(token: ProveedorToken, expirada: AlSalir) {
  * @throws ErrorApi si el backend responde con error
  */
 export async function pedir<T>(ruta: string, opciones: RequestInit = {}): Promise<T> {
-  const cabeceras = new Headers(opciones.headers);
-  cabeceras.set('Accept', 'application/json');
-  if (opciones.body) {
-    cabeceras.set('Content-Type', 'application/json');
-  }
-  const token = tokenActual();
-  if (token) {
-    cabeceras.set('Authorization', `Bearer ${token}`);
-  }
-
-  const respuesta = await fetch(`/api${ruta}`, { ...opciones, headers: cabeceras });
-  if (!respuesta.ok) {
-    if (respuesta.status === 401 && token) {
+  const conToken = !RUTAS_PUBLICAS.has(ruta);
+  let respuesta = await enviar(ruta, opciones, conToken);
+  if (respuesta.status === 401 && conToken && tokenActual()) {
+    if (await renovarToken()) {
+      respuesta = await enviar(ruta, opciones, conToken);
+    }
+    if (respuesta.status === 401) {
       alExpirar();
     }
+  }
+  if (!respuesta.ok) {
     throw new ErrorApi(respuesta.status, await mensajeDeError(respuesta));
   }
   if (respuesta.status === 204) {
     return undefined as T;
   }
   return (await respuesta.json()) as T;
+}
+
+/** Hace la petición con las cabeceras de la API y, si corresponde, con el token actual. */
+function enviar(ruta: string, opciones: RequestInit, conToken: boolean): Promise<Response> {
+  const cabeceras = new Headers(opciones.headers);
+  cabeceras.set('Accept', 'application/json');
+  if (opciones.body) {
+    cabeceras.set('Content-Type', 'application/json');
+  }
+  const token = conToken ? tokenActual() : null;
+  if (token) {
+    cabeceras.set('Authorization', `Bearer ${token}`);
+  }
+  return fetch(`/api${ruta}`, { ...opciones, headers: cabeceras });
 }
 
 /** Los errores del backend vienen como ProblemDetail ({ detail: "..." }). */

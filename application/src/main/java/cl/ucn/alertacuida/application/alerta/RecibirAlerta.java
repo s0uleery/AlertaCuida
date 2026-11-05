@@ -11,6 +11,7 @@ import cl.ucn.alertacuida.application.comun.error.Conflicto;
 import cl.ucn.alertacuida.application.comun.error.NoEncontrado;
 import cl.ucn.alertacuida.application.comun.error.SolicitudRechazada;
 import cl.ucn.alertacuida.domain.alerta.Severidad;
+import cl.ucn.alertacuida.domain.alerta.TipoEvento;
 import java.time.Clock;
 import java.util.Optional;
 import java.util.UUID;
@@ -37,7 +38,8 @@ public class RecibirAlerta {
 	 * Una alerta que terminó su ventana de 30 segundos sin cancelarse.
 	 *
 	 * <p>Solo una leve puede esperar al día hábil: si llega una media o grave marcada así, se guarda
-	 * sin la marca, porque esas avisan siempre.
+	 * sin la marca, porque esas avisan siempre. Del mismo modo, el botón de ayuda siempre es leve: si
+	 * llega con otra gravedad se guarda como leve, en vez de rechazar un pedido de ayuda.
 	 *
 	 * @param quien  el reloj que la envía, según su token
 	 * @param alerta lo que envió (sin hora de cancelación)
@@ -49,8 +51,9 @@ public class RecibirAlerta {
 		if (alerta.envio() == null) {
 			throw new SolicitudRechazada("Falta fechaHoraEnvio");
 		}
-		boolean espera = alerta.esperaDiaHabil() && alerta.severidad() == Severidad.LEVE;
-		return guardar(quien, new AlertaRecibida(alerta.eventId(), alerta.tipo(), alerta.severidad(),
+		Severidad severidad = severidadValida(alerta);
+		boolean espera = alerta.esperaDiaHabil() && severidad == Severidad.LEVE;
+		return guardar(quien, new AlertaRecibida(alerta.eventId(), alerta.tipo(), severidad,
 				alerta.versionConfiguracion(), alerta.deteccion(), alerta.envio(), espera, null, alerta.evidencia()));
 	}
 
@@ -68,7 +71,8 @@ public class RecibirAlerta {
 		if (cancelacion.cancelacion() == null) {
 			throw new SolicitudRechazada("Falta fechaHoraCancelacion");
 		}
-		return guardar(quien, new AlertaRecibida(cancelacion.eventId(), cancelacion.tipo(), cancelacion.severidad(),
+		return guardar(quien, new AlertaRecibida(cancelacion.eventId(), cancelacion.tipo(),
+				severidadValida(cancelacion),
 				cancelacion.versionConfiguracion(), cancelacion.deteccion(), null, false, cancelacion.cancelacion(),
 				cancelacion.evidencia()));
 	}
@@ -101,6 +105,11 @@ public class RecibirAlerta {
 			return new ResultadoAlerta(respuesta(repetida(otra, quien, cancelada)), false);
 		}
 		return new ResultadoAlerta(respuesta(nueva.get()), true);
+	}
+
+	/** @return la gravedad enviada, salvo en el botón de ayuda, que siempre es leve (regla alerta_boton_leve) */
+	private static Severidad severidadValida(AlertaRecibida alerta) {
+		return alerta.tipo() == TipoEvento.BOTON_AYUDA ? Severidad.LEVE : alerta.severidad();
 	}
 
 	/** Lo que la base exige a toda alerta del reloj. */

@@ -9,6 +9,9 @@ package cl.ucn.alertacuida.adapters.web;
  */
 public final class Permisos {
 
+	/** Ver el registro de auditoría. Solo el administrador lo tiene. */
+	public static final String ADMINISTRACION_VER = "hasAuthority('ADMINISTRACION:VER')";
+
 	/** Crear cuentas del personal y emitir sus enlaces de activación. Solo el administrador lo tiene. */
 	public static final String ADMINISTRACION_CREAR = "hasAuthority('ADMINISTRACION:CREAR')";
 

@@ -15,6 +15,7 @@ import type {
   TokenReloj,
   Umbral,
   VariableUmbral,
+  ZonaSegura,
 } from './tipos';
 
 /**
@@ -70,6 +71,10 @@ export const pacientesApi = {
   /** Vuelve al umbral base, sin borrar el historial. */
   volverAlUmbralBase: (id: string, variable: VariableUmbral) =>
     pedir<void>(`/pacientes/${id}/perfil-clinico/umbrales/${variable}`, { method: 'DELETE' }),
+
+  /** Define o cambia la zona segura (no la activa: eso va en los ajustes); si es igual, no crea otra versión. */
+  definirZonaSegura: (id: string, zona: ZonaSegura) =>
+    pedir<void>(`/pacientes/${id}/perfil-clinico/zona-segura`, { method: 'PUT', body: JSON.stringify(zona) }),
 
   /** Tipos de contacto que se pueden elegir. */
   tiposContacto: () => pedir<TipoContacto[]>('/tipos-contacto'),

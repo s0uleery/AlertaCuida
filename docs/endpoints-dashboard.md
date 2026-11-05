@@ -10,8 +10,8 @@ Los tipos de TypeScript de cada respuesta ya están en `frontend/src/features/*/
 
 ## Reglas comunes
 
-- **Token:** todo exige `Authorization: Bearer <token>`, salvo `POST /api/auth/login` y `POST /api/auth/activar`. El token sale del login.
-- **Permisos:** van en el token (`usuario.permisos`, por ejemplo `"USUARIOS:VER"`). Sin token, **401**; con token pero sin el permiso, **403**. Si cambian los permisos de alguien, se notan al iniciar sesión de nuevo.
+- **Token:** todo exige `Authorization: Bearer <token>`, salvo `POST /api/auth/login`, `renovar`, `salir` y `activar`. El token sale del login o de la renovación. Esas rutas públicas no deben llevar un token vencido, porque Spring Security las rechazaría con 401.
+- **Permisos:** van en el token (`usuario.permisos`, por ejemplo `"USUARIOS:VER"`). Sin token, **401**; con token pero sin el permiso, **403**. Si cambian los permisos de alguien, se notan en su siguiente renovación.
 - **"Usuarios" = pacientes:** el módulo `USUARIOS` son las personas mayores (en el código, "pacientes"). Las cuentas del equipo están en `ADMINISTRACION`, que solo tiene el administrador.
 - **Errores, en dos formatos:**
   - Las reglas del negocio (400, 404, 409 y el 401 del login) responden RFC 9457 (`application/problem+json`). El texto para mostrar viene en `detail`:
@@ -29,11 +29,15 @@ Los tipos de TypeScript de cada respuesta ya están en `frontend/src/features/*/
 |---|---|---|
 | **Sesión** | | |
 | `POST /api/auth/login` | público | 200 `RespuestaLogin` |
+| `POST /api/auth/renovar` | cookie de renovación | 200 `RespuestaLogin` |
+| `POST /api/auth/salir` | público | 204 |
 | `GET /api/auth/yo` | token | 200 `Usuario` |
 | `POST /api/auth/activar` | público | 204 |
 | **Cuentas del equipo** | | |
 | `POST /api/personal` | `ADMINISTRACION:CREAR` | 201 `RespuestaEnlace` |
 | `POST /api/personal/{id}/enlace-activacion` | `ADMINISTRACION:CREAR` | 200 `RespuestaEnlace` |
+| **Auditoría** | | |
+| `GET /api/auditoria?limite=500&incluirLecturas=false` | `ADMINISTRACION:VER` | 200 `RegistroAuditoria[]` |
 | **Pacientes** | | |
 | `GET /api/pacientes?incluirBajas=false` | `USUARIOS:VER` | 200 `ResumenPaciente[]` |
 | `GET /api/pacientes/{id}` | `USUARIOS:VER` | 200 `DetallePaciente` |
@@ -47,6 +51,7 @@ Los tipos de TypeScript de cada respuesta ya están en `frontend/src/features/*/
 | **Perfil clínico** | | |
 | `GET /api/pacientes/{id}/perfil-clinico` | `USUARIOS:VER` | 200 `PerfilClinico` |
 | `PUT /api/pacientes/{id}/perfil-clinico/ajustes` | `USUARIOS:EDITAR` | 204 |
+| `PUT /api/pacientes/{id}/perfil-clinico/zona-segura` | `USUARIOS:EDITAR` | 204 |
 | `PUT /api/pacientes/{id}/perfil-clinico/umbrales/{FC\|SPO2}` | `USUARIOS:EDITAR` | 204 |
 | `DELETE /api/pacientes/{id}/perfil-clinico/umbrales/{FC\|SPO2}` | `USUARIOS:EDITAR` | 204 |
 | **Contactos de emergencia** | | |
@@ -82,13 +87,27 @@ Respuesta 200:
 {
   "token": "eyJhbGciOi…",
   "expiraEn": "2026-10-26T22:00:00Z",
+  "inactividadSegundos": 900,
   "usuario": { "id": "…", "nombre": "Administrador de prueba", "rol": "ADMINISTRADOR", "permisos": ["ADMINISTRACION:CREAR", "USUARIOS:VER", "…"] }
 }
 ```
-401 con el mismo mensaje para RUN inexistente o contraseña mala. La cuenta se bloquea con 5 fallos en 15 minutos.
+401 con el mismo mensaje para RUN inexistente o contraseña mala. La cuenta se bloquea con 5 fallos en 15 minutos. Además deja el token de renovación en la cookie `alertacuida_renovacion` (`HttpOnly`, `SameSite=Strict`, `Path=/api/auth`).
+
+### `POST /api/auth/renovar`
+Sin cuerpo: el token viaja en la cookie, que se reemplaza en cada renovación. Responde 200 con el mismo formato del login. Sirve para recuperar la sesión al recargar la página y para renovar el token antes de que venza. Responde 401 con `detail` y borra la cookie si la sesión terminó: sin cookie, 10 horas desde el login, 15 minutos sin renovar, token reutilizado o cuenta desactivada.
+
+### `POST /api/auth/salir`
+Sin cuerpo. Cierra la sesión de este navegador y borra la cookie. Responde 204 aunque no haya sesión.
 
 ### `GET /api/auth/yo`
-Devuelve el `usuario` del token (mismo formato que arriba). Sirve para recuperar la sesión al recargar la página.
+Devuelve el `usuario` del token (mismo formato que arriba).
+
+### `GET /api/auditoria`
+Registros del más nuevo al más antiguo. `limite` se ajusta al rango de 1 a 1000 (por defecto, 500). Las acciones `LEER` solo vienen con `incluirLecturas=true`. No trae datos personales del objeto, solo su identificador.
+```json
+[{ "id": "…", "fechaHora": "2026-11-03T14:00:00Z", "accion": "LEER", "entidad": "PACIENTE", "idEntidad": "…", "detalle": null, "usuario": { "id": "…", "nombre": "Ana" }, "ip": "10.0.0.5" }]
+```
+`entidad` e `idEntidad` son `null` en los inicios de sesión. `usuario` es `null` en un login fallido con un RUN que no existe.
 
 ### `POST /api/auth/activar`
 La persona llega desde el enlace de activación (`/activar?token=…`) y elige su contraseña (mínimo 12 caracteres).
@@ -101,9 +120,10 @@ La persona llega desde el enlace de activación (`/activar?token=…`) y elige s
 
 ### `POST /api/personal`
 ```json
-{ "run": "12.345.678-5", "nombre": "Camila Vera", "cargo": "Enfermera", "correo": "camila@ejemplo.cl", "rol": "PERSONAL" }
+{ "run": "12.345.678-5", "nombre": "Camila Vera", "cargo": "Enfermera", "correo": "camila@ejemplo.cl", "rol": "COORDINADOR",
+  "telefono": "+56 9 1234 5678", "aceptaWhatsapp": true }
 ```
-`rol`: `ADMINISTRADOR`, `COORDINADOR` o `PERSONAL`; 400 si no existe o está desactivado. Respuesta 201:
+`rol`: `ADMINISTRADOR`, `COORDINADOR` o `PERSONAL`; 400 si no existe o está desactivado. `telefono` (celular con WhatsApp) es obligatorio para `COORDINADOR`, porque recibe los avisos de la oficina PRLAC; se guarda normalizado y cifrado. `aceptaWhatsapp: true` registra el opt-in con la fecha de hoy y exige el teléfono. Respuesta 201:
 ```json
 { "idUsuario": "…", "enlaceActivacion": "http://localhost:5173/activar?token=…", "expiraEn": "2026-10-28T14:00:00Z" }
 ```
@@ -167,20 +187,32 @@ Sin cuerpo. Deja la baja con la fecha de hoy y cierra el reloj que tenía. No bo
 ```json
 {
   "ajustes": {
-    "modulos": { "caidas": true, "fc": true, "spo2": true, "inactividad": false, "tendencia": false },
-    "gpsActivo": false, "modoConservador": false, "minutosEspera": null, "motivo": null
+    "modulos": { "caidas": true, "fc": true, "spo2": true, "inactividad": false, "tendencia": false,
+                 "zonaSegura": true, "botonAyuda": true },
+    "gpsActivo": true, "modoConservador": false, "minutosEspera": null, "motivo": null
   },
   "ajustesDesde": null,
   "minutosEspera": 5,
   "fc":   { "umbral": { "graveBajo": 40, "normalMin": 50, "normalMax": 110, "graveAlto": 130 }, "propio": false, "desde": null },
-  "spo2": { "umbral": { "graveBajo": 88, "normalMin": 92, "normalMax": null, "graveAlto": null }, "propio": false, "desde": null }
+  "spo2": { "umbral": { "graveBajo": 88, "normalMin": 92, "normalMax": null, "graveAlto": null }, "propio": false, "desde": null },
+  "zonaSegura": {
+    "zona": { "latitud": -23.6509, "longitud": -70.3975, "radioMetros": 200, "severidad": "MEDIA" },
+    "vigenteDesde": "2026-11-05T15:00:00Z"
+  }
 }
 ```
+- `zonaSegura` es `null` si nunca se definió; viene aunque el módulo esté apagado.
 - `minutosEspera` de afuera es el **vigente** (el propio o el base); el de `ajustes` es `null` si el paciente usa el base.
 - `propio: false` indica que el umbral es el **valor base** (definido en `application.properties`; provisional hasta que lo valide el equipo clínico).
 
 ### `PUT …/perfil-clinico/ajustes`
-El cuerpo es `ajustes` (como arriba). `motivo` hasta 500 caracteres.
+El cuerpo es `ajustes` (como arriba), con los siete módulos. `motivo` hasta 500 caracteres. 400 si se activa `zonaSegura` sin `gpsActivo` o sin una zona definida.
+
+### `PUT …/perfil-clinico/zona-segura`
+```json
+{ "latitud": -23.6509, "longitud": -70.3975, "radioMetros": 200, "severidad": "MEDIA" }
+```
+Define o cambia la zona (no la activa). `radioMetros` de 50 a 5000; `severidad` `LEVE`, `MEDIA` o `GRAVE` (vacía = `MEDIA`). Las coordenadas se guardan cifradas. Si es igual a la vigente no agrega una versión.
 
 ### `PUT …/perfil-clinico/umbrales/{FC|SPO2}`
 ```json

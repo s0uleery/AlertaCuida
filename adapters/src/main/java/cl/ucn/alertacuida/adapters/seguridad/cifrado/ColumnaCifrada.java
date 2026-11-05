@@ -9,6 +9,8 @@ public enum ColumnaCifrada {
 
 	/** RUN del personal. */
 	USUARIO_RUT("usuario.rut"),
+	/** Teléfono (WhatsApp) del personal, normalizado. */
+	USUARIO_TELEFONO("usuario.telefono"),
 	/** RUN del paciente. */
 	PACIENTE_RUT("paciente.rut"),
 	/** Nombres del paciente. */
@@ -28,7 +30,11 @@ public enum ColumnaCifrada {
 	/** Correo de una persona de contacto, normalizado. */
 	CONTACTO_CORREO("contacto.correo"),
 	/** Motivo de un cambio en la configuración del paciente. */
-	CONFIGURACION_MOTIVO("configuracion.motivo_cambio");
+	CONFIGURACION_MOTIVO("configuracion.motivo_cambio"),
+	/** Latitud del centro de la zona segura (suele ser el domicilio), como texto antes de cifrar. */
+	ZONA_SEGURA_LATITUD("zona_segura.latitud"),
+	/** Longitud del centro de la zona segura, como texto antes de cifrar. */
+	ZONA_SEGURA_LONGITUD("zona_segura.longitud");
 
 	private final String nombre;
 

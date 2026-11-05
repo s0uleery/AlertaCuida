@@ -153,14 +153,14 @@ await vale('Borrar la ficha no borra al paciente', `SELECT count(*) n FROM "PACI
 db = dbPrincipal;
 
 nuevoGrupo('1. Estructura de la base');
-await vale('Cantidad de tablas', `SELECT count(*) n FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'`, 28);
+await vale('Cantidad de tablas', `SELECT count(*) n FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'`, 29);
 await vale('Tablas sueltas (sin ninguna relación)', `SELECT count(*) n FROM information_schema.tables t
   WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
   AND NOT EXISTS (SELECT 1 FROM information_schema.table_constraints c WHERE c.constraint_type = 'FOREIGN KEY' AND c.table_name = t.table_name)
   AND NOT EXISTS (SELECT 1 FROM information_schema.constraint_column_usage u
                   JOIN information_schema.table_constraints c ON c.constraint_name = u.constraint_name AND c.constraint_type = 'FOREIGN KEY'
                   WHERE u.table_name = t.table_name)`, 0);
-await vale('Cantidad de relaciones (claves foráneas)', `SELECT count(*) n FROM information_schema.table_constraints WHERE constraint_type = 'FOREIGN KEY'`, 31);
+await vale('Cantidad de relaciones (claves foráneas)', `SELECT count(*) n FROM information_schema.table_constraints WHERE constraint_type = 'FOREIGN KEY'`, 32);
 await vale('Cantidad de tipos (Enum)', `SELECT count(*) n FROM pg_type t JOIN pg_namespace s ON s.oid = t.typnamespace WHERE s.nspname = 'public' AND t.typtype = 'e'`, 20);
 await vale('Vistas de datos calculados', `SELECT count(*) n FROM information_schema.views WHERE table_schema = 'public'`, 1);
 await vale('Ninguna columna jsonb en la configuración clínica', `SELECT count(*) n FROM information_schema.columns
@@ -202,6 +202,13 @@ await backend('Desactivar a una usuaria con un enlace de activación pendiente',
   INSERT INTO "TOKEN_ACCION"(id_token, id_usuario, tipo, hash_token, fecha_emision, fecha_expiracion) VALUES (gen_random_uuid(), '${LUIS}', 'ACTIVACION', 'act-luis', now(), now() + interval '2 days')`,
   'Nota de USUARIO: "al desactivar, marca como usados sus TOKEN_ACCION pendientes y revoca sus TOKEN_SESION".');
 await rechaza('Dos profesionales con el mismo RUN', usuario(gen(), 'PERSONAL','Otra', 'otra@muni.cl', 'rut-ana'), 'unico');
+await acepta('Coordinadora con teléfono y opt-in de WhatsApp (se deshace)', 'BEGIN; '
+  + usuario(gen(), 'COORDINADOR', 'Rosa', 'rosa@muni.cl', 'rut-rosa', ', telefono, fecha_opt_in', ", 'tel-cifrado', now()") + '; ROLLBACK');
+await rechaza('Opt-in de WhatsApp sin teléfono', usuario(gen(), 'COORDINADOR', 'Rosa', 'rosa@muni.cl', 'rut-rosa', ', fecha_opt_in', ', now()'), 'check');
+await rechaza('Revocación del opt-in sin haberlo aceptado', usuario(gen(), 'PERSONAL', 'Otra', 'otra@muni.cl', 'rut-otra',
+  ', telefono, fecha_revocacion_opt_in', ", 'tel-cifrado', now()"), 'check');
+await backend('Coordinadora sin teléfono (no recibiría los avisos de la oficina)', usuario(gen(), 'COORDINADOR', 'Sin', 'sin@muni.cl', 'rut-sin'),
+  'Nota de USUARIO: el teléfono es obligatorio para el rol COORDINADOR (lo valida el backend al crear la cuenta).');
 await rechaza('Profesional sin RUN', `INSERT INTO "USUARIO"(id_usuario, codigo_rol, rut_hash, nombre_profesional, correo) VALUES (gen_random_uuid(), 'PERSONAL','r', 'X', 'x@muni.cl')`, 'nulo');
 await rechaza('Enlace con un tipo que no existe', `INSERT INTO "TOKEN_ACCION"(id_token, id_usuario, tipo, hash_token, fecha_emision, fecha_expiracion) VALUES (gen_random_uuid(), '${ANA}', 'INVITACION', 'x', now(), now() + interval '30 minutes')`, 'enum');
 await rechaza('Enlace repetido', `INSERT INTO "TOKEN_ACCION"(id_token, id_usuario, tipo, hash_token, fecha_emision, fecha_expiracion) VALUES (gen_random_uuid(), '${ANA}', 'RECUPERACION', 'act-1', now(), now() + interval '30 minutes')`, 'unico');
@@ -314,8 +321,18 @@ await acepta('María: configuración inicial y un cambio posterior (activa el GP
   INSERT INTO "CONFIGURACION"(id_paciente, vigente_desde, gps_activo, minutos_espera, motivo_cambio) VALUES ('${MARIA}', '${T2}', true, 5, 'Sale sola a caminar')`);
 await acepta('Pedro con valores por defecto; Rosa en modo conservador', `INSERT INTO "CONFIGURACION"(id_paciente, vigente_desde) VALUES ('${PEDRO}', '${T1}');
   INSERT INTO "CONFIGURACION"(id_paciente, vigente_desde, modo_conservador) VALUES ('${ROSA}', '${T1}', true)`);
-await vale('Módulos por defecto (caídas, FC, SpO2, inactividad sí; tendencia y GPS no)', `SELECT concat_ws(',', caidas_activa::text, fc_activa::text, spo2_activa::text, inactividad_activa::text, tendencia_activa::text, gps_activo::text) n
-  FROM "CONFIGURACION" WHERE id_paciente = '${PEDRO}'`, 'true,true,true,true,false,false');
+await vale('Módulos por defecto (caídas, FC, SpO2, inactividad, tendencia y botón sí; GPS y zona no)', `SELECT concat_ws(',', caidas_activa::text, fc_activa::text, spo2_activa::text, inactividad_activa::text, tendencia_activa::text, gps_activo::text, zona_segura_activa::text, boton_ayuda_activo::text) n
+  FROM "CONFIGURACION" WHERE id_paciente = '${PEDRO}'`, 'true,true,true,true,true,false,false,true');
+await rechaza('Zona segura activa sin GPS', `INSERT INTO "CONFIGURACION"(id_paciente, vigente_desde, zona_segura_activa) VALUES ('${PEDRO}', now(), true)`, 'check');
+await acepta('Zona segura de Pedro: 200 m, media por defecto, coordenadas cifradas como texto', `INSERT INTO "ZONA_SEGURA"(id_paciente, vigente_desde, latitud, longitud, radio_metros)
+  VALUES ('${PEDRO}', '${T1}', 'c-lat', 'c-lon', 200)`);
+await vale('La zona sin severidad elegida es media', `SELECT severidad n FROM "ZONA_SEGURA" WHERE id_paciente = '${PEDRO}'`, 'MEDIA');
+await acepta('Pedro activa la zona con el GPS (se deshace)', `BEGIN; INSERT INTO "CONFIGURACION"(id_paciente, vigente_desde, gps_activo, zona_segura_activa)
+  VALUES ('${PEDRO}', now(), true, true); ROLLBACK`);
+await rechaza('Zona segura con radio cero', `INSERT INTO "ZONA_SEGURA"(id_paciente, vigente_desde, latitud, longitud, radio_metros) VALUES ('${PEDRO}', now(), 'c-lat', 'c-lon', 0)`, 'check');
+await rechaza('Zona segura con una severidad que no existe', `INSERT INTO "ZONA_SEGURA"(id_paciente, vigente_desde, latitud, longitud, radio_metros, severidad)
+  VALUES ('${PEDRO}', now(), 'c-lat', 'c-lon', 200, 'CRITICA')`, 'enum');
+await rechaza('Dos zonas de Pedro con la misma fecha', `INSERT INTO "ZONA_SEGURA"(id_paciente, vigente_desde, latitud, longitud, radio_metros) VALUES ('${PEDRO}', '${T1}', 'c-lat', 'c-lon', 300)`, 'unico');
 await vale('Configuración vigente de María (la más reciente): GPS activo', `SELECT gps_activo n FROM "CONFIGURACION" WHERE id_paciente = '${MARIA}' ORDER BY vigente_desde DESC LIMIT 1`, true);
 await acepta('Umbrales de María: FC (dos versiones) y SpO2 sin límite alto', `INSERT INTO "UMBRAL" VALUES
   ('${MARIA}', 'FC', '${T1}', 40, 50, 110, 130), ('${MARIA}', 'FC', '${T2}', 45, 55, 110, 130), ('${MARIA}', 'SPO2', '${T1}', 85, 90, null, null)`);
@@ -500,6 +517,9 @@ await estado('Estado de la grave sin respuesta', GRAVE_ROSA, 'SIN_RESPUESTA', 'S
 await rechaza('Una media marcada para esperar el día hábil', alertaReloj(id(90), A_ROSA, 'FC', 'MEDIA', ', espera_dia_habil', ', true'), 'check');
 await rechaza('Una grave marcada para esperar el día hábil', alertaReloj(id(91), A_ROSA, 'FC', 'GRAVE', ', espera_dia_habil', ', true'), 'check');
 await rechaza('Gravedad que no existe (MODERADA)', alertaReloj(id(92), A_ROSA, 'FC', 'MODERADA'), 'enum');
+await rechaza('Un botón de ayuda que no es leve', alertaReloj(id(93), A_ROSA, 'BOTON_AYUDA', 'MEDIA'), 'check');
+await acepta('Botón de ayuda de madrugada: leve, espera el día hábil (se deshace)', 'BEGIN; ' + alertaReloj(id(93), A_ROSA, 'BOTON_AYUDA', 'LEVE', ', espera_dia_habil', ', true') + '; ROLLBACK');
+await acepta('Salida de la zona segura con la gravedad de la zona (se deshace)', 'BEGIN; ' + alertaReloj(id(93), A_ROSA, 'ZONA_SEGURA', 'GRAVE') + '; ROLLBACK');
 await rechaza('Agravar una alerta que llegó grave', `UPDATE "ALERTA" SET fecha_hora_agravamiento = now() WHERE id_alerta = '${GRAVE_ROSA}'`, 'check');
 await rechaza('Agravar una alerta que no es caída', `UPDATE "ALERTA" SET fecha_hora_agravamiento = now() WHERE id_alerta = '${MEDIA_ROSA}'`, 'check');
 await rechaza('Tercera ronda de avisos', aviso(GRAVE_ROSA, R1, 3), 'check');
@@ -611,7 +631,8 @@ await acepta('Borrar a María con todos sus datos', `DELETE FROM "PACIENTE" WHER
 await vale('No queda ningún dato de María', `SELECT (SELECT count(*) FROM "FICHA_PACIENTE" WHERE id_paciente = '${MARIA}')
   + (SELECT count(*) FROM "CONDICION_PACIENTE" WHERE id_paciente = '${MARIA}') + (SELECT count(*) FROM "DOCUMENTO" WHERE id_paciente = '${MARIA}')
   + (SELECT count(*) FROM "CONTACTO_PACIENTE" WHERE id_paciente = '${MARIA}') + (SELECT count(*) FROM "CONFIGURACION" WHERE id_paciente = '${MARIA}')
-  + (SELECT count(*) FROM "UMBRAL" WHERE id_paciente = '${MARIA}') + (SELECT count(*) FROM "ASIGNACION_RELOJ" WHERE id_paciente = '${MARIA}')
+  + (SELECT count(*) FROM "UMBRAL" WHERE id_paciente = '${MARIA}') + (SELECT count(*) FROM "ZONA_SEGURA" WHERE id_paciente = '${MARIA}')
+  + (SELECT count(*) FROM "ASIGNACION_RELOJ" WHERE id_paciente = '${MARIA}')
   + (SELECT count(*) FROM "SINCRONIZACION" WHERE id_asignacion = '${A_MARIA}') + (SELECT count(*) FROM "REGISTRO_VITAL" WHERE id_asignacion = '${A_MARIA}')
   + (SELECT count(*) FROM "UBICACION" WHERE id_asignacion = '${A_MARIA}') + (SELECT count(*) FROM "EVENTO_DESCARTADO" WHERE id_sincronizacion = '${S_MARIA}')
   + (SELECT count(*) FROM "ALERTA" WHERE id_asignacion = '${A_MARIA}') + (SELECT count(*) FROM "ATENCION_ALERTA" WHERE id_alerta = '${CAIDA_MARIA}')

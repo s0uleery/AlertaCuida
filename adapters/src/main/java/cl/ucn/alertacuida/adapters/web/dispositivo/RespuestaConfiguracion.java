@@ -3,6 +3,7 @@ package cl.ucn.alertacuida.adapters.web.dispositivo;
 import cl.ucn.alertacuida.application.clinica.modelo.Modulos;
 import cl.ucn.alertacuida.application.configuracion.modelo.ConfiguracionReloj;
 import cl.ucn.alertacuida.application.configuracion.modelo.ContenidoConfiguracion;
+import cl.ucn.alertacuida.domain.alerta.Severidad;
 import cl.ucn.alertacuida.domain.calendario.DiaSemana;
 import cl.ucn.alertacuida.domain.clinica.Umbral;
 import cl.ucn.alertacuida.domain.comun.ZonaHoraria;
@@ -20,7 +21,7 @@ import java.util.UUID;
  * Las horas van como "08:30", en hora de Chile.
  */
 public record RespuestaConfiguracion(String version, Modulos modulos, boolean gpsActivo, boolean modoConservador,
-		Umbrales umbrales, Reglas reglas, Escalamiento escalamiento, List<Contacto> contactos,
+		Umbrales umbrales, ZonaSegura zonaSegura, Reglas reglas, Escalamiento escalamiento, List<Contacto> contactos,
 		Calendario calendario) {
 
 	private static final DateTimeFormatter HORA = DateTimeFormatter.ofPattern("HH:mm");
@@ -37,8 +38,28 @@ public record RespuestaConfiguracion(String version, Modulos modulos, boolean gp
 	public record Spo2(BigDecimal graveBajo, BigDecimal normalMin) {
 	}
 
-	/** Por ahora solo la versión de la matriz FC × SpO2; los parámetros esperan el Anexo B. */
-	public record Reglas(String versionMatriz) {
+	/**
+	 * Círculo que revisa el reloj con su GPS. Va vacío (null) si el módulo zonaSegura está apagado.
+	 *
+	 * @param latitud     del centro, en grados
+	 * @param longitud    del centro, en grados
+	 * @param radioMetros distancia desde el centro que se considera dentro
+	 * @param severidad   gravedad con que el reloj envía la alerta ZONA_SEGURA al salir
+	 */
+	public record ZonaSegura(BigDecimal latitud, BigDecimal longitud, int radioMetros, Severidad severidad) {
+	}
+
+	/** Versión de la matriz FC × SpO2 y parámetros de la regla de tendencia. */
+	public record Reglas(String versionMatriz, Tendencia tendencia) {
+	}
+
+	/**
+	 * Regla de tendencia, para FC y SpO2. Rige si el módulo tendencia está activo.
+	 *
+	 * @param minutos   tiempo seguido fuera del rango normal, sin llegar al límite grave, para alertar
+	 * @param severidad gravedad con que el reloj envía esa alerta
+	 */
+	public record Tendencia(int minutos, Severidad severidad) {
 	}
 
 	/** Plazo antes de pasar al siguiente contacto y veces que se recorre la lista. */
@@ -48,9 +69,11 @@ public record RespuestaConfiguracion(String version, Modulos modulos, boolean gp
 	/**
 	 * Un contacto, sin número ni correo.
 	 *
+	 * @param tipo    FAMILIA, VECINO, PRLAC...: con el botón de ayuda el reloj avisa primero a los VECINO
 	 * @param horario vacío = todo el día; si inicio &gt; fin, cruza la medianoche
 	 */
-	public record Contacto(UUID idContacto, String nombre, int prioridad, Tramo horario, List<Canal> canales) {
+	public record Contacto(UUID idContacto, String nombre, String tipo, int prioridad, Tramo horario,
+			List<Canal> canales) {
 	}
 
 	/** Un tramo horario: desde "inicio", incluida, hasta "fin", sin incluirla. */
@@ -78,11 +101,13 @@ public record RespuestaConfiguracion(String version, Modulos modulos, boolean gp
 		return new RespuestaConfiguracion(configuracion.version(), c.modulos(), c.gpsActivo(), c.modoConservador(),
 				new Umbrales(new Fc(fc.graveBajo(), fc.normalMin(), fc.normalMax(), fc.graveAlto()),
 						new Spo2(spo2.graveBajo(), spo2.normalMin())),
-				new Reglas(c.versionMatriz()),
+				c.zonaSegura() == null ? null : new ZonaSegura(c.zonaSegura().latitud(), c.zonaSegura().longitud(),
+						c.zonaSegura().radioMetros(), c.zonaSegura().severidad()),
+				new Reglas(c.versionMatriz(), new Tendencia(c.minutosTendencia(), c.severidadTendencia())),
 				new Escalamiento(c.minutosEspera(), c.rondas()),
 				c.contactos().stream()
-						.map(contacto -> new Contacto(contacto.idContacto(), contacto.nombre(), contacto.prioridad(),
-								tramo(contacto.horario()), contacto.canales()))
+						.map(contacto -> new Contacto(contacto.idContacto(), contacto.nombre(), contacto.tipo(),
+								contacto.prioridad(), tramo(contacto.horario()), contacto.canales()))
 						.toList(),
 				new Calendario(ZonaHoraria.CHILE.getId(),
 						c.horarioHabil().entrySet().stream()

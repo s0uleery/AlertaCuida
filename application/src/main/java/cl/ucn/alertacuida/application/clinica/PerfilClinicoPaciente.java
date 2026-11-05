@@ -7,12 +7,15 @@ import cl.ucn.alertacuida.application.clinica.modelo.PerfilClinico;
 import cl.ucn.alertacuida.application.clinica.modelo.UmbralGuardado;
 import cl.ucn.alertacuida.application.clinica.modelo.UmbralVigente;
 import cl.ucn.alertacuida.application.clinica.modelo.ValoresBase;
+import cl.ucn.alertacuida.application.clinica.modelo.ZonaGuardada;
 import cl.ucn.alertacuida.application.clinica.puerto.PerfilesClinicos;
 import cl.ucn.alertacuida.application.comun.error.NoEncontrado;
 import cl.ucn.alertacuida.application.comun.error.SolicitudRechazada;
 import cl.ucn.alertacuida.application.comun.puerto.Transacciones;
 import cl.ucn.alertacuida.application.paciente.puerto.Pacientes;
+import cl.ucn.alertacuida.domain.alerta.Severidad;
 import cl.ucn.alertacuida.domain.clinica.Umbral;
+import cl.ucn.alertacuida.domain.clinica.ZonaSegura;
 import cl.ucn.alertacuida.domain.telemetria.TipoLectura;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -23,7 +26,7 @@ import java.util.UUID;
 
 /**
  * Perfil clínico de un paciente: módulos que vigila el reloj, GPS, modo conservador, minutos de
- * espera entre contactos y umbrales de FC y SpO2. Cada cambio agrega una fila al historial y queda
+ * espera entre contactos, umbrales de FC y SpO2 y zona segura. Cada cambio agrega una fila al historial y queda
  * en la auditoría (quién y cuándo); las filas anteriores no se modifican.
  *
  * <p>Donde el paciente no tiene ajustes propios rigen los {@link ValoresBase}.
@@ -63,7 +66,8 @@ public class PerfilClinicoPaciente {
 		AjustesClinicos ajustes = configuracion.map(ConfiguracionGuardada::ajustes).orElse(AjustesClinicos.POR_DEFECTO);
 		int espera = ajustes.minutosEspera() != null ? ajustes.minutosEspera() : base.minutosEspera();
 		return new PerfilClinico(ajustes, configuracion.map(ConfiguracionGuardada::vigenteDesde).orElse(null), espera,
-				umbralVigente(idPaciente, TipoLectura.FC), umbralVigente(idPaciente, TipoLectura.SPO2));
+				umbralVigente(idPaciente, TipoLectura.FC), umbralVigente(idPaciente, TipoLectura.SPO2),
+				perfiles.zonaVigente(idPaciente).orElse(null));
 	}
 
 	/**
@@ -75,12 +79,21 @@ public class PerfilClinicoPaciente {
 	 * @param ip        desde dónde llegó la petición, para la auditoría
 	 * @return si se guardó un cambio
 	 * @throws NoEncontrado       si el paciente no existe
-	 * @throws SolicitudRechazada si los minutos de espera o el motivo no sirven
+	 * @throws SolicitudRechazada si los minutos de espera o el motivo no sirven, o si se activa la
+	 *                            zona segura sin GPS o sin una zona guardada
 	 */
 	public boolean cambiarAjustes(UUID idPaciente, AjustesClinicos ajustes, UUID idUsuario, String ip) {
 		exigirPaciente(idPaciente);
 		if (ajustes == null || ajustes.modulos() == null) {
 			throw new SolicitudRechazada("Faltan los módulos");
+		}
+		if (ajustes.modulos().zonaSegura()) {
+			if (!ajustes.gpsActivo()) {
+				throw new SolicitudRechazada("La zona segura necesita el GPS activo");
+			}
+			if (perfiles.zonaVigente(idPaciente).isEmpty()) {
+				throw new SolicitudRechazada("Primero define la zona segura: centro y radio");
+			}
 		}
 		Integer espera = ajustes.minutosEspera();
 		if (espera != null && (espera < 1 || espera > ESPERA_MAXIMA)) {
@@ -144,6 +157,42 @@ public class PerfilClinicoPaciente {
 	public boolean volverAlUmbralBase(UUID idPaciente, TipoLectura variable, UUID idUsuario, String ip) {
 		exigirPaciente(idPaciente);
 		return guardarUmbral(idPaciente, variable, null, idUsuario, ip);
+	}
+
+	/**
+	 * Define o cambia la zona segura del paciente. No la activa: eso se hace en los ajustes, con el
+	 * módulo zonaSegura, para que se pueda dejar guardada y apagada.
+	 *
+	 * @param latitud     del centro, en grados
+	 * @param longitud    del centro, en grados
+	 * @param radioMetros distancia desde el centro que se considera dentro de la zona
+	 * @param severidad   gravedad de la alerta al salir; vacía = media
+	 * @param idUsuario   quien la cambia, para la auditoría
+	 * @param ip          desde dónde llegó la petición, para la auditoría
+	 * @return si se guardó un cambio (no se guarda si es igual a la vigente)
+	 * @throws NoEncontrado       si el paciente no existe
+	 * @throws SolicitudRechazada si el centro está fuera del mapa o el radio fuera de rango
+	 */
+	public boolean definirZona(UUID idPaciente, BigDecimal latitud, BigDecimal longitud, Integer radioMetros,
+			Severidad severidad, UUID idUsuario, String ip) {
+		exigirPaciente(idPaciente);
+		ZonaSegura zona;
+		try {
+			zona = ZonaSegura.de(latitud, longitud, radioMetros, severidad);
+		} catch (IllegalArgumentException e) {
+			throw new SolicitudRechazada(e.getMessage());
+		}
+		ZonaSegura actual = perfiles.zonaVigente(idPaciente).map(ZonaGuardada::zona).orElse(null);
+		if (zona.equals(actual)) {
+			return false;
+		}
+		Instant ahora = reloj.instant();
+		transacciones.ejecutar(() -> {
+			perfiles.guardarZona(idPaciente, ahora, zona);
+			auditoria.registrar(idUsuario, "CREAR", "ZONA_SEGURA", idPaciente + "|" + ahora, ip, ahora);
+			return null;
+		});
+		return true;
 	}
 
 	/** Agrega la fila del umbral si cambia algo, con su auditoría. */

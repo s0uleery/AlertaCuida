@@ -39,7 +39,8 @@ public class ConfiguracionApiReloj {
 	@Bean
 	ConfiguracionDelReloj configuracionDelReloj(PerfilClinicoPaciente perfiles, ContactosPaciente contactos,
 			CalendarioHabil calendario, PropiedadesClinicas propiedades, Clock reloj) {
-		return new ConfiguracionDelReloj(perfiles, contactos, calendario, propiedades.versionMatriz(), reloj);
+		return new ConfiguracionDelReloj(perfiles, contactos, calendario, propiedades.versionMatriz(),
+				propiedades.minutosTendencia(), propiedades.severidadTendencia(), reloj);
 	}
 
 	/** Lotes de estado y lecturas que el reloj envía cada 2 horas. */

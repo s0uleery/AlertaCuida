@@ -48,7 +48,7 @@ sequenceDiagram
     R->>R: Muestra "Alerta recibida por ..." y deja de avisar
 ```
 
-Si nadie confirma, el reloj recorre la lista dos veces y termina con `POST /alertas/A/sin-respuesta`. Las alertas medias y graves, además, avisan por correo a los profesionales desde el servidor, en paralelo (2.10.5).
+Si nadie confirma, el reloj recorre la lista dos veces y termina con `POST /alertas/A/sin-respuesta`. Además, el servidor avisa por correo a la oficina PRLAC, a todos los coordinadores a la vez y en paralelo a este recorrido, sin esperar a los contactos (2.10.5). El reloj no participa en ese aviso.
 
 ## Decisiones
 
@@ -100,7 +100,10 @@ Si nadie confirma, el reloj recorre la lista dos veces y termina con `POST /aler
 4. ¿El reloj puede guardar la cola y los temporizadores de forma que sobrevivan a un reinicio (Room)?
 5. ¿Los rangos válidos de las lecturas (FC de 20 a 250 y SpO2 de 50 a 100) calzan con lo que entrega el Samsung Health Sensor SDK?
 6. ¿Le basta la `version` como hash, o prefiere además un número correlativo para mostrar en pantalla?
-7. Los parámetros de la regla de tendencia y de la matriz FC × SpO2 quedan pendientes del Anexo B (equipo clínico); por ahora la configuración solo trae `reglas.versionMatriz`.
+7. La matriz FC × SpO2 queda pendiente del Anexo B (equipo clínico); por ahora solo viaja `reglas.versionMatriz`.
+8. **Regla de tendencia (`reglas.tendencia`, 05-11-2026):** el reloj alerta cuando FC o SpO2 lleva ese tiempo fuera de su rango normal, sin llegar al límite grave; la regla de 2 lecturas consecutivas queda solo para los valores más allá del límite grave. Definido: la alerta usa la gravedad de `reglas.tendencia.severidad` (hoy `MEDIA`), sin fijarla en el código del reloj; si una lectura vuelve al rango normal, el tiempo parte de cero; con los umbrales de cada paciente, `normalMin` y `normalMax` son normales, y `graveBajo` y `graveAlto` son zona intermedia. Definido además (05-11-2026): una sola alerta mientras el valor siga en esa zona; puede volver a alertar solo después de que una lectura vuelva al rango normal (sujeto a validación del equipo clínico).
+9. **Zona segura (`zonaSegura`, 05-11-2026):** viene solo con `modulos.zonaSegura` activo (y entonces `gpsActivo` es `true`). El reloj compara su GPS con el círculo (`latitud`, `longitud`, `radioMetros`) y, si la persona sale, envía una alerta `ZONA_SEGURA` con `zonaSegura.severidad` (media por defecto; se elige por paciente). Por definir con quien desarrolla el reloj: cada cuánto revisa el GPS (afecta la batería, por eso la zona se había eliminado en la v7), cuántas posiciones fuera del círculo exige antes de alertar (el GPS puede saltar) y si vuelve a alertar después de que la persona regresa.
+10. **Botón de ayuda (`modulos.botonAyuda`, 05-11-2026):** el reloj muestra un botón para pedir ayuda. Al presionarlo envía una alerta `BOTON_AYUDA` siempre `LEVE`, con la ventana de 30 s para cancelar. Como toda leve, fuera del horario hábil espera al día hábil. Avisa primero a los contactos con `tipo` `VECINO`, por prioridad, y después al resto, por prioridad. Por definir: dónde va el botón en la pantalla y cómo evitar que se presione por error.
 
 ## Pendiente
 

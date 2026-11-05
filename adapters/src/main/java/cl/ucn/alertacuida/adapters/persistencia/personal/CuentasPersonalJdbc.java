@@ -6,6 +6,7 @@ import cl.ucn.alertacuida.application.personal.error.CuentaDuplicada;
 import cl.ucn.alertacuida.application.personal.modelo.CuentaPendiente;
 import cl.ucn.alertacuida.application.personal.modelo.NuevaCuenta;
 import cl.ucn.alertacuida.application.personal.puerto.CuentasPersonal;
+import java.sql.Timestamp;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.dao.DuplicateKeyException;
@@ -24,7 +25,7 @@ public class CuentasPersonalJdbc implements CuentasPersonal {
 
 	/**
 	 * @param jdbc    cliente de Spring sobre la conexión a PostgreSQL
-	 * @param cifrado cifra el RUN antes de guardarlo
+	 * @param cifrado cifra el RUN y el teléfono antes de guardarlos
 	 */
 	public CuentasPersonalJdbc(JdbcClient jdbc, CifradoCampos cifrado) {
 		this.jdbc = jdbc;
@@ -67,8 +68,9 @@ public class CuentasPersonalJdbc implements CuentasPersonal {
 	public UUID crear(NuevaCuenta cuenta) {
 		try {
 			return jdbc.sql("""
-					INSERT INTO usuario (codigo_rol, rut, rut_hash, nombre_profesional, cargo, correo)
-					VALUES (:rol, :rut, :rutHash, :nombre, :cargo, :correo)
+					INSERT INTO usuario (codigo_rol, rut, rut_hash, nombre_profesional, cargo, correo, telefono,
+						fecha_opt_in)
+					VALUES (:rol, :rut, :rutHash, :nombre, :cargo, :correo, :telefono, :optIn)
 					RETURNING id_usuario""")
 					.param("rol", cuenta.codigoRol())
 					.param("rut", cifrado.cifrar(cuenta.run(), ColumnaCifrada.USUARIO_RUT))
@@ -76,6 +78,8 @@ public class CuentasPersonalJdbc implements CuentasPersonal {
 					.param("nombre", cuenta.nombre())
 					.param("cargo", cuenta.cargo())
 					.param("correo", cuenta.correo())
+					.param("telefono", cifrado.cifrar(cuenta.telefono(), ColumnaCifrada.USUARIO_TELEFONO))
+					.param("optIn", cuenta.fechaOptIn() == null ? null : Timestamp.from(cuenta.fechaOptIn()))
 					.query(UUID.class)
 					.single();
 		} catch (DuplicateKeyException duplicada) {

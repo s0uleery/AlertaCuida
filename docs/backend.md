@@ -63,6 +63,8 @@ Al arrancar, Flyway aplica las migraciones de `adapters/src/main/resources/db/mi
 | V4 | Relojes y telemetría (sincronizaciones, lecturas, ubicaciones) |
 | V5 | Alertas y su seguimiento |
 | V6 | Catálogos iniciales: los 3 roles y sus permisos |
+| V7 | Acción `TOKEN_REUTILIZADO` en la auditoría |
+| V8 | Módulo de tendencia activo por defecto y para quienes lo tenían apagado |
 
 Con el perfil `dev` se carga además `db/ejemplo/R__datos_de_ejemplo.sql`, con el administrador de prueba. El detalle de las tablas está en [modelo-datos.md](modelo-datos.md).
 
@@ -70,8 +72,10 @@ Con el perfil `dev` se carga además `db/ejemplo/R__datos_de_ejemplo.sql`, con e
 
 Endpoints:
 
-- `POST /api/auth/login`: recibe `{run, contrasena}` y devuelve el token, su vencimiento y el usuario con sus permisos. Es lo único que se puede llamar sin token.
-- `GET /api/auth/yo`: devuelve el usuario del token. El front lo usa al recargar la página.
+- `POST /api/auth/login`: recibe `{run, contrasena}` y devuelve el token, su vencimiento, el plazo de inactividad y el usuario con sus permisos. Deja el token de renovación en una cookie.
+- `POST /api/auth/renovar`: cambia la cookie por tokens nuevos, sin pedir la contraseña.
+- `POST /api/auth/salir`: cierra la sesión de este navegador. Responde 204 aunque no haya sesión.
+- `GET /api/auth/yo`: devuelve el usuario del token.
 
 Recorrido de un login:
 
@@ -79,17 +83,17 @@ Recorrido de un login:
 2. `IniciarSesion` normaliza el RUN y le calcula el hash (`HashRunHmac`). Con ese hash busca al usuario (`CuentaUsuarioJdbc`), sin tener que descifrar los RUN guardados.
 3. Cuenta los intentos fallidos recientes en `registro_auditoria` (`RegistroAccesosJdbc`). La cuenta queda bloqueada con 5 fallos en 15 minutos sin un login correcto entre medio.
 4. Compara la contraseña con su hash bcrypt (`VerificadorBcrypt`).
-5. Si todo está bien, registra `LOGIN` y entrega un token JWT (`TokenJwt`) con el id, el nombre, el rol y los permisos (`"ALERTAS:VER"`, …). Si algo falla, registra `LOGIN_FALLIDO` y responde 401.
+5. Si todo está bien, registra `LOGIN` y `AperturaSesion` entrega un token JWT (`TokenJwt`) con el id, el nombre, el rol y los permisos (`"ALERTAS:VER"`, …), más el token de renovación. Si algo falla, registra `LOGIN_FALLIDO` y responde 401.
 
-Después, cada petición manda el token en la cabecera `Authorization: Bearer …`. Spring Security revisa su firma y su vencimiento, y convierte los permisos en *authorities*. El servidor no guarda sesiones.
+Después, cada petición manda el token en la cabecera `Authorization: Bearer …`. Spring Security revisa su firma y su vencimiento, y convierte los permisos en *authorities*. El token de acceso no se guarda en el servidor; el de renovación sí, como hash en `token_sesion`.
 
 Decisiones de seguridad:
 
 - **Mismo mensaje para cualquier falla** ("RUN o contraseña incorrectos"), y el mismo tiempo de respuesta: si el RUN no existe, igual se ejecuta bcrypt con un hash de relleno. Así no se puede averiguar qué RUN están registrados.
 - **El hash del RUN lleva clave (HMAC-SHA256)**: los RUN posibles son pocos, así que un SHA-256 simple se podría revertir probándolos todos.
 - **El bloqueo se calcula desde la auditoría**: no hay un contador que mantener ni que se pueda desincronizar.
-- **Sin CSRF**: el token no va en una cookie, así que el navegador no lo manda solo.
-- **Los permisos viajan en el token**: si cambian, se notan al iniciar sesión de nuevo.
+- **Sin CSRF**: el token de acceso no va en una cookie, así que el navegador no lo manda solo. La cookie de renovación es `SameSite=Strict`, solo viaja a `/api/auth` y no da acceso a ningún dato por sí misma.
+- **Los permisos viajan en el token**: si cambian, se notan en la siguiente renovación, porque esta los vuelve a leer.
 - **La contraseña no aparece en los logs** (`SolicitudLogin.toString`).
 
 ## Autorización por permiso
@@ -112,8 +116,10 @@ Endpoints:
 
 Recorrido:
 
-1. El administrador escribe el RUN, el nombre, el cargo, el correo y el rol. `CrearCuentaPersonal`:
+1. El administrador escribe el RUN, el nombre, el cargo, el correo, el rol y, si corresponde, el teléfono con WhatsApp y si la persona aceptó recibir avisos por ese medio. `CrearCuentaPersonal`:
    - valida el RUN y el rol;
+   - exige teléfono al rol `COORDINADOR`, que recibe por WhatsApp los avisos de la oficina PRLAC; lo normaliza con `NumeroWhatsapp` y el adaptador lo cifra (`usuario.telefono`);
+   - si la persona aceptó WhatsApp, guarda la fecha del opt-in (`usuario.fecha_opt_in`); sin teléfono, se rechaza;
    - rechaza un RUN o correo repetido (409);
    - guarda la cuenta **inactiva y sin contraseña**;
    - emite el enlace;
@@ -184,7 +190,8 @@ Lo que el reloj necesitará en su configuración (1.7): qué vigila, con qué um
 | Endpoint | Permiso | Qué hace |
 |---|---|---|
 | `GET /api/pacientes/{id}/perfil-clinico` | `VER` | Módulos, opciones y umbrales vigentes, con los valores base donde no hay ajustes. |
-| `PUT /api/pacientes/{id}/perfil-clinico/ajustes` | `EDITAR` | Módulos, GPS, modo conservador, minutos de espera y motivo. |
+| `PUT /api/pacientes/{id}/perfil-clinico/ajustes` | `EDITAR` | Módulos (incluidos zona segura y botón de ayuda), GPS, modo conservador, minutos de espera y motivo. |
+| `PUT /api/pacientes/{id}/perfil-clinico/zona-segura` | `EDITAR` | Define o cambia la zona segura: centro, radio y gravedad. No la activa. |
 | `PUT /api/pacientes/{id}/perfil-clinico/umbrales/{FC\|SPO2}` | `EDITAR` | Ajusta el umbral de una variable. |
 | `DELETE /api/pacientes/{id}/perfil-clinico/umbrales/{FC\|SPO2}` | `EDITAR` | Vuelve al umbral base (agrega una fila vacía). |
 | `GET /api/tipos-contacto` | `VER` | Catálogo de tipos (familia, vecino…). |
@@ -200,7 +207,9 @@ Perfil clínico (`PerfilClinicoPaciente`):
 - **Historial sin modificaciones**: cada cambio agrega una fila a `configuracion` o a `umbral`, con auditoría (`CREAR CONFIGURACION` o `UMBRAL`, con la clave compuesta como id). Rige la de mayor `vigente_desde`. Si no cambia nada (salvo el motivo), no se agrega fila: así no se crea una versión de configuración nueva para el reloj.
 - **Valores base** en `application.properties` (`alertacuida.clinica.*`, ver [Configuración](#configuración)), validados al arrancar con las mismas reglas que los de un paciente. Son **provisionales** hasta que los valide el equipo clínico (Anexo B).
 - **Umbrales** (`Umbral`, en el dominio): grave bajo < mínimo normal < máximo normal < grave alto, dentro de lo que mide el sensor. La SpO2 no tiene límites altos. Volver al base agrega una fila vacía, sin borrar el historial.
-- Sin configuración rigen los valores por defecto de V3 (todos los módulos menos la tendencia; GPS y modo conservador apagados). Los minutos de espera van de 1 a 60; vacíos = el valor base.
+- Sin configuración rigen los valores por defecto de V3, V8 y V9 (todos los módulos activos menos la zona segura; GPS y modo conservador apagados). Los minutos de espera van de 1 a 60; vacíos = el valor base.
+- **Zona segura** (`ZonaSegura`, en el dominio; tabla `zona_segura`, migración V9): un círculo con centro (latitud y longitud, guardadas cifradas porque suelen ser el domicilio), radio de 50 a 5000 m y la gravedad de la alerta al salir (media si no se elige). Tiene historial propio, como el umbral, con auditoría `CREAR ZONA_SEGURA`. Guardarla no la activa: el módulo `zonaSegura` se activa en los ajustes y exige el GPS (regla en la base) y una zona guardada (lo revisa `PerfilClinicoPaciente`). La revisa el reloj con su GPS; cada cuánto lo decide la app del reloj.
+- **Botón de ayuda** (módulo `botonAyuda`, activo por defecto desde V9): el reloj envía una alerta `BOTON_AYUDA`, siempre leve. Avisa primero a los contactos `VECINO` y después al resto (ver `ReglaEnrutamiento`).
 
 Contactos (`ContactosPaciente`):
 
@@ -226,7 +235,7 @@ Deciden si una alerta leve avisa o espera al día hábil, y a quién se avisa.
 - **Horario**: lunes a jueves de 08:30 a 17:30 y viernes de 08:30 a 16:30, en hora de Chile. El inicio cuenta y el fin ya no: a las 17:30 en punto es fuera de horario. Los días que no aparecen (sábado y domingo) no son hábiles.
 - **Feriados**: los nacionales de 2026 y 2027 (sin los regionales), según feriados.cl, que cita la BCN. Los de 2027 son provisionales hasta que se publique el calendario oficial. Hay que agregarlos cada año: el reloj recibe el año en curso y el siguiente.
 - **`CalendarioHabil`** (dominio): un momento es hábil si su día tiene horario, no es feriado y la hora cae dentro. Todo se calcula en `America/Santiago`, así que los cambios de hora de abril y septiembre no corren el horario.
-- **`ReglaEnrutamiento`** (aplicación), fija en el código: una alerta leve fuera de horario o en feriado espera al día hábil; en cualquier otro caso se avisa a los contactos activos, con algún canal y cuyo horario cubre ese momento, por prioridad. El horario de cada contacto se respeta siempre, también en horario hábil.
+- **`ReglaEnrutamiento`** (aplicación), fija en el código: una alerta leve fuera de horario o en feriado espera al día hábil; en cualquier otro caso se avisa a los contactos activos, con algún canal y cuyo horario cubre ese momento, por prioridad. Con el botón de ayuda (`BOTON_AYUDA`, siempre leve) van primero los `VECINO` por prioridad y después el resto por prioridad. El horario de cada contacto se respeta siempre, también en horario hábil.
 - **Quién la usa**: el reloj, porque escala (lo recibe en su configuración); el servidor, para revisar el `esperaDiaHabil` de las alertas que recibe (2.1.2) y para sus alertas técnicas (2.2).
 
 ## API del reloj
@@ -248,21 +257,24 @@ Reglas:
 
 - **Idempotencia:** `INSERT … ON CONFLICT DO NOTHING` por `event_id`. Un reenvío devuelve lo guardado la primera vez (`loteRepetido: true`; la alerta, con 200 en vez de 201). Dos reenvíos simultáneos tampoco duplican. Un `eventId` de otro reloj responde 409.
 - **Lecturas:** se descartan una por una (sin rechazar el lote) si están fuera del rango del sensor (FC de 20 a 250, SpO2 de 50 a 100, en `TipoLectura`), si son futuras (más de 5 min) o anteriores a la entrega del reloj. Las repetidas (misma asignación, tipo y hora) las ignora la base. Se insertan en un solo viaje (batch).
-- **Alertas:** nunca se rechazan por su contenido, solo si están mal formadas. Una media o grave marcada "espera día hábil" se guarda sin la marca (esas avisan siempre). `SILENCIO_DATOS` no lo envía el reloj.
+- **Alertas:** nunca se rechazan por su contenido, solo si están mal formadas. Una media o grave marcada "espera día hábil" se guarda sin la marca (esas avisan siempre). Un `BOTON_AYUDA` que llega con otra gravedad se guarda como leve (regla `alerta_boton_leve` de V9), para no perder un pedido de ayuda. `SILENCIO_DATOS` no lo envía el reloj.
 - **Errores:** `ErroresApiReloj` responde en RFC 9457 con `codigo` (`MENSAJE_INVALIDO`, `ALERTA_DESCONOCIDA`, `NO_APLICA`, `LOTE_GRANDE`), solo para los controladores del reloj.
 - **Hora del reloj:** si difiere más de 120 s de la del servidor, se acepta igual y la respuesta informa `desfaseRelojSegundos`.
 - **Sin auditoría:** lo que escribe el reloj no va a `registro_auditoria`; queda en sus propias tablas con la hora de recepción.
 
 ### Configuración del reloj
 
-Todo lo que el reloj necesita para evaluar y escalar sin conexión: módulos, GPS, modo conservador, umbrales, `versionMatriz`, minutos de espera, 2 rondas, contactos y calendario hábil.
+Todo lo que el reloj necesita para evaluar y escalar sin conexión: módulos, GPS, modo conservador, umbrales, zona segura, `versionMatriz`, minutos de la regla de tendencia, minutos de espera, 2 rondas, contactos y calendario hábil.
+
+- **Zona segura:** viaja solo con el módulo activo (si no, `null`). Así el reloj no recibe la ubicación del domicilio si no la usa, y cambiar una zona apagada no cambia la versión.
 
 - **No se guarda: se calcula.** `ConfiguracionDelReloj` (paquete `application/configuracion`) la arma cada vez con `PerfilClinicoPaciente.consultar` (con los valores base donde el paciente no tiene ajustes), `ContactosPaciente.listar` y el `CalendarioHabil` de `calendario.yml`. Así no hay que "publicar" una configuración: cualquier cambio en la base, en `application.properties` o en `calendario.yml` cambia la versión sola.
 - **Versión:** `ContenidoConfiguracion.huella()` = primeros 16 caracteres hexadecimales del SHA-256 de un texto canónico armado campo por campo (no de `toString()`, cuyo formato puede cambiar entre versiones de Java). Es la que el reloj informa en `estado.versionConfiguracion` y la que guarda `sincronizacion.hash_configuracion`.
 - **Solo si cambió:** la versión viaja como ETag. Con `If-None-Match` igual a la vigente, `WebRequest.checkNotModified` responde 304 sin cuerpo. La sincronización responde `configuracionNueva: true` si la versión que informa el reloj no es la vigente (o no informa ninguna), también en un lote repetido. `RecibirSincronizacion` la pide a través de la interfaz `VersionVigente`, sin conocer cómo se arma.
-- **Contactos:** solo los activos con algún canal usable (WhatsApp con opt-in vigente o correo), por prioridad, con id del vínculo, nombre, horario y canales. Sin número ni correo. Puede haber saltos en la prioridad si un contacto no tiene canal.
+- **Contactos:** solo los activos con algún canal usable (WhatsApp con opt-in vigente o correo), por prioridad, con id del vínculo, nombre, tipo (para que el botón de ayuda avise primero a los `VECINO`), horario y canales. Sin número ni correo. Puede haber saltos en la prioridad si un contacto no tiene canal.
 - **Feriados:** los del año en curso y el siguiente, por año calendario en hora de Chile. Así la versión cambia una vez al año (el 1 de enero) y no cada vez que pasa un feriado.
 - **`versionMatriz`:** `alertacuida.clinica.version-matriz` en `application.properties`, `PROVISIONAL` hasta recibir el Anexo B.
+- **Regla de tendencia:** `alertacuida.clinica.minutos-tendencia` y `severidad-tendencia` viajan en `reglas.tendencia`. El servidor solo entrega los parámetros; quien evalúa es el reloj. Alerta cuando FC o SpO2 lleva ese tiempo fuera del rango normal, sin llegar al límite grave; si una lectura vuelve al rango normal, el tiempo parte de cero. El interruptor sigue siendo `modulos.tendencia`, por paciente. Ver [dónde cambiar cada parte](#regla-de-tendencia-dónde-cambiar-cada-parte).
 - **Token de Firebase:** `RegistrarTokenFcm` lo guarda en el reloj físico (`smartwatch`), no en el vínculo; el nuevo reemplaza al anterior.
 - **Qué versión aplica cada reloj (dashboard):** `ConsultarConfiguracionAplicada` compara la versión del último lote del reloj **vigente** con la que rige hoy: `AL_DIA`, `PENDIENTE`, `SIN_SINCRONIZAR` o `SIN_RELOJ`. "Aplicada desde" es el primer lote de la racha actual con esa versión (`SincronizacionesJdbc.versionInformada`). `GET /api/pacientes/{id}/reloj/configuracion` (`USUARIOS:VER`) lo entrega y la ficha lo muestra en la sección del reloj.
 
@@ -272,13 +284,14 @@ Los adaptadores JDBC cifran al guardar y descifran al leer con `CifradoCampos`; 
 
 | Tabla | Columnas |
 |---|---|
-| `usuario` | `rut` |
+| `usuario` | `rut`, `telefono` |
 | `paciente` | `rut`, `nombres`, `apellidos`, `fecha_nacimiento`, `direccion` |
 | `condicion_paciente` | `descripcion` |
 | `contacto` | `nombre`, `whatsapp`, `correo` |
 | `configuracion` | `motivo_cambio` |
+| `zona_segura` | `latitud`, `longitud` (como texto) |
 
-Las demás columnas marcadas "cifrado" en las migraciones (`usuario.telefono` y `totp_secreto`, notas, observaciones) se agregan a `ColumnaCifrada` cuando se programe su adaptador.
+Las demás columnas marcadas "cifrado" en las migraciones (`usuario.totp_secreto`, notas, observaciones) se agregan a `ColumnaCifrada` cuando se programe su adaptador.
 
 Cómo funciona:
 
@@ -310,12 +323,18 @@ En `app/src/main/resources/application.properties`:
 | `clave-run` | variable `RUN_CLAVE` | Si cambia, hay que recalcular el `rut_hash` de todos los usuarios y los hash de los contactos |
 | `clave-jwt` | variable `JWT_CLAVE` | Al menos 32 caracteres |
 | `clave-cifrado` | variable `CIFRADO_CLAVE` | 32 bytes en base64. Si se pierde, los datos cifrados no se recuperan |
-| `duracion-token` | 15 min (8 h en `dev`) | |
+| `duracion-token` | 15 min | No puede superar `sesion.inactividad`: el backend no arranca si lo hace |
+| `sesion.duracion-maxima` | 10 h | Desde el login hasta volver a pedir la contraseña; renovar no la alarga |
+| `sesion.inactividad` | 15 min | Sin renovar en ese plazo, la sesión termina |
+| `sesion.gracia-rotacion` | 10 s | Tiempo en que se acepta un token recién reemplazado |
+| `sesion.cookie-segura` | `true` (`false` en `dev`) | Con `true`, la cookie de renovación solo viaja por HTTPS |
 | `bloqueo.intentos` / `bloqueo.ventana` | 5 / 15 min | |
 | `activacion.url` | `${DASHBOARD_URL}/activar` | Por defecto, `http://localhost:5173/activar` |
 | `activacion.vigencia` | 48 h | |
 
 Sin las claves, el backend no arranca. El perfil `dev` trae claves de desarrollo y lee la base desde el `.env`.
+
+`server.forward-headers-strategy=native` hace que el backend tome la IP real de `X-Forwarded-For`, que nginx reemplaza con la dirección de quien se conecta. Solo se le cree a un proxy de la red interna, así que en producción el puerto del backend no debe quedar expuesto: la entrada debe ser nginx.
 
 `docker-compose.yml` levanta el backend (`app/Dockerfile`) con el perfil `dev`. Recibe las credenciales por variables de entorno, y `SPRING_DATASOURCE_URL` reemplaza la dirección del perfil porque dentro de Docker la base está en `postgres` y no en `localhost`. El dashboard (`frontend/Dockerfile`) se sirve con nginx, que reenvía `/api` al backend (`frontend/nginx.conf`). Esta configuración es solo para desarrollo y demos: producción necesita sus propias claves y no debe cargar los datos de ejemplo.
 
@@ -326,15 +345,64 @@ Valores base del Anexo B (`alertacuida.clinica.*`), **provisionales** hasta que 
 | `umbral-fc.grave-bajo` / `normal-min` / `normal-max` / `grave-alto` | 40 / 50 / 110 / 130 lpm |
 | `umbral-spo2.grave-bajo` / `normal-min` | 88 / 92 % |
 | `minutos-espera` | 5 |
+| `minutos-tendencia` | 120 (mínimo 30, el intervalo de las lecturas) |
+| `severidad-tendencia` | `MEDIA` (`LEVE`, `MEDIA` o `GRAVE`) |
+
+### Regla de tendencia: dónde cambiar cada parte
+
+Todos estos valores son provisionales hasta que los valide el equipo clínico. La regla se evalúa en el reloj: lo que no viaja en la configuración también hay que cambiarlo en su código.
+
+| Qué | Hoy | Dónde se cambia |
+|---|---|---|
+| Tiempo fuera del rango normal | 120 minutos | `alertacuida.clinica.minutos-tendencia` en `app/src/main/resources/application.properties`. Requiere reiniciar el backend; los relojes lo descargan solos |
+| Gravedad de la alerta | `MEDIA` | `alertacuida.clinica.severidad-tendencia` en `app/src/main/resources/application.properties`. Requiere reiniciar el backend; los relojes la descargan solos |
+| Reinicio del tiempo | Parte de cero si una lectura vuelve al rango normal | Código del reloj y los mismos documentos |
+| Repetición de la alerta | Una sola vez mientras el valor siga en la zona intermedia; puede volver a alertar después de una lectura normal (05-11-2026) | Código del reloj y docs/api-reloj.md (pregunta 8) |
+| Límites de cada paciente | Los propios, o los valores base si no tiene (FC 40, 50, 110 y 130; SpO2 88 y 92) | Por paciente: su ficha en el dashboard. Valores base: `alertacuida.clinica.umbral-*` en `application.properties`. Los relojes los descargan solos |
+| Valores justo en el límite | `normalMin` y `normalMax` son normales; `graveBajo` y `graveAlto` son zona intermedia | Definición en `domain/.../clinica/Umbral.java` y código del reloj |
+| Activación | Activa por defecto; se apaga por paciente en su ficha | Ficha del usuario. Valor por defecto: `Modulos.POR_DEFECTO` y una migración nueva sobre `configuracion` |
+
+`Umbral` llama `LEVE` a una lectura de la zona intermedia. Eso describe la lectura; la alerta de tendencia que genera es `MEDIA`.
 
 ## Pruebas
 
-- `RunTest`, `PoliticaContrasenaTest`, `UmbralTest`, `MediosDeContactoTest`, `HorarioYCoberturaTest`, `IniciarSesionTest`, `AltaYActivacionTest`, `PacientesTest`, `CondicionesPacienteTest`, `PerfilClinicoPacienteTest`, `ContactosPacienteTest`, `VinculoRelojTest`, `RecibirSincronizacionTest`, `RecibirAlertaTest` y `CifradoCamposTest`: unitarias, sin base de datos. Los dobles en memoria compartidos están en `application/src/test/.../soporte/`.
-- `InicioSesionTest`, `CuentasPersonalTest`, `PacientesYRelojesTest`, `PerfilYContactosTest`, `ApiRelojTest` y `ModeloDatosTest`: contra un PostgreSQL real en Docker (Testcontainers). Sin Docker, se omiten.
+- `RunTest`, `PoliticaContrasenaTest`, `UmbralTest`, `MediosDeContactoTest`, `HorarioYCoberturaTest`, `IniciarSesionTest`, `RenovarSesionTest`, `AltaYActivacionTest`, `PacientesTest`, `CondicionesPacienteTest`, `PerfilClinicoPacienteTest`, `ContactosPacienteTest`, `VinculoRelojTest`, `RecibirSincronizacionTest`, `RecibirAlertaTest`, `CifradoCamposTest` y `RegistroDeLecturasTest`: unitarias, sin base de datos. Los dobles en memoria compartidos están en `application/src/test/.../soporte/`.
+- `InicioSesionTest`, `AuditoriaTest`, `IpRealTest`, `CuentasPersonalTest`, `PacientesYRelojesTest`, `PerfilYContactosTest`, `ApiRelojTest` y `ModeloDatosTest`: contra un PostgreSQL real en Docker (Testcontainers). Sin Docker, se omiten.
+
+## Duración de la sesión
+
+El token de acceso dura 15 minutos y el dashboard lo guarda solo en memoria. Para no pedir la contraseña cada vez, el login deja un token de renovación en una cookie `HttpOnly`, que el código del navegador no puede leer. Al recargar la página, el dashboard pide tokens nuevos con esa cookie.
+
+- **Límite de 10 horas:** la sesión termina a las 10 horas del login, aunque se esté usando. Renovar conserva `fecha_expiracion`.
+- **Inactividad de 15 minutos:** el dashboard la mide con el mouse, el teclado y el desplazamiento (`useControlInactividad`), renueva antes del plazo mientras se usa y cierra la sesión al cumplirse, aunque el primer movimiento tras despertar el equipo llegue antes de la revisión periódica. Si una renovación falla por la red, la reintenta a los 3 segundos, dentro de la gracia. El servidor lo exige por su cuenta: rechaza un token cuya `fecha_emision` tenga 15 minutos o más. Por eso, un equipo suspendido tampoco puede seguir.
+- **Rotación:** cada token sirve una vez (`RenovarSesion`). El reemplazado se marca en `fecha_revocacion`.
+- **Reutilización:** si llega un token ya reemplazado, alguien pudo haberlo copiado, así que se borran todas las sesiones de la cuenta y se registra `TOKEN_REUTILIZADO`. La excepción son los 10 segundos de gracia, porque dos pestañas pueden renovar a la vez con la misma cookie.
+- **Limpieza:** `TareasProgramadas` borra una vez al día, a las 04:00 de Chile, los tokens vencidos de todas las cuentas.
+- **Cuenta desactivada:** no puede renovar, así que pierde el acceso en un máximo de 15 minutos.
+- **Cierre de sesión:** borra el token de este navegador; las sesiones de otros computadores siguen abiertas. El token de acceso ya emitido no se puede revocar, pero el dashboard lo olvida y dura pocos minutos.
+
+## Auditoría
+
+`registro_auditoria` guarda quién hizo qué y cuándo, con la IP, usando solo identificadores y nunca datos personales. El administrador lo consulta con `GET /api/auditoria` (`ADMINISTRACION:VER`), en la pestaña Auditoría.
+
+| Qué | Cómo queda |
+|---|---|
+| Inicios de sesión | `LOGIN` y `LOGIN_FALLIDO`, sin el RUN escrito |
+| Posible robo de sesión | `TOKEN_REUTILIZADO`, con la cuenta afectada y la IP de quien usó el token. No cuenta para el bloqueo |
+| Cambios | `CREAR`, `MODIFICAR` y `ELIMINAR`, escritos por cada caso de uso |
+| Ficha del paciente | `LEER` con el id del paciente y la entidad `PACIENTE`, `CONDICION_PACIENTE`, `CONTACTO_PACIENTE`, `CONFIGURACION` o `ASIGNACION_RELOJ` (estado de sincronización del reloj) |
+| Listas de pacientes y relojes | Una fila `LEER` por consulta, con `id_entidad = 'LISTA'` |
+
+- **Las lecturas se registran después de leer con éxito:** cada endpoint se marca con `@LecturaAuditada` y `RegistroDeLecturas` llama a `RegistrarLectura` justo antes de escribir la respuesta. Un 404 o un 403 no entregó datos. Si no se puede registrar, la petición falla y los datos no salen. Un endpoint nuevo con datos de pacientes debe llevar esa anotación.
+- **Significado de `id_entidad`:** en `LEER` es el id del paciente o `LISTA`, y la pestaña Auditoría lo rotula como "Usuario del programa" u "Objeto". En las demás acciones es el id del objeto cambiado.
+- **La consulta no trae las lecturas por defecto**, porque son muchas más que los cambios. Se piden con `incluirLecturas=true`.
+- **No se registran:** las renovaciones, los cierres de sesión ni lo que escribe el reloj, que queda en sus propias tablas.
+- **Exportaciones:** aún no existen. Al programar los reportes deben registrar `EXPORTAR`.
 
 ## Pendiente del login
 
 - Listar, editar y desactivar cuentas del personal (hoy solo se crean, desde Administración en el dashboard).
 - Enviar el enlace por correo cuando exista.
-- Token de renovación con cookie y cierre de sesión.
-- Segundo factor TOTP.
+- Avisos por correo a la oficina PRLAC: la regla está definida en el cronograma (2.10.5), pero el envío aún no existe; hoy el servidor solo guarda la alerta.
+- Segundo factor TOTP: pospuesto por decisión del equipo (03-11-2026); revisarlo como riesgo en la revisión de seguridad.
+- Agrupar los tokens por sesión con una tabla `SESION`: pospuesto el 05-11-2026. Hasta entonces, cerrar sesión borra solo el token actual, un posible robo cierra todas las sesiones de la cuenta, y una renovación atrasada puede cerrar un login nuevo.

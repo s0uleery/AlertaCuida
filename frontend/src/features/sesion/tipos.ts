@@ -13,9 +13,11 @@ export interface Usuario {
   permisos: Permiso[];
 }
 
-/** Respuesta de POST /api/auth/login. */
+/** Respuesta de POST /api/auth/login y /api/auth/renovar. */
 export interface RespuestaLogin {
   token: string;
   expiraEn: string;
+  /** Segundos sin usar el dashboard tras los cuales se cierra la sesión. */
+  inactividadSegundos: number;
   usuario: Usuario;
 }

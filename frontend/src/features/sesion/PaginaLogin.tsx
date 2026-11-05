@@ -10,7 +10,7 @@ import { useSesion } from './SesionContext';
  * vuelve a la página desde donde se llegó (o al inicio).
  */
 export function PaginaLogin() {
-  const { usuario, iniciar } = useSesion();
+  const { usuario, iniciar, avisoCierre } = useSesion();
   const navegar = useNavigate();
   const destino = (useLocation().state as { desde?: string } | null)?.desde ?? '/';
 
@@ -49,6 +49,12 @@ export function PaginaLogin() {
           <h1 className="text-2xl font-semibold text-slate-900">AlertaCuida</h1>
           <p className="text-sm text-slate-500">Ingreso del personal del PRLAC</p>
         </div>
+
+        {avisoCierre && !error && (
+          <p role="status" className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            {avisoCierre}
+          </p>
+        )}
 
         <label className="block">
           <span className={CLASE_ETIQUETA}>RUN</span>

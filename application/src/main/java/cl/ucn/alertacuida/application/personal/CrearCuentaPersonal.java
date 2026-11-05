@@ -10,6 +10,7 @@ import cl.ucn.alertacuida.application.personal.modelo.EnlaceActivacion;
 import cl.ucn.alertacuida.application.personal.modelo.NuevaCuenta;
 import cl.ucn.alertacuida.application.personal.puerto.CuentasPersonal;
 import cl.ucn.alertacuida.domain.comun.Run;
+import cl.ucn.alertacuida.domain.contacto.NumeroWhatsapp;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Locale;
@@ -20,6 +21,9 @@ import java.util.UUID;
  * elige la suya con el enlace de activación, así nadie más la conoce.
  */
 public class CrearCuentaPersonal {
+
+	/** Rol que recibe por WhatsApp los avisos de la oficina PRLAC: necesita teléfono. */
+	static final String ROL_AVISOS_OFICINA = "COORDINADOR";
 
 	private final CuentasPersonal cuentas;
 	private final HashRun hashRun;
@@ -46,12 +50,13 @@ public class CrearCuentaPersonal {
 	 * @param idAdministrador quien crea la cuenta, para la auditoría
 	 * @param ip              desde dónde llegó la petición, para la auditoría
 	 * @return el enlace que el administrador le pasa a la persona
-	 * @throws SolicitudRechazada si el RUN no es válido o el rol no existe
+	 * @throws SolicitudRechazada si el RUN o el teléfono no son válidos, el rol no existe, un
+	 *                            coordinador no tiene teléfono o se acepta WhatsApp sin teléfono
 	 * @throws CuentaDuplicada    si ya hay una cuenta con ese RUN o correo
 	 */
 	public EnlaceActivacion crear(DatosCuenta datos, UUID idAdministrador, String ip) {
-		NuevaCuenta cuenta = validar(datos);
 		Instant ahora = reloj.instant();
+		NuevaCuenta cuenta = validar(datos, ahora);
 		return transacciones.ejecutar(() -> {
 			UUID id = cuentas.crear(cuenta);
 			auditoria.registrar(idAdministrador, "CREAR", "USUARIO", id.toString(), ip, ahora);
@@ -59,8 +64,13 @@ public class CrearCuentaPersonal {
 		});
 	}
 
-	/** Revisa las reglas y normaliza: RUN sin puntos, correo en minúsculas, sin espacios sobrantes. */
-	private NuevaCuenta validar(DatosCuenta datos) {
+	/**
+	 * Revisa las reglas y normaliza: RUN sin puntos, correo en minúsculas, teléfono en formato
+	 * internacional, sin espacios sobrantes.
+	 *
+	 * @param ahora fecha del opt-in, si la persona aceptó WhatsApp
+	 */
+	private NuevaCuenta validar(DatosCuenta datos, Instant ahora) {
 		Run run;
 		try {
 			run = Run.de(datos.run());
@@ -79,7 +89,32 @@ public class CrearCuentaPersonal {
 			throw new CuentaDuplicada("Ya existe una cuenta con ese correo");
 		}
 		String cargo = datos.cargo() == null || datos.cargo().isBlank() ? null : datos.cargo().strip();
-		return new NuevaCuenta(run.valor(), runHash, datos.nombre().strip(), cargo, correo, datos.codigoRol());
+		String telefono = telefono(datos);
+		return new NuevaCuenta(run.valor(), runHash, datos.nombre().strip(), cargo, correo, datos.codigoRol(),
+				telefono, datos.aceptaWhatsapp() ? ahora : null);
+	}
+
+	/**
+	 * @return el teléfono normalizado, o vacío si no se escribió
+	 * @throws SolicitudRechazada si no es un celular válido, falta en un coordinador o se acepta
+	 *                            WhatsApp sin teléfono
+	 */
+	private static String telefono(DatosCuenta datos) {
+		if (datos.telefono() == null || datos.telefono().isBlank()) {
+			if (ROL_AVISOS_OFICINA.equals(datos.codigoRol())) {
+				throw new SolicitudRechazada("Los coordinadores necesitan un teléfono con WhatsApp: reciben los "
+						+ "avisos de la oficina PRLAC");
+			}
+			if (datos.aceptaWhatsapp()) {
+				throw new SolicitudRechazada("Para aceptar WhatsApp falta el teléfono");
+			}
+			return null;
+		}
+		try {
+			return NumeroWhatsapp.de(datos.telefono()).valor();
+		} catch (IllegalArgumentException invalido) {
+			throw new SolicitudRechazada(invalido.getMessage());
+		}
 	}
 
 }
