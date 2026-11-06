@@ -153,15 +153,15 @@ await vale('Borrar la ficha no borra al paciente', `SELECT count(*) n FROM "PACI
 db = dbPrincipal;
 
 nuevoGrupo('1. Estructura de la base');
-await vale('Cantidad de tablas', `SELECT count(*) n FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'`, 29);
+await vale('Cantidad de tablas', `SELECT count(*) n FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'`, 30);
 await vale('Tablas sueltas (sin ninguna relación)', `SELECT count(*) n FROM information_schema.tables t
   WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
   AND NOT EXISTS (SELECT 1 FROM information_schema.table_constraints c WHERE c.constraint_type = 'FOREIGN KEY' AND c.table_name = t.table_name)
   AND NOT EXISTS (SELECT 1 FROM information_schema.constraint_column_usage u
                   JOIN information_schema.table_constraints c ON c.constraint_name = u.constraint_name AND c.constraint_type = 'FOREIGN KEY'
                   WHERE u.table_name = t.table_name)`, 0);
-await vale('Cantidad de relaciones (claves foráneas)', `SELECT count(*) n FROM information_schema.table_constraints WHERE constraint_type = 'FOREIGN KEY'`, 32);
-await vale('Cantidad de tipos (Enum)', `SELECT count(*) n FROM pg_type t JOIN pg_namespace s ON s.oid = t.typnamespace WHERE s.nspname = 'public' AND t.typtype = 'e'`, 20);
+await vale('Cantidad de relaciones (claves foráneas)', `SELECT count(*) n FROM information_schema.table_constraints WHERE constraint_type = 'FOREIGN KEY'`, 33);
+await vale('Cantidad de tipos (Enum)', `SELECT count(*) n FROM pg_type t JOIN pg_namespace s ON s.oid = t.typnamespace WHERE s.nspname = 'public' AND t.typtype = 'e'`, 21);
 await vale('Vistas de datos calculados', `SELECT count(*) n FROM information_schema.views WHERE table_schema = 'public'`, 1);
 await vale('Ninguna columna jsonb en la configuración clínica', `SELECT count(*) n FROM information_schema.columns
   WHERE table_name IN ('CONFIGURACION', 'UMBRAL') AND data_type = 'jsonb'`, 0);
@@ -449,7 +449,13 @@ await vale('Estado de entrega calculado desde las fechas', `SELECT CASE WHEN fec
   WHEN fecha_hora_entrega IS NOT NULL THEN 'ENTREGADO' ELSE 'ENVIADO' END n FROM "REGISTRO_INTENTO" WHERE id_externo = 'wamid.1'`, 'LEIDO');
 await acepta('La hija responde "No puedo"', `UPDATE "REGISTRO_INTENTO" SET respuesta = 'NO_PUEDO', fecha_hora_respuesta = now() WHERE id_externo = 'wamid.1'`);
 await estado('Sigue avisando', CAIDA_MARIA, 'AVISANDO_CONTACTO', 'SIN_ASIGNAR');
-await acepta('La caída se agrava por inmovilidad', `UPDATE "ALERTA" SET fecha_hora_agravamiento = now() WHERE id_alerta = '${CAIDA_MARIA}'`);
+await rechaza('Segundos de inmovilidad sin agravamiento', `UPDATE "ALERTA" SET segundos_inmovilidad_agravamiento = 90 WHERE id_alerta = '${CAIDA_MARIA}'`, 'check');
+await acepta('La caída se agrava por inmovilidad (90 s sin moverse)', `UPDATE "ALERTA" SET fecha_hora_agravamiento = now(), segundos_inmovilidad_agravamiento = 90 WHERE id_alerta = '${CAIDA_MARIA}'`);
+await rechaza('Segundos de inmovilidad negativos', `UPDATE "ALERTA" SET segundos_inmovilidad_agravamiento = -1 WHERE id_alerta = '${CAIDA_MARIA}'`, 'check');
+await acepta('La caída llegó con una discrepancia: el reloj usaba otra versión de la configuración', `INSERT INTO "DISCREPANCIA_ALERTA"(id_alerta, codigo, detalle) VALUES ('${CAIDA_MARIA}', 'VERSION_DISTINTA', 'El reloj usó la versión h0; la vigente es h1')`);
+await rechaza('La misma discrepancia dos veces en la alerta', `INSERT INTO "DISCREPANCIA_ALERTA"(id_alerta, codigo, detalle) VALUES ('${CAIDA_MARIA}', 'VERSION_DISTINTA', 'otra vez')`, 'unico');
+await rechaza('Discrepancia con un código que no existe', `INSERT INTO "DISCREPANCIA_ALERTA"(id_alerta, codigo, detalle) VALUES ('${CAIDA_MARIA}', 'HORA_RARA', 'x')`, 'enum');
+await rechaza('Discrepancia de una alerta que no existe', `INSERT INTO "DISCREPANCIA_ALERTA"(id_alerta, codigo, detalle) VALUES ('${id(98)}', 'MODULO_APAGADO', 'x')`, 'foranea');
 await vale('Conserva la gravedad con que llegó', `SELECT severidad n FROM "ALERTA" WHERE id_alerta = '${CAIDA_MARIA}'`, 'MEDIA');
 await vale('Gravedad actual calculada', `SELECT severidad_actual n FROM "ALERTA_ESTADO" WHERE id_alerta = '${CAIDA_MARIA}'`, 'GRAVE');
 await acepta('El reloj pasa a Seguridad Ciudadana (prioridad 2), que responde "Voy en camino"', aviso(CAIDA_MARIA, M2, 1, ', id_externo, respuesta, fecha_hora_respuesta', `, 'wamid.2', 'VOY_EN_CAMINO', now()`));
@@ -560,6 +566,7 @@ await rechaza('Alerta del reloj sin el hash de su configuración', `INSERT INTO 
 await rechaza('El servidor crea una alerta clínica (CAIDA)', alertaServidor(id(96), A_PEDRO, 'CAIDA'), 'check');
 await acepta('El servidor crea una alerta de batería baja (técnica, se deshace)', `BEGIN; ${alertaServidor(id(96), A_PEDRO, 'BATERIA_BAJA')}; ROLLBACK`);
 await rechaza('El reloj informa un silencio de datos (solo lo puede detectar el servidor)', alertaReloj(id(97), A_PEDRO, 'SILENCIO_DATOS', 'LEVE'), 'check');
+await acepta('El servidor crea una alerta por exceso de alertas del reloj (técnica, se deshace)', 'BEGIN; ' + alertaServidor(id(96), A_PEDRO, 'EXCESO_ALERTAS') + '; ROLLBACK');await rechaza('El reloj informa un exceso de alertas (solo lo puede detectar el servidor)', alertaReloj(id(97), A_PEDRO, 'EXCESO_ALERTAS', 'LEVE'), 'check');await vale('Una cuenta nueva no recibe avisos por correo hasta que se encienda', `SELECT column_default n FROM information_schema.columns WHERE table_name = 'USUARIO' AND column_name = 'recibe_avisos'`, 'false');
 
 // =====================================================================
 nuevoGrupo('15. Reintentos y mensajes duplicados (idempotencia)');
@@ -637,7 +644,7 @@ await vale('No queda ningún dato de María', `SELECT (SELECT count(*) FROM "FIC
   + (SELECT count(*) FROM "UBICACION" WHERE id_asignacion = '${A_MARIA}') + (SELECT count(*) FROM "EVENTO_DESCARTADO" WHERE id_sincronizacion = '${S_MARIA}')
   + (SELECT count(*) FROM "ALERTA" WHERE id_asignacion = '${A_MARIA}') + (SELECT count(*) FROM "ATENCION_ALERTA" WHERE id_alerta = '${CAIDA_MARIA}')
   + (SELECT count(*) FROM "REGISTRO_INTENTO" WHERE id_alerta = '${CAIDA_MARIA}') + (SELECT count(*) FROM "AVISO_FCM" WHERE id_alerta = '${CAIDA_MARIA}')
-  + (SELECT count(*) FROM "SEGUIMIENTO" WHERE id_alerta = '${CAIDA_MARIA}') n`, 0);
+  + (SELECT count(*) FROM "SEGUIMIENTO" WHERE id_alerta = '${CAIDA_MARIA}') + (SELECT count(*) FROM "DISCREPANCIA_ALERTA" WHERE id_alerta = '${CAIDA_MARIA}') n`, 0);
 await vale('Pedro y Rosa conservan sus datos (5 vínculos + 8 alertas)', `SELECT (SELECT count(*) FROM "CONTACTO_PACIENTE" WHERE id_paciente IN ('${PEDRO}', '${ROSA}'))
   + (SELECT count(*) FROM "ALERTA" a JOIN "ASIGNACION_RELOJ" r USING (id_asignacion) WHERE r.id_paciente IN ('${PEDRO}', '${ROSA}')) n`, 13);
 await vale('La auditoría sobre María sobrevive al borrado', `SELECT count(*) n FROM "REGISTRO_AUDITORIA" WHERE id_entidad LIKE '${MARIA}%'`, 2);

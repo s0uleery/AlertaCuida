@@ -77,6 +77,14 @@ Enum tipo_evento {
   SILENCIO_DATOS [note: 'Técnica: no llegan datos (sin señal, reloj apagado o plan vencido)']
   BATERIA_BAJA [note: 'Técnica']
   RELOJ_NO_PUESTO [note: 'Técnica']
+  EXCESO_ALERTAS [note: 'Técnica: el reloj envió más alertas de las permitidas en una ventana (posible falla). Solo el servidor']
+}
+
+Enum codigo_discrepancia {
+  VERSION_DISTINTA [note: 'El reloj evaluó con una configuración distinta de la vigente']
+  MODULO_APAGADO [note: 'Alerta de un módulo que el paciente tiene apagado']
+  GRAVEDAD_DISTINTA [note: 'Gravedad distinta de la configurada (tendencia o zona segura)']
+  LECTURAS_EN_RANGO [note: 'Las lecturas de la evidencia no superan los umbrales vigentes']
 }
 
 Enum origen_alerta {
@@ -479,6 +487,7 @@ Table ALERTA {
   tipo_evento tipo_evento [not null]
   severidad severidad [not null, note: 'Gravedad con que llegó la alerta; el equipo no la edita. La actual es GRAVE si se agravó']
   fecha_hora_agravamiento timestamptz [note: 'Una caída leve o media que sube a grave por inmovilidad (2.1.3). Vacío = no se agravó']
+  segundos_inmovilidad_agravamiento int [note: 'Cuánto tiempo quedó sin moverse al agravarse. Solo con fecha_hora_agravamiento']
   evidencia jsonb [note: 'Foto de lo que causó la alerta: lecturas, nivel de cada variable, umbrales aplicados, versión de la matriz de riesgo y la celda que dio la severidad. Se lee completa']
   es_simulacro boolean [not null, default: false, note: 'Se excluye de reportes y métricas']
   espera_dia_habil boolean [not null, default: false, note: 'Leve fuera del horario hábil: el reloj no avisa a contactos']
@@ -513,12 +522,28 @@ Table ALERTA {
   Que una alerta CANCELADA no tenga atención ni avisos a contactos lo valida el backend.
   CHECK (fecha_hora_cancelacion IS NULL OR fecha_hora_sin_respuesta IS NULL).
   CHECK ((origen = 'SERVIDOR') = (hash_configuracion IS NULL)).
-  CHECK (origen = 'RELOJ' OR es_simulacro OR tipo_evento IN ('SILENCIO_DATOS', 'BATERIA_BAJA', 'RELOJ_NO_PUESTO')): el servidor solo crea técnicas y simulacros.
+  CHECK (origen = 'RELOJ' OR es_simulacro OR tipo_evento IN ('SILENCIO_DATOS', 'BATERIA_BAJA', 'RELOJ_NO_PUESTO', 'EXCESO_ALERTAS')): el servidor solo crea técnicas y simulacros.
   CHECK (tipo_evento <> 'SILENCIO_DATOS' OR origen = 'SERVIDOR'): el silencio de datos solo lo detecta el servidor.
+  CHECK (tipo_evento <> 'EXCESO_ALERTAS' OR origen = 'SERVIDOR'): el exceso de alertas solo lo detecta el servidor.
+  CHECK (segundos_inmovilidad_agravamiento >= 0).
+  CHECK (segundos_inmovilidad_agravamiento IS NULL OR fecha_hora_agravamiento IS NOT NULL).
   CHECK (fecha_hora_agravamiento IS NULL OR (tipo_evento = 'CAIDA' AND severidad <> 'GRAVE')).
   CHECK (NOT espera_dia_habil OR severidad = 'LEVE'): solo la leve espera; media y grave avisan siempre.
   CHECK (tipo_evento <> 'BOTON_AYUDA' OR severidad = 'LEVE'): el botón de ayuda siempre es leve (si el reloj envía otra
   gravedad, el backend la guarda como LEVE en vez de rechazar el pedido de ayuda).
+  '''
+}
+
+Table DISCREPANCIA_ALERTA {
+  id_alerta uuid [pk]
+  codigo codigo_discrepancia [pk]
+  detalle text [not null, note: 'Legible para el equipo, ej. "FC 95 dentro del rango normal 50–110"']
+  Note: '''
+  Lo que no calzó entre una alerta del reloj y la configuración vigente al recibirla (2.1.2). La alerta se
+  acepta igual: el servidor nunca descarta una. Se guarda al recibirla y no se calcula después, porque los
+  valores base del backend (application.properties) no tienen historial: más tarde no se podría saber qué
+  regía. Una fila por discrepancia (1FN); cada código a lo más una vez por alerta.
+  Las alertas canceladas por el paciente no se revisan.
   '''
 }
 
@@ -663,7 +688,7 @@ Table USUARIO {
   hash_contrasena varchar [note: 'Vacío hasta que el usuario activa su cuenta']
   totp_secreto varchar [note: 'cifrado']
   totp_activo boolean [not null, default: false]
-  recibe_avisos boolean [not null, default: true, note: 'Recibe por correo las alertas técnicas, medias y graves. No aplica al rol COORDINADOR, que recibe por WhatsApp el aviso de la oficina PRLAC. PENDIENTE: decidir si va encendido por defecto']
+  recibe_avisos boolean [not null, default: false, note: 'Recibe por correo las alertas técnicas, medias y graves. Apagado por defecto (V10). No aplica al rol COORDINADOR, que recibe por WhatsApp el aviso de la oficina PRLAC']
   recibe_resumen_diario boolean [not null, default: false]
   activo boolean [not null, default: false, note: 'Se activa al definir la contraseña']
   Note: '''
@@ -775,6 +800,7 @@ Ref: EVENTO_DESCARTADO.id_sincronizacion > SINCRONIZACION.id_sincronizacion [del
 // 4. Alertas
 Ref: ALERTA.id_asignacion > ASIGNACION_RELOJ.id_asignacion [delete: cascade]
 Ref: ATENCION_ALERTA.id_alerta > ALERTA.id_alerta [delete: cascade] // Uno a uno (ver la nota de FICHA_PACIENTE)
+Ref: DISCREPANCIA_ALERTA.id_alerta > ALERTA.id_alerta [delete: cascade]
 Ref: ATENCION_ALERTA.id_usuario_responsable > USUARIO.id_usuario
 Ref: ATENCION_ALERTA.id_usuario_resolutor > USUARIO.id_usuario
 Ref: REGISTRO_INTENTO.id_alerta > ALERTA.id_alerta [delete: cascade]

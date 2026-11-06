@@ -27,7 +27,7 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
 - Los `Enum` se dibujan como `Enum`, pero en las migraciones van como `varchar` con `CHECK` (los `ENUM` de PostgreSQL no permiten quitar ni renombrar valores).
 - **Fuera de la base**, en la configuración del backend (`application.properties`, y el horario hábil y los feriados en `calendario.yml`): umbrales base, matriz de riesgo FC × SpO2 (con su versión), horario hábil, feriados, plazos y la política de bloqueo de sesión (intentos y minutos). Son valores del sistema, no datos de un paciente. Cambiarlos requiere reiniciar el backend. La regla de enrutamiento por gravedad está fija en el código (`ReglaEnrutamiento`).
 
-## Tablas (29)
+## Tablas (30)
 
 | Área | Tablas |
 |---|---|
@@ -36,7 +36,7 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
 | 3. Contactos | `TIPO_CONTACTO`, `CONTACTO`, `CONTACTO_PACIENTE` |
 | 4. Configuración clínica | `CONFIGURACION`, `UMBRAL`, `ZONA_SEGURA` |
 | 5. Relojes y telemetría | `SMARTWATCH`, `ASIGNACION_RELOJ`, `SINCRONIZACION`, `EVENTO_DESCARTADO`, `REGISTRO_VITAL`, `UBICACION` |
-| 6. Alertas | `ALERTA`, `ATENCION_ALERTA`, `REGISTRO_INTENTO`, `AVISO_FCM` |
+| 6. Alertas | `ALERTA`, `DISCREPANCIA_ALERTA`, `ATENCION_ALERTA`, `REGISTRO_INTENTO`, `AVISO_FCM` |
 | 7. Seguimiento | `DESTINO_DERIVACION`, `SEGUIMIENTO` |
 | 8. Personal, roles y permisos | `ROL`, `PERMISO_ROL`, `USUARIO`, `CODIGO_RESPALDO`, `TOKEN_SESION`, `TOKEN_ACCION`, `REGISTRO_AUDITORIA` |
 
@@ -109,7 +109,7 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
 
 - **Tipos de evento.**
   - Clínicos, que escalan a los contactos: caída, FC, SpO2, FC+SpO2, tendencia, inactividad, salida de la zona segura (con la gravedad de su zona) y botón de ayuda (siempre leve; avisa primero a los `VECINO`, regla `alerta_boton_leve`).
-  - Técnicos, que avisan a todos los coordinadores (por WhatsApp, en horario laboral) y por correo a las demás cuentas con `recibe_avisos`: silencio de datos (sin señal, reloj apagado o plan vencido), batería baja y reloj no puesto.
+  - Técnicos, que avisan a todos los coordinadores (por WhatsApp, en horario laboral) y por correo a las demás cuentas con `recibe_avisos` (apagado por defecto desde V10): silencio de datos (sin señal, reloj apagado o plan vencido), batería baja, reloj no puesto y exceso de alertas (`EXCESO_ALERTAS`: desde la 10.ª alerta del mismo reloj en 60 minutos, posible falla; leve).
   - El servidor solo crea alertas técnicas y simulacros, y el silencio de datos solo lo crea el servidor (`CHECK`).
 - **Gravedad y enrutamiento.** Hay tres niveles. La regla está fija en el código (`ReglaEnrutamiento`); el horario de cada contacto se respeta siempre, también en horario hábil:
 
@@ -153,6 +153,8 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
 
   La vista también da la gravedad actual: `GRAVE` si se agravó; si no, la inicial. "Derivada" no es un estado: se ve en `SEGUIMIENTO`.
 - **Una alerta del servidor abierta por reloj y tipo (2.2.5).** "Abierta" depende de `ATENCION_ALERTA`, así que no puede ser un índice parcial. El job del servidor la valida al crearla, dentro de una transacción con `pg_advisory_xact_lock(hashtextextended(id_asignacion::text || ':' || tipo_evento, 0))`. Las del reloj nunca se rechazan (2.1).
+- **`DISCREPANCIA_ALERTA`** (2.1.2, V10): lo que no calzó entre una alerta del reloj y la configuración vigente al recibirla: otra versión, módulo apagado, gravedad distinta de la configurada (tendencia o zona segura) o lecturas que no superan los umbrales. La alerta se acepta igual. Una fila por código (1FN), con un detalle legible. **Se guarda y no se calcula** porque los valores base del backend no tienen historial: después no se podría saber qué regía. Las cancelaciones no se revisan.
+- **Agravamiento** (2.1.3): `fecha_hora_agravamiento` y `segundos_inmovilidad_agravamiento` (solo con la fecha) se completan una vez; repetirlo no cambia la hora.
 - **`REGISTRO_INTENTO`**: cada aviso que el reloj pidió y el servidor envió a un contacto, con canal, ronda (1 o 2), horas de envío, entrega, lectura (solo WhatsApp) o falla, y la respuesta (botón de WhatsApp o enlace del correo). El estado de entrega es la fecha más avanzada.
   - `event_id` lo genera el reloj al pedir el aviso: si reintenta, no se envía dos veces (2.10.2).
   - Además, un aviso por contacto, canal y ronda (`unique`), aunque el reloj genere otro `event_id` tras reiniciarse.
@@ -203,7 +205,7 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
 
 ## Relaciones
 
-32 relaciones, todas 1 a muchos (dos de ellas uno a uno):
+33 relaciones, todas 1 a muchos (dos de ellas uno a uno):
 
 | Tabla padre | Tablas hijas |
 |---|---|
@@ -213,7 +215,7 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
 | `SMARTWATCH` | `ASIGNACION_RELOJ` |
 | `ASIGNACION_RELOJ` | `SINCRONIZACION`, `ALERTA` |
 | `SINCRONIZACION` | `EVENTO_DESCARTADO`, `REGISTRO_VITAL`, `UBICACION` |
-| `ALERTA` | `ATENCION_ALERTA` (1 a 1), `REGISTRO_INTENTO`, `AVISO_FCM`, `SEGUIMIENTO` |
+| `ALERTA` | `ATENCION_ALERTA` (1 a 1), `DISCREPANCIA_ALERTA`, `REGISTRO_INTENTO`, `AVISO_FCM`, `SEGUIMIENTO` |
 | `CONTACTO_PACIENTE` | `REGISTRO_INTENTO` |
 | `DESTINO_DERIVACION` | `SEGUIMIENTO` |
 | `ROL` | `USUARIO`, `PERMISO_ROL` |

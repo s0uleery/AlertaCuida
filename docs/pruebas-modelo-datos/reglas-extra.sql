@@ -105,3 +105,11 @@ ALTER TABLE "ZONA_SEGURA" ADD CONSTRAINT zona_segura_radio CHECK (radio_metros >
 ALTER TABLE "ALERTA" ADD CONSTRAINT alerta_boton_leve CHECK (tipo_evento <> 'BOTON_AYUDA' OR severidad = 'LEVE');
 ALTER TABLE "USUARIO" ADD CONSTRAINT usuario_opt_in_telefono CHECK (fecha_opt_in IS NULL OR telefono IS NOT NULL);
 ALTER TABLE "USUARIO" ADD CONSTRAINT usuario_revocacion_opt_in CHECK (fecha_revocacion_opt_in IS NULL OR fecha_opt_in IS NOT NULL);
+
+-- Discrepancias, agravamiento y exceso de alertas (migración V10)
+ALTER TABLE "ALERTA" DROP CONSTRAINT alerta_servidor_tecnica;
+ALTER TABLE "ALERTA" ADD CONSTRAINT alerta_servidor_tecnica CHECK (origen = 'RELOJ' OR es_simulacro OR tipo_evento IN ('SILENCIO_DATOS', 'BATERIA_BAJA', 'RELOJ_NO_PUESTO', 'EXCESO_ALERTAS'));
+ALTER TABLE "ALERTA" ADD CONSTRAINT alerta_exceso_servidor CHECK (tipo_evento <> 'EXCESO_ALERTAS' OR origen = 'SERVIDOR');
+ALTER TABLE "ALERTA" ADD CONSTRAINT alerta_inmovilidad_positiva CHECK (segundos_inmovilidad_agravamiento >= 0);
+ALTER TABLE "ALERTA" ADD CONSTRAINT alerta_inmovilidad_agravamiento CHECK (segundos_inmovilidad_agravamiento IS NULL OR fecha_hora_agravamiento IS NOT NULL);
+ALTER TABLE "EVENTO_DESCARTADO" ADD CONSTRAINT evento_descartado_exceso CHECK (tipo_evento <> 'EXCESO_ALERTAS');

@@ -181,8 +181,10 @@ paths:
     post:
       tags: [Alertas]
       operationId: agravarAlerta
-      summary: "[Pendiente 2.1.3] Una caída leve o media pasa a grave por inmovilidad posterior"
-      description: Repetirlo no cambia la hora ya registrada.
+      summary: Una caída leve o media pasa a grave por inmovilidad posterior
+      description: |
+        Repetirlo no cambia la hora ya registrada (responde 200 igual). 409 `NO_APLICA` si la alerta no es
+        una caída, llegó grave o la canceló el paciente. `segundosInmovilidad` se guarda junto a la hora.
       requestBody:
         required: true
         content:

@@ -4,9 +4,11 @@ import cl.ucn.alertacuida.adapters.seguridad.dispositivo.PrincipalReloj;
 import cl.ucn.alertacuida.application.alerta.RecibirAlerta;
 import cl.ucn.alertacuida.application.alerta.modelo.AlertaRecibida;
 import cl.ucn.alertacuida.application.alerta.modelo.EstadoAlerta;
+import cl.ucn.alertacuida.application.alerta.modelo.LecturaEvidencia;
 import cl.ucn.alertacuida.application.alerta.modelo.RespuestaAlerta;
 import cl.ucn.alertacuida.application.alerta.modelo.ResultadoAlerta;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,7 +22,8 @@ import org.springframework.web.bind.annotation.RestController;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Alertas que envía el reloj, las que canceló el paciente y la consulta de su estado. Solo las
+ * Alertas que envía el reloj, las que canceló el paciente, el agravamiento de una caída y la
+ * consulta de su estado. Solo las
  * llama un reloj con su token. Las alertas se identifican por el eventId del reloj.
  */
 @RestController
@@ -45,8 +48,21 @@ public class AlertasRelojController {
 			@AuthenticationPrincipal PrincipalReloj principal) {
 		AlertaRecibida alerta = new AlertaRecibida(solicitud.eventId(), solicitud.tipoEvento(), solicitud.severidad(),
 				solicitud.versionConfiguracion(), solicitud.fechaHoraDeteccion(), solicitud.fechaHoraEnvio(),
-				solicitud.esperaDiaHabil(), null, evidencia(solicitud.evidencia()));
+				solicitud.esperaDiaHabil(), null, evidencia(solicitud.evidencia()), lecturas(solicitud.evidencia()));
 		return respuesta(recibir.recibir(principal.reloj(), alerta));
+	}
+
+	/**
+	 * Una caída leve o media que pasó a grave por inmovilidad. Repetirlo no cambia la hora.
+	 *
+	 * @return 200 con el estado. 404 si la alerta no es de este reloj; 409 si no es una caída, llegó
+	 *         grave o se canceló
+	 */
+	@PostMapping("/alertas/{eventIdAlerta}/agravamiento")
+	public EstadoAlerta agravar(@PathVariable UUID eventIdAlerta, @Valid @RequestBody SolicitudAgravamiento solicitud,
+			@AuthenticationPrincipal PrincipalReloj principal) {
+		return recibir.agravar(principal.reloj(), eventIdAlerta, solicitud.fechaHoraAgravamiento(),
+				solicitud.segundosInmovilidad());
 	}
 
 	/** @return 201 con la alerta cancelada; 200 si ya había llegado. 409 si ese eventId se envió como alerta */
@@ -69,6 +85,15 @@ public class AlertasRelojController {
 	private static ResponseEntity<RespuestaAlerta> respuesta(ResultadoAlerta resultado) {
 		HttpStatus estado = resultado.nueva() ? HttpStatus.CREATED : HttpStatus.OK;
 		return ResponseEntity.status(estado).body(resultado.respuesta());
+	}
+
+	/** @return las lecturas de la evidencia, para compararlas con los umbrales; vacía si no trae */
+	private static List<LecturaEvidencia> lecturas(EvidenciaReloj evidencia) {
+		if (evidencia == null || evidencia.lecturas() == null) {
+			return List.of();
+		}
+		return evidencia.lecturas().stream().map(lectura -> new LecturaEvidencia(lectura.tipo(), lectura.valor()))
+				.toList();
 	}
 
 	/** @return la evidencia como texto JSON, o null si no vino */

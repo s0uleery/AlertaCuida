@@ -15,7 +15,8 @@ export type TipoEvento =
   | 'BOTON_AYUDA'
   | 'SILENCIO_DATOS'
   | 'BATERIA_BAJA'
-  | 'RELOJ_NO_PUESTO';
+  | 'RELOJ_NO_PUESTO'
+  | 'EXCESO_ALERTAS';
 
 /** Lo que ha hecho el equipo PRLAC con la alerta. */
 export type EstadoAtencion = 'SIN_ASIGNAR' | 'EN_ATENCION' | 'EN_SEGUIMIENTO' | 'RESUELTA';

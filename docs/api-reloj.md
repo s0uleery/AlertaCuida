@@ -58,7 +58,9 @@ Si nadie confirma, el reloj recorre la lista dos veces y termina con `POST /aler
 - **Una lectura mala no traba la sincronización.** Las lecturas fuera de rango (FC fuera de 20 a 250; SpO2 fuera de 50 a 100), con hora futura o anteriores a la asignación se descartan una por una y se informan en `lecturasRechazadas`. Si se rechazara el lote completo, el reloj lo reintentaría para siempre. Las lecturas repetidas se ignoran sin error (`lecturasRepetidas`).
 - **Una alerta nunca se rechaza por su contenido.** Si la evidencia no calza con la configuración vigente, el servidor la acepta y marca la discrepancia (2.1.2). Solo responde 400 si el mensaje está mal formado (falta un campo, un tipo no existe); eso es un error de programación del reloj, y el reloj debe mostrar "No se pudo avisar".
 - **La cancelación es un mensaje aparte.** Una alerta cancelada nunca se envió como alerta; se informa después, cuando haya conexión, solo para métricas.
-- **El agravamiento aal ctualiza la alerta existente** (2.1.3): no crea otra. Solo vale para caídas leves o medias.
+- **El agravamiento actualiza la alerta existente** (2.1.3): no crea otra. Solo vale para caídas leves o medias, no canceladas; repetirlo no cambia la hora. Guarda también los segundos de inmovilidad.
+- **Discrepancias** (2.1.2): el servidor compara cada alerta con la configuración vigente (versión, módulo activo, gravedad configurada de tendencia y zona, y que las lecturas superen los umbrales). Si algo no calza, la acepta igual y guarda la discrepancia para el equipo; el reloj no recibe nada distinto.
+- **Exceso de alertas** (2.1.4): desde la 10.ª alerta de un reloj (sin contar cancelaciones) en 60 minutos, el servidor las acepta todas y crea una alerta técnica `EXCESO_ALERTAS`, leve, para revisar el reloj. Nunca responde 429 por esto.
 - **Hora del reloj desfasada:** se acepta igual. Si la diferencia con el servidor supera 120 s, la respuesta de la sincronización la informa (`desfaseRelojSegundos`) y el dashboard la muestra.
 - **Configuración por versión.** La `version` es un hash del contenido, el mismo que guarda la base (`hash_configuracion`). Cambia con cualquier dato, incluso el nombre o el horario de un contacto. La sincronización avisa si el reloj tiene una versión distinta (`configuracionNueva`); el reloj la descarga con `GET /configuracion` y `If-None-Match`, y el servidor responde 304 si ya es la vigente. Así no viaja en cada sincronización.
 - **La configuración trae todo para trabajar sin conexión:** módulos, umbrales (con los valores base si el paciente no tiene ajustes), plazo de espera, contactos, horario hábil y feriados. Los contactos van sin número ni correo: el reloj pide los avisos por `idContacto` (el vínculo `contacto_paciente`) y el servidor elige el número o el correo.
@@ -75,7 +77,7 @@ Si nadie confirma, el reloj recorre la lista dos veces y termina con `POST /aler
 | Mensaje | Tablas |
 |---|---|
 | Sincronización | `sincronizacion`, `registro_vital`, `ubicacion`, `evento_descartado` |
-| Alerta, cancelación y agravamiento | `alerta` (el estado lo calcula la vista `alerta_estado`) |
+| Alerta, cancelación y agravamiento | `alerta` (el estado lo calcula la vista `alerta_estado`) y `discrepancia_alerta` |
 | Solicitud de aviso | `registro_intento` |
 | Webhook de WhatsApp | `registro_intento` (entrega, lectura, fallo y respuesta) |
 | Fin del escalamiento | `alerta.fecha_hora_sin_respuesta` |
@@ -108,5 +110,6 @@ Si nadie confirma, el reloj recorre la lista dos veces y termina con `POST /aler
 ## Pendiente
 
 - Ya implementados: sincronización, alertas, cancelaciones y estado de una alerta (25-10-2026, tarea 1.4); configuración y token de Firebase (27-10-2026, tarea 1.7). Detalle en [backend.md](backend.md#api-del-reloj).
-- Por implementar: 2.1.3 (agravamiento), 2.3 (avisos FCM y acuse), 2.9 (webhook) y 2.10 (solicitud de aviso y fin del escalamiento).
+- Implementado el 05-11-2026 (tarea 2.1): agravamiento, discrepancias y exceso de alertas.
+- Por implementar: 2.3 (avisos FCM y acuse), 2.9 (webhook) y 2.10 (solicitud de aviso y fin del escalamiento).
 - Definir con TI el subdominio público (0.8); en el contrato figura uno de ejemplo.

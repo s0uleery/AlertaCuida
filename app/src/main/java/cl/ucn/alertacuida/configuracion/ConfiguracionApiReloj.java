@@ -1,6 +1,7 @@
 package cl.ucn.alertacuida.configuracion;
 
 import cl.ucn.alertacuida.application.alerta.RecibirAlerta;
+import cl.ucn.alertacuida.application.alerta.RevisionDiscrepancias;
 import cl.ucn.alertacuida.application.alerta.puerto.Alertas;
 import cl.ucn.alertacuida.application.asignacion.AutenticarReloj;
 import cl.ucn.alertacuida.application.asignacion.puerto.Asignaciones;
@@ -16,6 +17,7 @@ import cl.ucn.alertacuida.application.telemetria.RecibirSincronizacion;
 import cl.ucn.alertacuida.application.telemetria.puerto.Sincronizaciones;
 import cl.ucn.alertacuida.domain.calendario.CalendarioHabil;
 import java.time.Clock;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -24,6 +26,7 @@ import org.springframework.context.annotation.Configuration;
  * {@link ConfiguracionPacientesYRelojes}, que tiene los del dashboard.
  */
 @Configuration
+@EnableConfigurationProperties(PropiedadesAlertas.class)
 public class ConfiguracionApiReloj {
 
 	/** Reconoce al reloj por su token en cada petición. */
@@ -50,10 +53,18 @@ public class ConfiguracionApiReloj {
 		return new RecibirSincronizacion(sincronizaciones, configuraciones, transacciones, reloj);
 	}
 
-	/** Alertas del reloj, cancelaciones del paciente y estado de cada alerta. */
+	/** Compara cada alerta nueva con la configuración vigente del paciente. */
 	@Bean
-	RecibirAlerta recibirAlerta(Alertas alertas, Clock reloj) {
-		return new RecibirAlerta(alertas, reloj);
+	RevisionDiscrepancias revisionDiscrepancias(ConfiguracionDelReloj configuraciones, PerfilClinicoPaciente perfiles,
+			PropiedadesClinicas propiedades) {
+		return new RevisionDiscrepancias(configuraciones, perfiles, propiedades.severidadTendencia());
+	}
+
+	/** Alertas del reloj, cancelaciones del paciente, agravamiento y estado de cada alerta. */
+	@Bean
+	RecibirAlerta recibirAlerta(Alertas alertas, RevisionDiscrepancias revision, PropiedadesAlertas propiedades,
+			Transacciones transacciones, Clock reloj) {
+		return new RecibirAlerta(alertas, revision, propiedades.limite(), transacciones, reloj);
 	}
 
 	/** Token de Firebase de cada reloj, para enviarle avisos. */

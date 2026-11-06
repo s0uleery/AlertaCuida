@@ -240,13 +240,14 @@ Deciden si una alerta leve avisa o espera al día hábil, y a quién se avisa.
 
 ## API del reloj
 
-Lo que llama el reloj (o el simulador), según el contrato de [api-reloj.md](api-reloj.md). Implementado: sincronización, alertas, cancelaciones, estado de una alerta, configuración y token de Firebase. Falta: agravamiento (2.1.3), solicitud de aviso y fin del escalamiento (2.10), acuse de avisos FCM (2.3) y webhook de WhatsApp (2.9).
+Lo que llama el reloj (o el simulador), según el contrato de [api-reloj.md](api-reloj.md). Implementado: sincronización, alertas (con discrepancias y exceso), cancelaciones, agravamiento, estado de una alerta, configuración y token de Firebase. Falta: solicitud de aviso y fin del escalamiento (2.10), acuse de avisos FCM (2.3) y webhook de WhatsApp (2.9).
 
 | Endpoint | Caso de uso | Guarda en |
 |---|---|---|
 | `POST /api/reloj/v1/sincronizaciones` | `RecibirSincronizacion` | `sincronizacion`, `registro_vital`, `ubicacion`, `evento_descartado` |
-| `POST /api/reloj/v1/alertas` | `RecibirAlerta.recibir` | `alerta` (origen `RELOJ`, evidencia en `jsonb`) |
+| `POST /api/reloj/v1/alertas` | `RecibirAlerta.recibir` | `alerta` (origen `RELOJ`, evidencia en `jsonb`), `discrepancia_alerta` y, si hay exceso, una `alerta` técnica |
 | `POST /api/reloj/v1/cancelaciones` | `RecibirAlerta.registrarCancelacion` | `alerta` con `fecha_hora_cancelacion` |
+| `POST /api/reloj/v1/alertas/{eventId}/agravamiento` | `RecibirAlerta.agravar` | `alerta.fecha_hora_agravamiento` y `segundos_inmovilidad_agravamiento` |
 | `GET /api/reloj/v1/alertas/{eventId}` | `RecibirAlerta.estado` | — (lee la vista `alerta_estado`) |
 | `GET /api/reloj/v1/configuracion` | `ConfiguracionDelReloj.armar` | — (se calcula de lo vigente) |
 | `PUT /api/reloj/v1/token-fcm` | `RegistrarTokenFcm` | `smartwatch.token_fcm` y `fecha_token_fcm` |
@@ -258,6 +259,9 @@ Reglas:
 - **Idempotencia:** `INSERT … ON CONFLICT DO NOTHING` por `event_id`. Un reenvío devuelve lo guardado la primera vez (`loteRepetido: true`; la alerta, con 200 en vez de 201). Dos reenvíos simultáneos tampoco duplican. Un `eventId` de otro reloj responde 409.
 - **Lecturas:** se descartan una por una (sin rechazar el lote) si están fuera del rango del sensor (FC de 20 a 250, SpO2 de 50 a 100, en `TipoLectura`), si son futuras (más de 5 min) o anteriores a la entrega del reloj. Las repetidas (misma asignación, tipo y hora) las ignora la base. Se insertan en un solo viaje (batch).
 - **Alertas:** nunca se rechazan por su contenido, solo si están mal formadas. Una media o grave marcada "espera día hábil" se guarda sin la marca (esas avisan siempre). Un `BOTON_AYUDA` que llega con otra gravedad se guarda como leve (regla `alerta_boton_leve` de V9), para no perder un pedido de ayuda. `SILENCIO_DATOS` no lo envía el reloj.
+- **Discrepancias (`RevisionDiscrepancias`, 2.1.2):** al recibir una alerta nueva (no las cancelaciones) se compara con lo vigente del paciente y se guarda en `discrepancia_alerta` lo que no calza. Revisa cuatro cosas: `VERSION_DISTINTA` (la versión que informa no es la que calcula hoy `ConfiguracionDelReloj`), `MODULO_APAGADO` (el módulo de ese tipo está apagado; `FC_SPO2` exige FC y SpO2), `GRAVEDAD_DISTINTA` (tendencia distinta de `severidad-tendencia`, zona distinta de la de su zona; FC y SpO2 esperan la matriz del Anexo B) y `LECTURAS_EN_RANGO` (FC o SpO2: ninguna lectura más allá del límite grave; tendencia y `FC_SPO2`: todas dentro del rango normal; sin lecturas no se marca). Si la revisión misma falla, la alerta se guarda igual, sin discrepancias.
+- **Exceso de alertas (2.1.4):** en la misma transacción se cuentan las alertas del reloj del vínculo en la ventana: no cuentan las que el paciente canceló, y una recibida hace justo 60 minutos ya no entra (decidido por ella el 05-11-2026). Desde la alerta número `avisar-desde` (10), contando la que llega, se crea una alerta técnica `EXCESO_ALERTAS` leve, salvo que ya haya una abierta (sin cierre del equipo) del mismo vínculo; `pg_advisory_xact_lock` evita crear dos si llegan a la vez. Nunca se responde 429 por esto.
+- **Agravamiento (2.1.3):** solo una caída leve o media, no cancelada (si no, 409 `NO_APLICA`); de otro reloj o desconocida, 404. La actualización tiene la condición `fecha_hora_agravamiento IS NULL`: repetirlo no cambia la hora.
 - **Errores:** `ErroresApiReloj` responde en RFC 9457 con `codigo` (`MENSAJE_INVALIDO`, `ALERTA_DESCONOCIDA`, `NO_APLICA`, `LOTE_GRANDE`), solo para los controladores del reloj.
 - **Hora del reloj:** si difiere más de 120 s de la del servidor, se acepta igual y la respuesta informa `desfaseRelojSegundos`.
 - **Sin auditoría:** lo que escribe el reloj no va a `registro_auditoria`; queda en sus propias tablas con la hora de recepción.
@@ -347,6 +351,7 @@ Valores base del Anexo B (`alertacuida.clinica.*`), **provisionales** hasta que 
 | `minutos-espera` | 5 |
 | `minutos-tendencia` | 120 (mínimo 30, el intervalo de las lecturas) |
 | `severidad-tendencia` | `MEDIA` (`LEVE`, `MEDIA` o `GRAVE`) |
+| `alertacuida.alertas.avisar-desde` / `ventana-minutos` | 10 / 60: desde la 10.ª alerta del mismo reloj en 60 min se crea `EXCESO_ALERTAS` |
 
 ### Regla de tendencia: dónde cambiar cada parte
 

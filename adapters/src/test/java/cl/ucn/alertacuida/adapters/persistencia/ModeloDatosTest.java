@@ -273,13 +273,13 @@ class ModeloDatosTest {
 	private DynamicContainer estructura() {
 		return grupo("1. Estructura de la base (migraciones)",
 			c.vale("Migraciones aplicadas por Flyway", """
-					SELECT count(*) n FROM flyway_schema_history WHERE success AND version IS NOT NULL""", 9),
+					SELECT count(*) n FROM flyway_schema_history WHERE success AND version IS NOT NULL""", 10),
 			c.vale("Cantidad de tablas", """
 					SELECT count(*) n FROM information_schema.tables WHERE table_schema = 'public'
-					AND table_type = 'BASE TABLE' AND table_name <> 'flyway_schema_history'""", 29),
+					AND table_type = 'BASE TABLE' AND table_name <> 'flyway_schema_history'""", 30),
 			c.vale("Cantidad de relaciones (claves foráneas)", """
 					SELECT count(*) n FROM information_schema.table_constraints
-					WHERE table_schema = 'public' AND constraint_type = 'FOREIGN KEY'""", 32),
+					WHERE table_schema = 'public' AND constraint_type = 'FOREIGN KEY'""", 33),
 			c.vale("Tablas sueltas (sin ninguna relación)", """
 					SELECT count(*) n FROM information_schema.tables t
 					WHERE t.table_schema = 'public' AND t.table_type = 'BASE TABLE'
@@ -847,8 +847,27 @@ class ModeloDatosTest {
 					UPDATE registro_intento SET respuesta = 'NO_PUEDO', fecha_hora_respuesta = now()
 					WHERE id_externo = 'wamid.1'"""),
 			estado("Sigue avisando", "CAIDA_MARIA", "AVISANDO_CONTACTO", "SIN_ASIGNAR"),
-			c.acepta("La caída se agrava por inmovilidad",
-					"UPDATE alerta SET fecha_hora_agravamiento = now() WHERE id_alerta = '{CAIDA_MARIA}'"),
+			c.rechaza("Segundos de inmovilidad sin agravamiento",
+					"UPDATE alerta SET segundos_inmovilidad_agravamiento = 90 WHERE id_alerta = '{CAIDA_MARIA}'",
+					CHECK),
+			c.acepta("La caída se agrava por inmovilidad (90 s sin moverse)", """
+					UPDATE alerta SET fecha_hora_agravamiento = now(), segundos_inmovilidad_agravamiento = 90
+					WHERE id_alerta = '{CAIDA_MARIA}'"""),
+			c.rechaza("Segundos de inmovilidad negativos",
+					"UPDATE alerta SET segundos_inmovilidad_agravamiento = -1 WHERE id_alerta = '{CAIDA_MARIA}'",
+					CHECK),
+			c.acepta("La caída llegó con una discrepancia: el reloj usaba otra versión de la configuración", """
+					INSERT INTO discrepancia_alerta (id_alerta, codigo, detalle)
+					VALUES ('{CAIDA_MARIA}', 'VERSION_DISTINTA', 'El reloj usó la versión h0; la vigente es h1')"""),
+			c.rechaza("La misma discrepancia dos veces en la alerta", """
+					INSERT INTO discrepancia_alerta (id_alerta, codigo, detalle)
+					VALUES ('{CAIDA_MARIA}', 'VERSION_DISTINTA', 'otra vez')""", UNICO),
+			c.rechaza("Discrepancia con un código que no existe", """
+					INSERT INTO discrepancia_alerta (id_alerta, codigo, detalle)
+					VALUES ('{CAIDA_MARIA}', 'HORA_RARA', 'x')""", CHECK),
+			c.rechaza("Discrepancia de una alerta que no existe", """
+					INSERT INTO discrepancia_alerta (id_alerta, codigo, detalle)
+					VALUES ('{ALERTA_INEXISTENTE}', 'MODULO_APAGADO', 'x')""", FORANEA),
 			c.vale("Conserva la gravedad con que llegó",
 					"SELECT severidad n FROM alerta WHERE id_alerta = '{CAIDA_MARIA}'", "MEDIA"),
 			c.vale("Gravedad actual calculada",
@@ -1046,7 +1065,14 @@ class ModeloDatosTest {
 			c.acepta("El servidor crea una alerta de batería baja (técnica, se deshace)",
 					"BEGIN; " + alertaServidor("ALERTA_X4", "A_PEDRO", "BATERIA_BAJA") + "; ROLLBACK"),
 			c.rechaza("El reloj informa un silencio de datos (solo lo puede detectar el servidor)",
-					alertaReloj("ALERTA_X5", "A_PEDRO", "SILENCIO_DATOS", "LEVE"), CHECK));
+					alertaReloj("ALERTA_X5", "A_PEDRO", "SILENCIO_DATOS", "LEVE"), CHECK),
+			c.acepta("El servidor crea una alerta por exceso de alertas del reloj (técnica, se deshace)",
+					"BEGIN; " + alertaServidor("ALERTA_X4", "A_PEDRO", "EXCESO_ALERTAS") + "; ROLLBACK"),
+			c.rechaza("El reloj informa un exceso de alertas (solo lo puede detectar el servidor)",
+					alertaReloj("ALERTA_X5", "A_PEDRO", "EXCESO_ALERTAS", "LEVE"), CHECK),
+			c.vale("Una cuenta nueva no recibe avisos por correo hasta que se encienda", """
+					SELECT column_default n FROM information_schema.columns
+					WHERE table_name = 'usuario' AND column_name = 'recibe_avisos'""", "false"));
 	}
 
 	/** Idempotencia: el mismo event_id no se guarda dos veces aunque el reloj reintente. */
@@ -1183,7 +1209,8 @@ class ModeloDatosTest {
 					+ (SELECT count(*) FROM atencion_alerta WHERE id_alerta = '{CAIDA_MARIA}')
 					+ (SELECT count(*) FROM registro_intento WHERE id_alerta = '{CAIDA_MARIA}')
 					+ (SELECT count(*) FROM aviso_fcm WHERE id_alerta = '{CAIDA_MARIA}')
-					+ (SELECT count(*) FROM seguimiento WHERE id_alerta = '{CAIDA_MARIA}') n""", 0),
+					+ (SELECT count(*) FROM seguimiento WHERE id_alerta = '{CAIDA_MARIA}')
+					+ (SELECT count(*) FROM discrepancia_alerta WHERE id_alerta = '{CAIDA_MARIA}') n""", 0),
 			c.vale("Pedro y Rosa conservan sus datos (5 vínculos + 8 alertas)", """
 					SELECT (SELECT count(*) FROM contacto_paciente WHERE id_paciente IN ('{PEDRO}', '{ROSA}'))
 					+ (SELECT count(*) FROM alerta a JOIN asignacion_reloj r USING (id_asignacion)

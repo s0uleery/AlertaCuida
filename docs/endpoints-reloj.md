@@ -32,6 +32,7 @@ Lo que el backend **ya atiende** para el reloj (o el simulador), al 26 de octubr
 | `POST /api/reloj/v1/sincronizaciones` | Cada 2 h, o al bajar del 15 % de batería | 200 |
 | `POST /api/reloj/v1/alertas` | Al terminar la ventana de 30 s sin cancelación | 201 nueva, 200 reenvío |
 | `POST /api/reloj/v1/cancelaciones` | Si el paciente canceló dentro de los 30 s (solo métricas) | 201 nueva, 200 reenvío |
+| `POST /api/reloj/v1/alertas/{eventId}/agravamiento` | Si una caída leve o media pasa a grave por inmovilidad | 200 |
 | `GET /api/reloj/v1/alertas/{eventId}` | Antes de pasar al siguiente contacto | 200 |
 | `GET /api/reloj/v1/configuracion` | Si la sincronización responde `configuracionNueva: true` | 200, 304 si no cambió |
 | `PUT /api/reloj/v1/token-fcm` | Al instalarse y cada vez que Firebase renueva el token | 204 |
@@ -142,6 +143,18 @@ Respuesta 201 (o 200 si es un reenvío, con el mismo cuerpo):
 ```
 **Una alerta nunca se rechaza por su contenido:** si la evidencia no calza con la configuración, el servidor igual la guarda. Solo responde 400 si el mensaje está mal formado.
 
+- **Discrepancias:** el servidor guarda, para el equipo, lo que no calza con la configuración vigente: otra versión, un módulo apagado, una gravedad distinta de la configurada (tendencia y zona segura) o lecturas que no superan los umbrales. La respuesta al reloj no cambia.
+- **Exceso de alertas:** desde la 10.ª alerta (sin contar cancelaciones) en 60 minutos, el servidor crea una alerta técnica `EXCESO_ALERTAS` para revisar el reloj. Todas las alertas se guardan igual.
+
+## `POST /api/reloj/v1/alertas/{eventId}/agravamiento`
+
+Una caída leve o media pasa a grave porque la persona sigue sin moverse.
+
+```json
+{ "fechaHoraAgravamiento": "2026-10-26T15:12:00Z", "segundosInmovilidad": 90 }
+```
+Responde 200 con el estado de la alerta (`severidadActual: "GRAVE"`). Repetirlo no cambia la hora ya registrada. 404 `ALERTA_DESCONOCIDA` si este reloj no envió esa alerta; 409 `NO_APLICA` si no es una caída, llegó grave o la canceló el paciente.
+
 ## `POST /api/reloj/v1/cancelaciones`
 
 La alerta que el paciente canceló en los 30 s nunca se envió como alerta. Se informa después, cuando haya conexión, solo para métricas.
@@ -227,7 +240,6 @@ Están definidos en el contrato ([api-reloj.yaml](api-reloj.yaml)), pero el serv
 
 | Método y ruta | Para qué | Cronograma |
 |---|---|---|
-| `POST /api/reloj/v1/alertas/{eventId}/agravamiento` | Caída leve o media que pasa a grave por inmovilidad | 2.1.3 |
 | `POST /api/reloj/v1/avisos-fcm/{idAviso}/recepcion` | Acusar que llegó un aviso FCM | 2.3 |
 | `POST /api/reloj/v1/alertas/{eventId}/avisos` | Pedir al servidor que avise a un contacto | 2.10 |
 | `POST /api/reloj/v1/alertas/{eventId}/sin-respuesta` | Informar que se recorrió la lista dos veces sin confirmación | 2.10 |

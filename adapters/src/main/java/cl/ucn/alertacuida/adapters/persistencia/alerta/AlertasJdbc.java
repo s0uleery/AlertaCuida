@@ -3,21 +3,25 @@ package cl.ucn.alertacuida.adapters.persistencia.alerta;
 import cl.ucn.alertacuida.application.alerta.modelo.AlertaGuardada;
 import cl.ucn.alertacuida.application.alerta.modelo.AlertaRecibida;
 import cl.ucn.alertacuida.application.alerta.modelo.ConfirmacionContacto;
+import cl.ucn.alertacuida.application.alerta.modelo.Discrepancia;
 import cl.ucn.alertacuida.application.alerta.modelo.EstadoAlerta;
 import cl.ucn.alertacuida.application.alerta.puerto.Alertas;
 import cl.ucn.alertacuida.domain.alerta.EstadoContacto;
 import cl.ucn.alertacuida.domain.alerta.Severidad;
+import cl.ucn.alertacuida.domain.alerta.TipoEvento;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * Alertas en la tabla alerta. El estado no se guarda: se lee de la vista alerta_estado.
+ * Alertas en las tablas alerta y discrepancia_alerta. El estado no se guarda: se lee de la vista
+ * alerta_estado.
  *
  * <p>Una alerta por eventId: si dos reintentos llegan a la vez, {@code ON CONFLICT DO NOTHING}
  * guarda solo el primero.
@@ -35,7 +39,8 @@ public class AlertasJdbc implements Alertas {
 	@Override
 	public Optional<AlertaGuardada> buscar(UUID eventId) {
 		return jdbc.sql("""
-				SELECT id_alerta, id_asignacion, numero, fecha_hora_cancelacion IS NOT NULL AS cancelada
+				SELECT id_alerta, id_asignacion, numero, tipo_evento, severidad,
+					fecha_hora_cancelacion IS NOT NULL AS cancelada, fecha_hora_agravamiento IS NOT NULL AS agravada
 				FROM alerta WHERE event_id = :eventId""")
 				.param("eventId", eventId)
 				.query((fila, n) -> guardada(fila))
@@ -52,7 +57,8 @@ public class AlertasJdbc implements Alertas {
 				VALUES (:eventId, :asignacion, :configuracion, 'RELOJ', :tipo, :severidad, CAST(:evidencia AS jsonb),
 					:espera, :deteccion, :envio, :recepcion, :cancelacion)
 				ON CONFLICT (event_id) DO NOTHING
-				RETURNING id_alerta, id_asignacion, numero, fecha_hora_cancelacion IS NOT NULL AS cancelada""")
+				RETURNING id_alerta, id_asignacion, numero, tipo_evento, severidad,
+					fecha_hora_cancelacion IS NOT NULL AS cancelada, fecha_hora_agravamiento IS NOT NULL AS agravada""")
 				.param("eventId", alerta.eventId())
 				.param("asignacion", idAsignacion)
 				.param("configuracion", alerta.versionConfiguracion())
@@ -93,10 +99,77 @@ public class AlertasJdbc implements Alertas {
 				.single();
 	}
 
-	/** Arma una {@link AlertaGuardada} desde una fila con id_alerta, id_asignacion, numero y cancelada. */
+	/** Una fila por discrepancia; sin discrepancias no hace nada. */
+	@Override
+	public void guardarDiscrepancias(UUID idAlerta, List<Discrepancia> discrepancias) {
+		for (Discrepancia discrepancia : discrepancias) {
+			jdbc.sql("INSERT INTO discrepancia_alerta (id_alerta, codigo, detalle) VALUES (:alerta, :codigo, :detalle)")
+					.param("alerta", idAlerta)
+					.param("codigo", discrepancia.codigo().name())
+					.param("detalle", discrepancia.detalle())
+					.update();
+		}
+	}
+
+	/** Usa el índice (id_asignacion, fecha_hora_recepcion) de V5. */
+	@Override
+	public int contarRecientes(UUID idAsignacion, Instant desde) {
+		return jdbc.sql("""
+				SELECT count(*) FROM alerta
+				WHERE id_asignacion = :asignacion AND origen = 'RELOJ' AND fecha_hora_cancelacion IS NULL
+					AND fecha_hora_recepcion > :desde""")
+				.param("asignacion", idAsignacion)
+				.param("desde", marca(desde))
+				.query(Integer.class)
+				.single();
+	}
+
+	/**
+	 * El candado (pg_advisory_xact_lock por vínculo y tipo, nota de ALERTA en el modelo) hace esperar a
+	 * una segunda llamada simultánea hasta que la primera termine su transacción; así ve la alerta ya
+	 * creada y no crea otra. "Abierta" = sin cierre en atencion_alerta.
+	 */
+	@Override
+	public boolean crearTecnicaSiNoHayAbierta(UUID idAsignacion, TipoEvento tipo, Severidad severidad,
+			String detalle, Instant ahora) {
+		jdbc.sql("SELECT pg_advisory_xact_lock(hashtextextended(:clave, 0))")
+				.param("clave", idAsignacion + ":" + tipo.name())
+				.query((fila, n) -> 1)
+				.single();
+		return jdbc.sql("""
+				INSERT INTO alerta (event_id, id_asignacion, origen, tipo_evento, severidad, evidencia,
+					fecha_hora_deteccion, fecha_hora_recepcion)
+				SELECT gen_random_uuid(), :asignacion, 'SERVIDOR', :tipo, :severidad, CAST(:detalle AS jsonb),
+					:ahora, :ahora
+				WHERE NOT EXISTS (
+					SELECT 1 FROM alerta a LEFT JOIN atencion_alerta t USING (id_alerta)
+					WHERE a.id_asignacion = :asignacion AND a.tipo_evento = :tipo AND t.fecha_hora_cierre IS NULL)""")
+				.param("asignacion", idAsignacion)
+				.param("tipo", tipo.name())
+				.param("severidad", severidad.name())
+				.param("detalle", detalle)
+				.param("ahora", marca(ahora))
+				.update() == 1;
+	}
+
+	/** La condición {@code fecha_hora_agravamiento IS NULL} hace que repetirlo no cambie la hora. */
+	@Override
+	public boolean agravar(UUID idAlerta, Instant fecha, Integer segundosInmovilidad) {
+		return jdbc.sql("""
+				UPDATE alerta SET fecha_hora_agravamiento = :fecha, segundos_inmovilidad_agravamiento = :segundos
+				WHERE id_alerta = :id AND fecha_hora_agravamiento IS NULL""")
+				.param("fecha", marca(fecha))
+				.param("segundos", segundosInmovilidad)
+				.param("id", idAlerta)
+				.update() == 1;
+	}
+
+	/** Arma una {@link AlertaGuardada} desde una fila de buscar o crear. */
 	private static AlertaGuardada guardada(ResultSet fila) throws SQLException {
 		return new AlertaGuardada(fila.getObject("id_alerta", UUID.class), fila.getObject("id_asignacion", UUID.class),
-				fila.getLong("numero"), fila.getBoolean("cancelada"));
+				fila.getLong("numero"), TipoEvento.valueOf(fila.getString("tipo_evento")),
+				Severidad.valueOf(fila.getString("severidad")), fila.getBoolean("cancelada"),
+				fila.getBoolean("agravada"));
 	}
 
 	/** @return el instante como Timestamp para JDBC, o null */
