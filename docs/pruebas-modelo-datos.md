@@ -4,10 +4,10 @@ Informe generado automáticamente por [`pruebas-modelo-datos/prueba-modelo.mjs`]
 
 | | |
 |---|---|
-| Fecha | 5 de noviembre de 2026 a las 7:43 p. m. |
+| Fecha | 5 de noviembre de 2026 a las 9:31 p. m. |
 | Modelo | [`modelo-datos.dbml`](modelo-datos.dbml) + [`reglas-extra.sql`](pruebas-modelo-datos/reglas-extra.sql) |
 | Base de datos | PostgreSQL embebido (PGlite 0.2.17), conversión con @dbml/core 3.14.1, Node v26.11.1 |
-| **Resultado** | **299 casos: 285 ✅ · 0 ❌ · 0 ⚠️ · 14 ℹ️** |
+| **Resultado** | **308 casos: 294 ✅ · 0 ❌ · 0 ⚠️ · 14 ℹ️** |
 
 ## Cómo repetir las pruebas
 
@@ -39,11 +39,11 @@ Cada ejecución crea la base desde cero en memoria, con datos inventados (pacien
 | 7. Relojes y asignaciones | 23 | 20 | 0 | 0 | 3 |
 | 8. Datos recibidos del reloj (lotes, lecturas, GPS) | 19 | 19 | 0 | 0 | 0 |
 | 9. Configuración pendiente en el reloj (por hash) | 5 | 5 | 0 | 0 | 0 |
-| 10. Flujo completo de una alerta (caída de María) | 36 | 34 | 0 | 0 | 2 |
+| 10. Flujo completo de una alerta (caída de María) | 42 | 40 | 0 | 0 | 2 |
 | 11. Reglas de la atención (ATENCION_ALERTA) | 13 | 13 | 0 | 0 | 0 |
 | 12. Gravedad y horario (leve, media y grave de madrugada) | 18 | 18 | 0 | 0 | 0 |
 | 13. Cancelación por el paciente y simulacro | 7 | 5 | 0 | 0 | 2 |
-| 14. Alertas técnicas del servidor | 15 | 14 | 0 | 0 | 1 |
+| 14. Alertas técnicas del servidor | 18 | 17 | 0 | 0 | 1 |
 | 15. Reintentos y mensajes duplicados (idempotencia) | 7 | 7 | 0 | 0 | 0 |
 | 16. Reglas de los avisos a contactos | 9 | 6 | 0 | 0 | 3 |
 | 17. Datos calculados (reportes, hallazgos, panel) | 9 | 9 | 0 | 0 | 0 |
@@ -67,10 +67,10 @@ Cada ejecución crea la base desde cero en memoria, con datos inventados (pacien
 
 | # | Caso | Esperado | Obtenido | |
 |---|---|---|---|---|
-| 7 | Cantidad de tablas | = 29 | = 29 | ✅ |
+| 7 | Cantidad de tablas | = 30 | = 30 | ✅ |
 | 8 | Tablas sueltas (sin ninguna relación) | = 0 | = 0 | ✅ |
-| 9 | Cantidad de relaciones (claves foráneas) | = 32 | = 32 | ✅ |
-| 10 | Cantidad de tipos (Enum) | = 20 | = 20 | ✅ |
+| 9 | Cantidad de relaciones (claves foráneas) | = 33 | = 33 | ✅ |
+| 10 | Cantidad de tipos (Enum) | = 21 | = 21 | ✅ |
 | 11 | Vistas de datos calculados | = 1 | = 1 | ✅ |
 | 12 | Ninguna columna jsonb en la configuración clínica | = 0 | = 0 | ✅ |
 
@@ -286,167 +286,176 @@ Cada ejecución crea la base desde cero en memoria, con datos inventados (pacien
 | 178 | Estado de entrega calculado desde las fechas | = LEIDO | = LEIDO | ✅ |
 | 179 | La hija responde "No puedo" | Se acepta | Aceptado | ✅ |
 | 180 | Sigue avisando | = AVISANDO_CONTACTO / SIN_ASIGNAR | = AVISANDO_CONTACTO / SIN_ASIGNAR | ✅ |
-| 181 | La caída se agrava por inmovilidad | Se acepta | Aceptado | ✅ |
-| 182 | Conserva la gravedad con que llegó | = MEDIA | = MEDIA | ✅ |
-| 183 | Gravedad actual calculada | = GRAVE | = GRAVE | ✅ |
-| 184 | El reloj pasa a Seguridad Ciudadana (prioridad 2), que responde "Voy en camino" | Se acepta | Aceptado | ✅ |
-| 185 | Estado tras la confirmación | = CONFIRMADA / SIN_ASIGNAR | = CONFIRMADA / SIN_ASIGNAR | ✅ |
-| 186 | Aviso FCM al reloj y el reloj informa que lo recibió | Se acepta | Aceptado | ✅ |
-| 187 | Contacto que confirmó (para la pantalla del reloj) | = Seguridad Ciudadana | = Seguridad Ciudadana | ✅ |
-| 188 | Ana asume el caso | 1 fila(s) afectada(s) | 1 fila(s) afectada(s) | ✅ |
-| 189 | Estado al asumir | = CONFIRMADA / EN_ATENCION | = CONFIRMADA / EN_ATENCION | ✅ |
-| 190 | Luis intenta asumirlo un momento después: no afecta filas (ya lo tomó Ana) | 0 fila(s) afectada(s) | 0 fila(s) afectada(s) | ✅ |
-| 191 | La responsable sigue siendo Ana | = Ana | = Ana | ✅ |
-| 192 | Ana la resuelve como POSITIVA y queda a cargo del seguimiento | Se acepta | Aceptado | ✅ |
-| 193 | Estado tras el cierre | = RESUELTA / EN_SEGUIMIENTO | = RESUELTA / EN_SEGUIMIENTO | ✅ |
-| 194 | Reasignación del seguimiento a Luis | Se acepta | Aceptado | ✅ |
-| 195 | Catálogo de destinos de derivación | Se acepta | Aceptado | ✅ |
-| 196 | Llamada y derivación al CESFAM | Se acepta | Aceptado | ✅ |
-| 197 | "Derivada" se ve en el seguimiento (no es un estado) | = 1 | = 1 | ✅ |
-| 198 | Derivación sin destino | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 199 | Llamada con destino de derivación | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 200 | Derivación a un destino que no existe | Se rechaza (clave foránea) | Rechazado (clave foránea) | ✅ |
-| 201 | Cierre del seguimiento antes del cierre de la alerta | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 202 | Cierre del seguimiento | Se acepta | Aceptado | ✅ |
-| 203 | Estado final | = RESUELTA / RESUELTA | = RESUELTA / RESUELTA | ✅ |
-| 204 | Agregar un seguimiento después del cierre del seguimiento | Lo valida el backend | Aceptado por la base | ℹ️ |
-| 205 | Historial del caso (avisos + FCM + seguimientos) | = 5 | = 5 | ✅ |
-| 206 | El equipo cambia la gravedad con que llegó la alerta | Lo valida el backend | Aceptado por la base | ℹ️ |
+| 181 | Segundos de inmovilidad sin agravamiento | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 182 | La caída se agrava por inmovilidad (90 s sin moverse) | Se acepta | Aceptado | ✅ |
+| 183 | Segundos de inmovilidad negativos | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 184 | La caída llegó con una discrepancia: el reloj usaba otra versión de la configuración | Se acepta | Aceptado | ✅ |
+| 185 | La misma discrepancia dos veces en la alerta | Se rechaza (clave única) | Rechazado (clave única) | ✅ |
+| 186 | Discrepancia con un código que no existe | Se rechaza (valor fuera del enum) | Rechazado (valor fuera del enum) | ✅ |
+| 187 | Discrepancia de una alerta que no existe | Se rechaza (clave foránea) | Rechazado (clave foránea) | ✅ |
+| 188 | Conserva la gravedad con que llegó | = MEDIA | = MEDIA | ✅ |
+| 189 | Gravedad actual calculada | = GRAVE | = GRAVE | ✅ |
+| 190 | El reloj pasa a Seguridad Ciudadana (prioridad 2), que responde "Voy en camino" | Se acepta | Aceptado | ✅ |
+| 191 | Estado tras la confirmación | = CONFIRMADA / SIN_ASIGNAR | = CONFIRMADA / SIN_ASIGNAR | ✅ |
+| 192 | Aviso FCM al reloj y el reloj informa que lo recibió | Se acepta | Aceptado | ✅ |
+| 193 | Contacto que confirmó (para la pantalla del reloj) | = Seguridad Ciudadana | = Seguridad Ciudadana | ✅ |
+| 194 | Ana asume el caso | 1 fila(s) afectada(s) | 1 fila(s) afectada(s) | ✅ |
+| 195 | Estado al asumir | = CONFIRMADA / EN_ATENCION | = CONFIRMADA / EN_ATENCION | ✅ |
+| 196 | Luis intenta asumirlo un momento después: no afecta filas (ya lo tomó Ana) | 0 fila(s) afectada(s) | 0 fila(s) afectada(s) | ✅ |
+| 197 | La responsable sigue siendo Ana | = Ana | = Ana | ✅ |
+| 198 | Ana la resuelve como POSITIVA y queda a cargo del seguimiento | Se acepta | Aceptado | ✅ |
+| 199 | Estado tras el cierre | = RESUELTA / EN_SEGUIMIENTO | = RESUELTA / EN_SEGUIMIENTO | ✅ |
+| 200 | Reasignación del seguimiento a Luis | Se acepta | Aceptado | ✅ |
+| 201 | Catálogo de destinos de derivación | Se acepta | Aceptado | ✅ |
+| 202 | Llamada y derivación al CESFAM | Se acepta | Aceptado | ✅ |
+| 203 | "Derivada" se ve en el seguimiento (no es un estado) | = 1 | = 1 | ✅ |
+| 204 | Derivación sin destino | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 205 | Llamada con destino de derivación | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 206 | Derivación a un destino que no existe | Se rechaza (clave foránea) | Rechazado (clave foránea) | ✅ |
+| 207 | Cierre del seguimiento antes del cierre de la alerta | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 208 | Cierre del seguimiento | Se acepta | Aceptado | ✅ |
+| 209 | Estado final | = RESUELTA / RESUELTA | = RESUELTA / RESUELTA | ✅ |
+| 210 | Agregar un seguimiento después del cierre del seguimiento | Lo valida el backend | Aceptado por la base | ℹ️ |
+| 211 | Historial del caso (avisos + FCM + seguimientos) | = 5 | = 5 | ✅ |
+| 212 | El equipo cambia la gravedad con que llegó la alerta | Lo valida el backend | Aceptado por la base | ℹ️ |
 
 ### 11. Reglas de la atención (ATENCION_ALERTA)
 
 | # | Caso | Esperado | Obtenido | |
 |---|---|---|---|---|
-| 207 | Media de madrugada (Rosa): avisa de inmediato a Seguridad Ciudadana (compartido) | Se acepta | Aceptado | ✅ |
-| 208 | Atención vacía (sin toma ni cierre) | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 209 | Toma sin responsable | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 210 | Responsable sin hora de toma | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 211 | Clasificar sin cerrar | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 212 | Observaciones de cierre sin cerrar | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 213 | Cierre anterior a la toma | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 214 | POSITIVA sin responsable del seguimiento | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 215 | Cierre de seguimiento en una falsa alarma | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 216 | Responsable que no existe | Se rechaza (clave foránea) | Rechazado (clave foránea) | ✅ |
-| 217 | Clasificación que no existe | Se rechaza (valor fuera del enum) | Rechazado (valor fuera del enum) | ✅ |
-| 218 | Dos atenciones para la misma alerta | Se rechaza (clave única) | Rechazado (clave única) | ✅ |
-| 219 | Atención de una alerta que no existe | Se rechaza (clave foránea) | Rechazado (clave foránea) | ✅ |
+| 213 | Media de madrugada (Rosa): avisa de inmediato a Seguridad Ciudadana (compartido) | Se acepta | Aceptado | ✅ |
+| 214 | Atención vacía (sin toma ni cierre) | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 215 | Toma sin responsable | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 216 | Responsable sin hora de toma | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 217 | Clasificar sin cerrar | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 218 | Observaciones de cierre sin cerrar | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 219 | Cierre anterior a la toma | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 220 | POSITIVA sin responsable del seguimiento | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 221 | Cierre de seguimiento en una falsa alarma | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 222 | Responsable que no existe | Se rechaza (clave foránea) | Rechazado (clave foránea) | ✅ |
+| 223 | Clasificación que no existe | Se rechaza (valor fuera del enum) | Rechazado (valor fuera del enum) | ✅ |
+| 224 | Dos atenciones para la misma alerta | Se rechaza (clave única) | Rechazado (clave única) | ✅ |
+| 225 | Atención de una alerta que no existe | Se rechaza (clave foránea) | Rechazado (clave foránea) | ✅ |
 
 ### 12. Gravedad y horario (leve, media y grave de madrugada)
 
 | # | Caso | Esperado | Obtenido | |
 |---|---|---|---|---|
-| 220 | Leve de madrugada (Pedro): el reloj no avisa y espera el día hábil | Se acepta | Aceptado | ✅ |
-| 221 | Queda en la bandeja de día hábil | = PENDIENTE_DIA_HABIL / SIN_ASIGNAR | = PENDIENTE_DIA_HABIL / SIN_ASIGNAR | ✅ |
-| 222 | El folio crece con cada alerta | = true | = true | ✅ |
-| 223 | A primera hora, Ana la cierra directamente como falsa alarma (sin asumirla antes) | Se acepta | Aceptado | ✅ |
-| 224 | Estado tras la revisión | = RESUELTA / RESUELTA | = RESUELTA / RESUELTA | ✅ |
-| 225 | La media está avisando | = AVISANDO_CONTACTO / SIN_ASIGNAR | = AVISANDO_CONTACTO / SIN_ASIGNAR | ✅ |
-| 226 | Grave de madrugada (Rosa): el reloj recorre la lista dos veces | Se acepta | Aceptado | ✅ |
-| 227 | Nadie confirma: el reloj informa el fin de la lista | Se acepta | Aceptado | ✅ |
-| 228 | Estado de la grave sin respuesta | = SIN_RESPUESTA / SIN_ASIGNAR | = SIN_RESPUESTA / SIN_ASIGNAR | ✅ |
-| 229 | Una media marcada para esperar el día hábil | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 230 | Una grave marcada para esperar el día hábil | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 231 | Gravedad que no existe (MODERADA) | Se rechaza (valor fuera del enum) | Rechazado (valor fuera del enum) | ✅ |
-| 232 | Un botón de ayuda que no es leve | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 233 | Botón de ayuda de madrugada: leve, espera el día hábil (se deshace) | Se acepta | Aceptado | ✅ |
-| 234 | Salida de la zona segura con la gravedad de la zona (se deshace) | Se acepta | Aceptado | ✅ |
-| 235 | Agravar una alerta que llegó grave | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 236 | Agravar una alerta que no es caída | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 237 | Tercera ronda de avisos | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 226 | Leve de madrugada (Pedro): el reloj no avisa y espera el día hábil | Se acepta | Aceptado | ✅ |
+| 227 | Queda en la bandeja de día hábil | = PENDIENTE_DIA_HABIL / SIN_ASIGNAR | = PENDIENTE_DIA_HABIL / SIN_ASIGNAR | ✅ |
+| 228 | El folio crece con cada alerta | = true | = true | ✅ |
+| 229 | A primera hora, Ana la cierra directamente como falsa alarma (sin asumirla antes) | Se acepta | Aceptado | ✅ |
+| 230 | Estado tras la revisión | = RESUELTA / RESUELTA | = RESUELTA / RESUELTA | ✅ |
+| 231 | La media está avisando | = AVISANDO_CONTACTO / SIN_ASIGNAR | = AVISANDO_CONTACTO / SIN_ASIGNAR | ✅ |
+| 232 | Grave de madrugada (Rosa): el reloj recorre la lista dos veces | Se acepta | Aceptado | ✅ |
+| 233 | Nadie confirma: el reloj informa el fin de la lista | Se acepta | Aceptado | ✅ |
+| 234 | Estado de la grave sin respuesta | = SIN_RESPUESTA / SIN_ASIGNAR | = SIN_RESPUESTA / SIN_ASIGNAR | ✅ |
+| 235 | Una media marcada para esperar el día hábil | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 236 | Una grave marcada para esperar el día hábil | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 237 | Gravedad que no existe (MODERADA) | Se rechaza (valor fuera del enum) | Rechazado (valor fuera del enum) | ✅ |
+| 238 | Un botón de ayuda que no es leve | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 239 | Botón de ayuda de madrugada: leve, espera el día hábil (se deshace) | Se acepta | Aceptado | ✅ |
+| 240 | Salida de la zona segura con la gravedad de la zona (se deshace) | Se acepta | Aceptado | ✅ |
+| 241 | Agravar una alerta que llegó grave | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 242 | Agravar una alerta que no es caída | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 243 | Tercera ronda de avisos | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
 
 ### 13. Cancelación por el paciente y simulacro
 
 | # | Caso | Esperado | Obtenido | |
 |---|---|---|---|---|
-| 238 | El paciente cancela una caída en los 30 segundos | Se acepta | Aceptado | ✅ |
-| 239 | Estado de la cancelada | = CANCELADA / SIN_ASIGNAR | = CANCELADA / SIN_ASIGNAR | ✅ |
-| 240 | Una cancelada no puede quedar sin respuesta | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 241 | Una cancelada recibe atención del equipo | Lo valida el backend | Aceptado por la base | ℹ️ |
-| 242 | Una cancelada tiene avisos a contactos | Lo valida el backend | Aceptado por la base | ℹ️ |
-| 243 | Simulacro desde el dashboard, con aviso FCM | Se acepta | Aceptado | ✅ |
-| 244 | Avisos FCM con intentos negativos | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 244 | El paciente cancela una caída en los 30 segundos | Se acepta | Aceptado | ✅ |
+| 245 | Estado de la cancelada | = CANCELADA / SIN_ASIGNAR | = CANCELADA / SIN_ASIGNAR | ✅ |
+| 246 | Una cancelada no puede quedar sin respuesta | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 247 | Una cancelada recibe atención del equipo | Lo valida el backend | Aceptado por la base | ℹ️ |
+| 248 | Una cancelada tiene avisos a contactos | Lo valida el backend | Aceptado por la base | ℹ️ |
+| 249 | Simulacro desde el dashboard, con aviso FCM | Se acepta | Aceptado | ✅ |
+| 250 | Avisos FCM con intentos negativos | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
 
 ### 14. Alertas técnicas del servidor
 
 | # | Caso | Esperado | Obtenido | |
 |---|---|---|---|---|
-| 245 | Bloqueo de la nota de ALERTA: pg_advisory_xact_lock(hashtextextended(id_asignacion::text \|\| ':' \|\| tipo_evento, 0)) | Se acepta | Aceptado | ✅ |
-| 246 | Silencio de datos del reloj de Pedro | Se acepta | Aceptado | ✅ |
-| 247 | Hay un silencio de datos abierto: el job no crea otro | = 1 | = 1 | ✅ |
-| 248 | Vuelven los datos: el sistema la cierra solo (sin profesional) | Se acepta | Aceptado | ✅ |
-| 249 | Estado de la técnica cerrada por el sistema | = RESUELTA / RESUELTA | = RESUELTA / RESUELTA | ✅ |
-| 250 | Ya no hay silencio abierto | = 0 | = 0 | ✅ |
-| 251 | Alguien intenta asumir la técnica ya cerrada con la receta de la nota: no afecta filas | 0 fila(s) afectada(s) | 0 fila(s) afectada(s) | ✅ |
-| 252 | Después puede abrirse un nuevo silencio de datos | Se acepta | Aceptado | ✅ |
-| 253 | El reloj envía otra alerta del mismo tipo con una abierta (nunca se descarta) | Se acepta | Aceptado | ✅ |
-| 254 | Clasificar como POSITIVA una alerta técnica | Lo valida el backend | Aceptado por la base | ℹ️ |
-| 255 | Alerta del servidor que dice traer configuración del reloj | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 256 | Alerta del reloj sin el hash de su configuración | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 257 | El servidor crea una alerta clínica (CAIDA) | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 258 | El servidor crea una alerta de batería baja (técnica, se deshace) | Se acepta | Aceptado | ✅ |
-| 259 | El reloj informa un silencio de datos (solo lo puede detectar el servidor) | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 251 | Bloqueo de la nota de ALERTA: pg_advisory_xact_lock(hashtextextended(id_asignacion::text \|\| ':' \|\| tipo_evento, 0)) | Se acepta | Aceptado | ✅ |
+| 252 | Silencio de datos del reloj de Pedro | Se acepta | Aceptado | ✅ |
+| 253 | Hay un silencio de datos abierto: el job no crea otro | = 1 | = 1 | ✅ |
+| 254 | Vuelven los datos: el sistema la cierra solo (sin profesional) | Se acepta | Aceptado | ✅ |
+| 255 | Estado de la técnica cerrada por el sistema | = RESUELTA / RESUELTA | = RESUELTA / RESUELTA | ✅ |
+| 256 | Ya no hay silencio abierto | = 0 | = 0 | ✅ |
+| 257 | Alguien intenta asumir la técnica ya cerrada con la receta de la nota: no afecta filas | 0 fila(s) afectada(s) | 0 fila(s) afectada(s) | ✅ |
+| 258 | Después puede abrirse un nuevo silencio de datos | Se acepta | Aceptado | ✅ |
+| 259 | El reloj envía otra alerta del mismo tipo con una abierta (nunca se descarta) | Se acepta | Aceptado | ✅ |
+| 260 | Clasificar como POSITIVA una alerta técnica | Lo valida el backend | Aceptado por la base | ℹ️ |
+| 261 | Alerta del servidor que dice traer configuración del reloj | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 262 | Alerta del reloj sin el hash de su configuración | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 263 | El servidor crea una alerta clínica (CAIDA) | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 264 | El servidor crea una alerta de batería baja (técnica, se deshace) | Se acepta | Aceptado | ✅ |
+| 265 | El reloj informa un silencio de datos (solo lo puede detectar el servidor) | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 266 | El servidor crea una alerta por exceso de alertas del reloj (técnica, se deshace) | Se acepta | Aceptado | ✅ |
+| 267 | El reloj informa un exceso de alertas (solo lo puede detectar el servidor) | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 268 | Una cuenta nueva no recibe avisos por correo hasta que se encienda | = false | = false | ✅ |
 
 ### 15. Reintentos y mensajes duplicados (idempotencia)
 
 | # | Caso | Esperado | Obtenido | |
 |---|---|---|---|---|
-| 260 | El reloj reenvía la misma alerta (mismo event_id) | Se rechaza (clave única) | Rechazado (clave única) | ✅ |
-| 261 | El backend ignora la alerta reenviada (ON CONFLICT (event_id) DO NOTHING) | 0 fila(s) afectada(s) | 0 fila(s) afectada(s) | ✅ |
-| 262 | El reloj repite una solicitud de aviso (no se envía dos veces) | Se rechaza (clave única) | Rechazado (clave única) | ✅ |
-| 263 | Meta repite un webhook (mismo id de mensaje) | Se rechaza (clave única) | Rechazado (clave única) | ✅ |
-| 264 | Aviso FCM repetido del mismo tipo para la misma alerta | Se rechaza (clave única) | Rechazado (clave única) | ✅ |
-| 265 | Dos solicitudes distintas para el mismo contacto, canal y ronda (el reloj se reinició) | Se rechaza (clave única) | Rechazado (clave única) | ✅ |
-| 266 | El mismo contacto en la ronda 2 (se deshace) | Se acepta | Aceptado | ✅ |
+| 269 | El reloj reenvía la misma alerta (mismo event_id) | Se rechaza (clave única) | Rechazado (clave única) | ✅ |
+| 270 | El backend ignora la alerta reenviada (ON CONFLICT (event_id) DO NOTHING) | 0 fila(s) afectada(s) | 0 fila(s) afectada(s) | ✅ |
+| 271 | El reloj repite una solicitud de aviso (no se envía dos veces) | Se rechaza (clave única) | Rechazado (clave única) | ✅ |
+| 272 | Meta repite un webhook (mismo id de mensaje) | Se rechaza (clave única) | Rechazado (clave única) | ✅ |
+| 273 | Aviso FCM repetido del mismo tipo para la misma alerta | Se rechaza (clave única) | Rechazado (clave única) | ✅ |
+| 274 | Dos solicitudes distintas para el mismo contacto, canal y ronda (el reloj se reinició) | Se rechaza (clave única) | Rechazado (clave única) | ✅ |
+| 275 | El mismo contacto en la ronda 2 (se deshace) | Se acepta | Aceptado | ✅ |
 
 ### 16. Reglas de los avisos a contactos
 
 | # | Caso | Esperado | Obtenido | |
 |---|---|---|---|---|
-| 267 | Respuesta del contacto sin su hora | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 268 | Motivo de falla sin fecha de falla | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 269 | Lectura informada en un correo (solo WhatsApp) | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 270 | Respuesta que no existe en los botones | Se rechaza (valor fuera del enum) | Rechazado (valor fuera del enum) | ✅ |
-| 271 | Canal que no existe (SMS) | Se rechaza (valor fuera del enum) | Rechazado (valor fuera del enum) | ✅ |
-| 272 | Aviso a un vínculo que no existe | Se rechaza (clave foránea) | Rechazado (clave foránea) | ✅ |
-| 273 | Aviso a un vínculo de otro paciente (la hija de María en una alerta de Rosa) | Lo valida el backend | Aceptado por la base | ℹ️ |
-| 274 | Aviso por WhatsApp a una persona que solo tiene correo (el vecino) | Lo valida el backend | Aceptado por la base | ℹ️ |
-| 275 | Aviso por WhatsApp a una persona que revocó el opt-in (la cuidadora de Pedro) | Lo valida el backend | Aceptado por la base | ℹ️ |
+| 276 | Respuesta del contacto sin su hora | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 277 | Motivo de falla sin fecha de falla | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 278 | Lectura informada en un correo (solo WhatsApp) | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 279 | Respuesta que no existe en los botones | Se rechaza (valor fuera del enum) | Rechazado (valor fuera del enum) | ✅ |
+| 280 | Canal que no existe (SMS) | Se rechaza (valor fuera del enum) | Rechazado (valor fuera del enum) | ✅ |
+| 281 | Aviso a un vínculo que no existe | Se rechaza (clave foránea) | Rechazado (clave foránea) | ✅ |
+| 282 | Aviso a un vínculo de otro paciente (la hija de María en una alerta de Rosa) | Lo valida el backend | Aceptado por la base | ℹ️ |
+| 283 | Aviso por WhatsApp a una persona que solo tiene correo (el vecino) | Lo valida el backend | Aceptado por la base | ℹ️ |
+| 284 | Aviso por WhatsApp a una persona que revocó el opt-in (la cuidadora de Pedro) | Lo valida el backend | Aceptado por la base | ℹ️ |
 
 ### 17. Datos calculados (reportes, hallazgos, panel)
 
 | # | Caso | Esperado | Obtenido | |
 |---|---|---|---|---|
-| 276 | Reporte diario de María (hora de Chile): FC promedio / mínima / máxima | = 80 / 70 / 90 | = 80 / 70 / 90 | ✅ |
-| 277 | Uso del reloj de María (minutos puesto en el día) | = 110 | = 110 | ✅ |
-| 278 | Hallazgo de la red de seguridad: SpO2 bajo 90 sin alerta cercana del reloj | = 1 | = 1 | ✅ |
-| 279 | Métrica de validación: SpO2 descartados por los relojes | = 5 | = 5 | ✅ |
-| 280 | Métricas: alertas reales (sin simulacros ni canceladas) | = 7 | = 7 | ✅ |
-| 281 | Panel: alertas reales abiertas | = 4 | = 4 | ✅ |
-| 282 | Panel: alertas sin respuesta (prioridad máxima) | = 1 | = 1 | ✅ |
-| 283 | Panel: casos en seguimiento | = 0 | = 0 | ✅ |
-| 284 | Inventario: relojes vigentes con batería bajo 20 % en su último lote | = 1 | = 1 | ✅ |
+| 285 | Reporte diario de María (hora de Chile): FC promedio / mínima / máxima | = 80 / 70 / 90 | = 80 / 70 / 90 | ✅ |
+| 286 | Uso del reloj de María (minutos puesto en el día) | = 110 | = 110 | ✅ |
+| 287 | Hallazgo de la red de seguridad: SpO2 bajo 90 sin alerta cercana del reloj | = 1 | = 1 | ✅ |
+| 288 | Métrica de validación: SpO2 descartados por los relojes | = 5 | = 5 | ✅ |
+| 289 | Métricas: alertas reales (sin simulacros ni canceladas) | = 7 | = 7 | ✅ |
+| 290 | Panel: alertas reales abiertas | = 4 | = 4 | ✅ |
+| 291 | Panel: alertas sin respuesta (prioridad máxima) | = 1 | = 1 | ✅ |
+| 292 | Panel: casos en seguimiento | = 0 | = 0 | ✅ |
+| 293 | Inventario: relojes vigentes con batería bajo 20 % en su último lote | = 1 | = 1 | ✅ |
 
 ### 18. Auditoría de cambios
 
 | # | Caso | Esperado | Obtenido | |
 |---|---|---|---|---|
-| 285 | Ana modifica a María y cambia su configuración; queda en la auditoría | Se acepta | Aceptado | ✅ |
-| 286 | Auditar la desactivación de un contacto, la ficha, una condición y un permiso, cada uno con su propio id | Se acepta | Aceptado | ✅ |
-| 287 | Historial de un objeto con clave compuesta (configuración de María del 10-10) | = 1 | = 1 | ✅ |
-| 288 | Borrar a una profesional con historial (se desactiva, no se borra) | Se rechaza (clave foránea) | Rechazado (clave foránea) | ✅ |
+| 294 | Ana modifica a María y cambia su configuración; queda en la auditoría | Se acepta | Aceptado | ✅ |
+| 295 | Auditar la desactivación de un contacto, la ficha, una condición y un permiso, cada uno con su propio id | Se acepta | Aceptado | ✅ |
+| 296 | Historial de un objeto con clave compuesta (configuración de María del 10-10) | = 1 | = 1 | ✅ |
+| 297 | Borrar a una profesional con historial (se desactiva, no se borra) | Se rechaza (clave foránea) | Rechazado (clave foránea) | ✅ |
 
 ### 19. Borrado al terminar el piloto (4.4.5)
 
 | # | Caso | Esperado | Obtenido | |
 |---|---|---|---|---|
-| 289 | Borrar un reloj asignado | Se rechaza (clave foránea) | Rechazado (clave foránea) | ✅ |
-| 290 | Borrar un vínculo que tiene avisos enviados | Se rechaza (clave foránea) | Rechazado (clave foránea) | ✅ |
-| 291 | Borrar una persona que es contacto de pacientes | Se rechaza (clave foránea) | Rechazado (clave foránea) | ✅ |
-| 292 | Borrar a María con todos sus datos | Se acepta | Aceptado | ✅ |
-| 293 | No queda ningún dato de María | = 0 | = 0 | ✅ |
-| 294 | Pedro y Rosa conservan sus datos (5 vínculos + 8 alertas) | = 13 | = 13 | ✅ |
-| 295 | La auditoría sobre María sobrevive al borrado | = 2 | = 2 | ✅ |
-| 296 | Seguridad Ciudadana se conserva (sigue siendo contacto de Pedro y Rosa) | = 1 | = 1 | ✅ |
-| 297 | Limpieza: el backend borra las personas que quedaron sin pacientes | Se acepta | Aceptado | ✅ |
-| 298 | Se borró solo la hija de María | = 3 / 0 | = 3 / 0 | ✅ |
-| 299 | Se conservan profesionales, relojes y documentos de otros pacientes | = 4 / 5 | = 4 / 5 | ✅ |
+| 298 | Borrar un reloj asignado | Se rechaza (clave foránea) | Rechazado (clave foránea) | ✅ |
+| 299 | Borrar un vínculo que tiene avisos enviados | Se rechaza (clave foránea) | Rechazado (clave foránea) | ✅ |
+| 300 | Borrar una persona que es contacto de pacientes | Se rechaza (clave foránea) | Rechazado (clave foránea) | ✅ |
+| 301 | Borrar a María con todos sus datos | Se acepta | Aceptado | ✅ |
+| 302 | No queda ningún dato de María | = 0 | = 0 | ✅ |
+| 303 | Pedro y Rosa conservan sus datos (5 vínculos + 8 alertas) | = 13 | = 13 | ✅ |
+| 304 | La auditoría sobre María sobrevive al borrado | = 2 | = 2 | ✅ |
+| 305 | Seguridad Ciudadana se conserva (sigue siendo contacto de Pedro y Rosa) | = 1 | = 1 | ✅ |
+| 306 | Limpieza: el backend borra las personas que quedaron sin pacientes | Se acepta | Aceptado | ✅ |
+| 307 | Se borró solo la hija de María | = 3 / 0 | = 3 / 0 | ✅ |
+| 308 | Se conservan profesionales, relojes y documentos de otros pacientes | = 4 / 5 | = 4 / 5 | ✅ |

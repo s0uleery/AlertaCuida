@@ -13,6 +13,7 @@ export const CONDICION: Record<TipoEvento, string> = {
   SILENCIO_DATOS: 'Reloj sin enviar datos',
   BATERIA_BAJA: 'Batería baja del reloj',
   RELOJ_NO_PUESTO: 'Reloj no puesto',
+  EXCESO_ALERTAS: 'Reloj con demasiadas alertas (revisar el reloj)',
 };
 
 /** Cómo se muestra cada estado de atención. */

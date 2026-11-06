@@ -187,6 +187,44 @@ class ApiRelojTest {
 		assertThat(origen).isEqualTo("RELOJ");
 	}
 
+	/**
+	 * Una caída media se agrava (200, ahora GRAVE) con su inmovilidad, y repetirlo no cambia la hora.
+	 * Una grave no se agrava (409) y una desconocida responde 404. La alerta, evaluada con otra versión
+	 * de la configuración, se aceptó igual y quedó con esa discrepancia.
+	 */
+	@Test
+	void unaCaidaSeAgravaYLaDiscrepanciaQuedaGuardada() throws Exception {
+		UUID media = UUID.randomUUID();
+		UUID grave = UUID.randomUUID();
+		enviar(TOKEN, "/api/reloj/v1/alertas", alerta(media).replace("\"GRAVE\"", "\"MEDIA\""))
+				.andExpect(status().isCreated());
+		enviar(TOKEN, "/api/reloj/v1/alertas", alerta(grave)).andExpect(status().isCreated());
+
+		String agravamiento = "{\"fechaHoraAgravamiento\": \"%s\", \"segundosInmovilidad\": 90}";
+		enviar(TOKEN, "/api/reloj/v1/alertas/" + media + "/agravamiento", agravamiento.formatted(ahora))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.severidadActual").value("GRAVE"));
+		enviar(TOKEN, "/api/reloj/v1/alertas/" + media + "/agravamiento", agravamiento.formatted(hace(-5)))
+				.andExpect(status().isOk());
+		enviar(TOKEN, "/api/reloj/v1/alertas/" + grave + "/agravamiento", agravamiento.formatted(ahora))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.codigo").value("NO_APLICA"));
+		enviar(TOKEN, "/api/reloj/v1/alertas/" + UUID.randomUUID() + "/agravamiento", agravamiento.formatted(ahora))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.codigo").value("ALERTA_DESCONOCIDA"));
+
+		Integer inmovilidad = jdbc.sql("SELECT segundos_inmovilidad_agravamiento FROM alerta WHERE event_id = :e")
+				.param("e", media).query(Integer.class).single();
+		assertThat(inmovilidad).isEqualTo(90);
+		Instant agravada = jdbc.sql("SELECT fecha_hora_agravamiento FROM alerta WHERE event_id = :e")
+				.param("e", media).query(Timestamp.class).single().toInstant();
+		assertThat(agravada).isEqualTo(ahora);
+		String discrepancia = jdbc.sql("""
+				SELECT d.codigo FROM discrepancia_alerta d JOIN alerta a USING (id_alerta) WHERE a.event_id = :e""")
+				.param("e", media).query(String.class).single();
+		assertThat(discrepancia).isEqualTo("VERSION_DISTINTA");
+	}
+
 	/** Una cancelación queda CANCELADA; una alerta desconocida responde 404 ALERTA_DESCONOCIDA. */
 	@Test
 	void laCancelacionQuedaCanceladaYUnaAlertaDesconocidaResponde404() throws Exception {

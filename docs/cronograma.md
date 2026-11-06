@@ -12,7 +12,7 @@ Archivos relacionados: `tecnologias_plataforma_prlac_v3.md` y el [modelo de dato
 |---|---|
 | Tareas | 49 tareas activas y sus subtareas, en 6 fases (2 eliminadas respecto de la v5) |
 | Esfuerzo total | 786 horas-persona (unas 1.022 con 30 % de margen) |
-| Ya hecho | 220 horas al 05-11-2026 (0.1, 0.2, 0.3, casi toda 0.4, 1.1, 1.2, casi toda 1.3, casi toda 1.4, 1.5, casi toda 1.6, 1.7, 1.9, 2.10.8, 3.2 y parte de 3.3) |
+| Ya hecho | 236 horas al 05-11-2026 (0.1, 0.2, 0.3, casi toda 0.4, 1.1, 1.2, casi toda 1.3, casi toda 1.4, 1.5, casi toda 1.6, 1.7, 1.9, 2.1, 2.10.8, 3.2 y parte de 3.3) |
 | Capacidad del equipo | 60 a 90 horas por semana (3 personas, 20 a 30 h cada una) |
 | Duración estimada | 7 sprints de 2 semanas, unas 14 semanas |
 | Fuera de alcance | App del reloj (ver la sección correspondiente) |
@@ -330,18 +330,25 @@ Depende de: 1.5. Listo cuando: la regla de enrutamiento está configurada, cada 
 
 ## Fase 2: alertas, escalamiento y avisos (167 h)
 
-### 2.1 Recepción y validación de las alertas del reloj (16 h). Cambia.
+### 2.1 Recepción y validación de las alertas del reloj (16 h). Cambia. Hecha.
 Recibir y registrar cada alerta del reloj. El servidor nunca descarta una alerta: si algo no calza, la acepta y marca la discrepancia.
 
 Depende de: 1.4, 1.5. Listo cuando: cada alerta queda registrada y visible, y ninguna se descarta.
 
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
-| [ ] | 2.1.1 | Tipos de alerta (caída, FC, SpO2, tendencia, FC y SpO2 simultáneas; sin SOS) y niveles de gravedad | 4 |
-| [ ] | 2.1.2 | Comparar la evidencia con la configuración vigente: si no calza, aceptar igual y marcar la discrepancia | 3 |
-| [ ] | 2.1.3 | Alertas en dos etapas (caída que sube a grave por inmovilidad) y actualización de una alerta existente | 3 |
-| [ ] | 2.1.4 | Deduplicación y límite de frecuencia por paciente (reloj defectuoso que inunda de alertas) | 3 |
-| [ ] | 2.1.5 | Pruebas con casos límite | 3 |
+| [x] | 2.1.1 | Tipos de alerta (caída, FC, SpO2, tendencia, FC y SpO2 simultáneas, inactividad, zona segura y botón de ayuda) y niveles de gravedad | 4 |
+| [x] | 2.1.2 | Comparar la evidencia con la configuración vigente: si no calza, aceptar igual y marcar la discrepancia | 3 |
+| [x] | 2.1.3 | Alertas en dos etapas (caída que sube a grave por inmovilidad) y actualización de una alerta existente | 3 |
+| [x] | 2.1.4 | Deduplicación y límite de frecuencia por paciente (reloj defectuoso que inunda de alertas) | 3 |
+| [x] | 2.1.5 | Pruebas con casos límite | 3 |
+
+Notas (05-11-2026):
+- **Discrepancias:** se revisan la versión de la configuración, el módulo apagado, la gravedad distinta de la configurada (tendencia y zona segura) y las lecturas que no superan los umbrales. Se guardan en la tabla `DISCREPANCIA_ALERTA` (V10), porque los valores base del backend no tienen historial y después no se podrían recalcular.
+- **Exceso de alertas:** desde la 10.ª alerta del mismo reloj en los últimos 60 minutos (sin contar las que el paciente canceló; una de hace justo 60 minutos ya no entra), se aceptan todas y se crea una alerta técnica leve `EXCESO_ALERTAS`, una abierta a la vez. Los duplicados por reintento ya los evitaba el `eventId` (1.4.6).
+- **Agravamiento:** guarda también los segundos de inmovilidad.
+- **"Visible":** las alertas se pueden consultar por la API; la pantalla que muestra las alertas y sus discrepancias es la 3.4.
+- **`recibe_avisos`:** desde V10 viene apagado por defecto en las cuentas nuevas.
 
 ### 2.2 Reglas de ausencia en el servidor (24 h)
 Tareas programadas que revisan si algún reloj dejó de sincronizar (silencio de datos), si hay inactividad prolongada o problemas de batería o de uso. Con LTE, el silencio delata falta de señal, un reloj apagado o un plan de datos vencido.

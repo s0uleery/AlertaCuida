@@ -15,11 +15,13 @@ public enum TipoEvento {
 	/** El reloj dejó de sincronizar: solo lo detecta el servidor. */
 	SILENCIO_DATOS,
 	BATERIA_BAJA,
-	RELOJ_NO_PUESTO;
+	RELOJ_NO_PUESTO,
+	/** El reloj envió demasiadas alertas en poco tiempo (posible falla): solo lo detecta el servidor. */
+	EXCESO_ALERTAS;
 
-	/** @return si el reloj puede informarlo (todos menos el silencio de datos) */
+	/** @return si el reloj puede informarlo (todos menos el silencio de datos y el exceso de alertas) */
 	public boolean loDetectaElReloj() {
-		return this != SILENCIO_DATOS;
+		return this != SILENCIO_DATOS && this != EXCESO_ALERTAS;
 	}
 
 }
