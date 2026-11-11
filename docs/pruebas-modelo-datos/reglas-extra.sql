@@ -113,3 +113,64 @@ ALTER TABLE "ALERTA" ADD CONSTRAINT alerta_exceso_servidor CHECK (tipo_evento <>
 ALTER TABLE "ALERTA" ADD CONSTRAINT alerta_inmovilidad_positiva CHECK (segundos_inmovilidad_agravamiento >= 0);
 ALTER TABLE "ALERTA" ADD CONSTRAINT alerta_inmovilidad_agravamiento CHECK (segundos_inmovilidad_agravamiento IS NULL OR fecha_hora_agravamiento IS NOT NULL);
 ALTER TABLE "EVENTO_DESCARTADO" ADD CONSTRAINT evento_descartado_exceso CHECK (tipo_evento <> 'EXCESO_ALERTAS');
+
+-- Correo institucional: contacto interno y reintentos (migración V11)
+ALTER TABLE "CONTACTO" DROP CONSTRAINT contacto_canal;
+ALTER TABLE "CONTACTO" ADD CONSTRAINT contacto_canal CHECK (id_usuario IS NOT NULL OR whatsapp IS NOT NULL OR correo IS NOT NULL);
+ALTER TABLE "CONTACTO" ADD CONSTRAINT contacto_nombre CHECK (id_usuario IS NOT NULL OR nombre IS NOT NULL);
+ALTER TABLE "CONTACTO" ADD CONSTRAINT contacto_interno_sin_datos CHECK (id_usuario IS NULL OR (nombre IS NULL AND whatsapp IS NULL AND correo IS NULL AND fecha_opt_in IS NULL));
+ALTER TABLE "REGISTRO_INTENTO" ADD CONSTRAINT intento_destino CHECK ((id_contacto_paciente IS NULL) <> (id_contacto_interno IS NULL));
+ALTER TABLE "REGISTRO_INTENTO" ADD CONSTRAINT intento_ronda_externo CHECK ((ronda IS NULL) = (id_contacto_paciente IS NULL));
+ALTER TABLE "REGISTRO_INTENTO" ADD CONSTRAINT intento_reintentos CHECK (reintentos >= 0);
+ALTER TABLE "REGISTRO_INTENTO" ADD CONSTRAINT intento_respuesta_externo CHECK (respuesta IS NULL OR id_contacto_paciente IS NOT NULL);
+ALTER TABLE "REGISTRO_INTENTO" ADD CONSTRAINT intento_pendiente CHECK (fecha_hora_proximo_envio IS NULL OR (fecha_hora_envio IS NULL AND fecha_hora_fallo IS NULL));
+
+-- Disparadores: responden como un CHECK (23514)
+CREATE FUNCTION contacto_tipo_fijo() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.id_usuario IS DISTINCT FROM OLD.id_usuario THEN
+    RAISE EXCEPTION 'Un contacto no puede cambiar de interno a externo ni al revés' USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER contacto_tipo_fijo BEFORE UPDATE OF id_usuario ON "CONTACTO" FOR EACH ROW EXECUTE FUNCTION contacto_tipo_fijo();
+
+CREATE FUNCTION contacto_paciente_externo() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM "CONTACTO" WHERE id_contacto = NEW.id_contacto AND id_usuario IS NOT NULL) THEN
+    RAISE EXCEPTION 'Un contacto interno no entra en la lista de un paciente' USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER contacto_paciente_externo BEFORE INSERT OR UPDATE OF id_contacto ON "CONTACTO_PACIENTE" FOR EACH ROW EXECUTE FUNCTION contacto_paciente_externo();
+
+CREATE FUNCTION intento_contacto_interno() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.id_contacto_interno IS NOT NULL AND NOT EXISTS
+    (SELECT 1 FROM "CONTACTO" WHERE id_contacto = NEW.id_contacto_interno AND id_usuario IS NOT NULL) THEN
+    RAISE EXCEPTION 'id_contacto_interno debe ser un contacto interno' USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER intento_contacto_interno BEFORE INSERT OR UPDATE OF id_contacto_interno ON "REGISTRO_INTENTO" FOR EACH ROW EXECUTE FUNCTION intento_contacto_interno();
+
+-- Los avisos al equipo no son el recorrido de contactos del reloj: no cuentan para AVISANDO_CONTACTO
+CREATE OR REPLACE VIEW "ALERTA_ESTADO" AS
+SELECT a.id_alerta,
+  CASE
+    WHEN a.fecha_hora_cancelacion IS NOT NULL THEN 'CANCELADA'
+    WHEN at.fecha_hora_cierre IS NOT NULL THEN 'RESUELTA'
+    WHEN EXISTS (SELECT 1 FROM "REGISTRO_INTENTO" i WHERE i.id_alerta = a.id_alerta AND i.respuesta = 'VOY_EN_CAMINO') THEN 'CONFIRMADA'
+    WHEN a.fecha_hora_sin_respuesta IS NOT NULL THEN 'SIN_RESPUESTA'
+    WHEN EXISTS (SELECT 1 FROM "REGISTRO_INTENTO" i WHERE i.id_alerta = a.id_alerta AND i.id_contacto_paciente IS NOT NULL) THEN 'AVISANDO_CONTACTO'
+    WHEN a.espera_dia_habil THEN 'PENDIENTE_DIA_HABIL'
+    ELSE 'RECIBIDA'
+  END AS estado_contacto,
+  CASE
+    WHEN at.clasificacion = 'POSITIVA' AND at.fecha_cierre_seguimiento IS NULL THEN 'EN_SEGUIMIENTO'
+    WHEN at.fecha_hora_cierre IS NOT NULL THEN 'RESUELTA'
+    WHEN at.fecha_hora_toma IS NOT NULL THEN 'EN_ATENCION'
+    ELSE 'SIN_ASIGNAR'
+  END AS estado_atencion,
+  CASE WHEN a.fecha_hora_agravamiento IS NOT NULL THEN 'GRAVE' ELSE a.severidad::text END AS severidad_actual
+FROM "ALERTA" a LEFT JOIN "ATENCION_ALERTA" at USING (id_alerta);

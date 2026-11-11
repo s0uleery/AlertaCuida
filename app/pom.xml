@@ -50,6 +50,13 @@
 			<artifactId>testcontainers-junit-jupiter</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!-- Servidor de correo de prueba en memoria: los correos no salen a internet -->
+		<dependency>
+			<groupId>com.icegreen</groupId>
+			<artifactId>greenmail-junit5</artifactId>
+			<version>${greenmail.version}</version>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>

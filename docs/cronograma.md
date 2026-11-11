@@ -50,7 +50,7 @@ Respecto de la v5 (plan inicial): el reloj vuelve a escalar, pero por WhatsApp a
 
 - La plataforma incluye: backend, base de datos, dashboard para el PRLAC, **envío y registro de los avisos que pide el reloj**, canal de WhatsApp, canal de correo, avisos al reloj por FCM, auditoría de alertas y vigilancia del silencio de datos.
 - El reloj y la plataforma son dos sistemas aparte. Cada reloj tiene un ID único, vinculado a un ID de usuario.
-- División del trabajo: el reloj decide el "qué", el "quién" y el "cuándo". Evalúa sus lecturas con los parámetros del paciente, detecta la emergencia, elige el contacto según prioridad y horario, espera la confirmación y pasa al siguiente. El servidor hace el "cómo": envía el WhatsApp o el correo que pide el reloj, recibe la respuesta del contacto, se la avisa al reloj y lo registra todo. Además, el servidor genera las alertas técnicas (silencio de datos, batería, reloj no puesto) y avisa por correo a los profesionales.
+- División del trabajo: el reloj decide el "qué", el "quién" y el "cuándo". Evalúa sus lecturas con los parámetros del paciente, detecta la emergencia, elige el contacto según prioridad y horario, espera la confirmación y pasa al siguiente. El servidor hace el "cómo": envía el WhatsApp o el correo que pide el reloj, recibe la respuesta del contacto, se la avisa al reloj y lo registra todo. Además, el servidor genera las alertas técnicas (silencio de datos, batería, reloj no puesto) y avisa por WhatsApp a los coordinadores, con correo de respaldo.
 - Tipos de evento: caída con inmovilidad posterior, FC o SpO2 más allá del límite grave en 2 lecturas consecutivas, tendencia (FC o SpO2 fuera del rango normal sin llegar al límite grave durante un tiempo configurable; una sola alerta hasta que el valor vuelva a lo normal), FC y SpO2 anormales a la vez, **salida de la zona segura** (gravedad elegida por paciente, media por defecto) y **botón de ayuda** (siempre leve; avisa primero a los vecinos y después al resto de los contactos).
 - Ventana de cancelación: el reloj vibra 30 segundos antes de enviar la alerta; el paciente puede cancelarla.
 - Escalamiento en el reloj: el reloj pide al servidor avisar al contacto de prioridad 1 (plantilla de WhatsApp con botones). Si no hay confirmación en el plazo configurado, consulta el estado de la alerta y pasa al de prioridad 2. Al terminar la lista, la repite una vez e informa `SIN_RESPUESTA`. El servidor avisa al reloj por FCM cuando un contacto confirma. Las alertas medias y graves quedan destacadas en el dashboard.
@@ -350,19 +350,26 @@ Notas (05-11-2026):
 - **"Visible":** las alertas se pueden consultar por la API; la pantalla que muestra las alertas y sus discrepancias es la 3.4.
 - **`recibe_avisos`:** desde V10 viene apagado por defecto en las cuentas nuevas.
 
-### 2.2 Reglas de ausencia en el servidor (24 h)
+### 2.2 Reglas de ausencia en el servidor (24 h). Hecha, salvo la 2.2.3.
 Tareas programadas que revisan si algún reloj dejó de sincronizar (silencio de datos), si hay inactividad prolongada o problemas de batería o de uso. Con LTE, el silencio delata falta de señal, un reloj apagado o un plan de datos vencido.
 
 Depende de: 1.4. Listo cuando: el sistema detecta por sí solo que un reloj dejó de sincronizar, sin alertas repetidas.
 
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
-| [ ] | 2.2.1 | Tarea programada (vigilante) que revisa la última sincronización de cada reloj | 4 |
-| [ ] | 2.2.2 | Regla de silencio de datos (4 horas sin sincronizar) | 4 |
-| [ ] | 2.2.3 | Regla de inactividad prolongada como respaldo del servidor | 4 |
-| [ ] | 2.2.4 | Reloj no puesto y batería baja informados en la sincronización: alertar si el estado persiste | 6 |
-| [ ] | 2.2.5 | Evitar alertas repetidas mientras una siga abierta | 3 |
-| [ ] | 2.2.6 | Pruebas | 3 |
+| [x] | 2.2.1 | Tarea programada (vigilante) que revisa la última sincronización de cada reloj | 4 |
+| [x] | 2.2.2 | Regla de silencio de datos (4 horas sin sincronizar) | 4 |
+| [ ] | 2.2.3 | Regla de inactividad prolongada como respaldo del servidor. Pospuesta | 4 |
+| [x] | 2.2.4 | Reloj no puesto y batería baja informados en la sincronización: alertar si el estado persiste | 6 |
+| [x] | 2.2.5 | Evitar alertas repetidas mientras una siga abierta | 3 |
+| [x] | 2.2.6 | Pruebas | 3 |
+
+Notas (08-11-2026):
+- **Inactividad (2.2.3):** pospuesta. La sincronización no trae ningún dato de movimiento, y el servidor no puede crear alertas `INACTIVIDAD`. Depende de que el reloj pueda enviar ese dato (pregunta 11 de [api-reloj.md](api-reloj.md)). Mientras tanto, la inactividad la detecta solo el reloj.
+- **Silencio de datos:** 4 horas sin sincronizar, gravedad media. Un reloj que nunca sincronizó se mide desde que se vinculó.
+- **Batería baja:** 2 sincronizaciones seguidas bajo 20 %, gravedad leve.
+- **Reloj no puesto:** 2 sincronizaciones seguidas del mismo día, entre las 08:00 y las 22:00 de Chile, gravedad leve. De noche es normal sacárselo para cargarlo.
+- **Cierre:** las tres se cierran solas al volver a la normalidad, sin profesional. Mientras una siga abierta no se crea otra.
 
 ### 2.3 Avisos al reloj por FCM (12 h). Cambia en v7.
 Avisar al reloj que un contacto confirmó su alerta o que un profesional la resolvió (en ambos casos el reloj detiene su escalamiento), o que hay configuración nueva (por ejemplo, un contacto cambió).
@@ -376,17 +383,17 @@ Depende de: 2.1, 1.7. Listo cuando: el reloj (o el simulador) recibe los avisos 
 | [ ] | 2.3.3 | Registrar la recepción informada por el reloj y reintentar si no llega en un plazo | 3 |
 | [ ] | 2.3.4 | Pruebas con el simulador | 3 |
 
-### 2.4 Correo institucional (12 h). Cambia.
-Avisos por correo desde la cuenta institucional: aviso a la oficina PRLAC, silencio de datos y respaldo cuando WhatsApp falla, sin datos clínicos en el mensaje.
+### 2.4 Correo institucional (12 h). Cambia. Hecha.
+Avisos por correo desde la cuenta institucional: respaldo cuando falla un WhatsApp (también el de las alertas técnicas a los coordinadores) y aviso a las cuentas con `recibe_avisos`, sin datos clínicos en el mensaje.
 
-Depende de: 2.2. Listo cuando: un silencio de datos y una alerta grave generan correos desde la cuenta institucional, y en local se prueba sin enviar correos reales.
+Depende de: 2.2. Listo cuando: un WhatsApp fallido de un silencio de datos o de una alerta grave genera su correo de respaldo desde la cuenta institucional, y en local se prueba sin enviar correos reales.
 
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
-| [ ] | 2.4.1 | Interfaz `NotificationChannel` y canal simulado que solo registra el mensaje (local) | 2 |
-| [ ] | 2.4.2 | Canal de correo con Spring Mail y la cuenta SMTP institucional (credenciales como secreto) | 3 |
-| [ ] | 2.4.3 | Plantillas mínimas: silencio de datos, alerta grave y respaldo de WhatsApp (alias del paciente, sin datos clínicos) | 3 |
-| [ ] | 2.4.4 | Manejo de errores, reintentos y pruebas con un servidor de correo de prueba | 4 |
+| [x] | 2.4.1 | Interfaz `NotificationChannel` y canal simulado que solo registra el mensaje (local) | 2 |
+| [x] | 2.4.2 | Canal de correo con Spring Mail y la cuenta SMTP institucional (credenciales como secreto) | 3 |
+| [x] | 2.4.3 | Plantillas mínimas: silencio de datos, alerta grave y respaldo de WhatsApp (alias del paciente, sin datos clínicos) | 3 |
+| [x] | 2.4.4 | Manejo de errores, reintentos y pruebas con un servidor de correo de prueba | 4 |
 
 ### 2.5 Registro y estado de cada alerta (12 h). Cambia.
 Línea de tiempo completa de cada alerta (mensajes, entregas, respuestas, saltos de contacto) y su resolución por un profesional. Es la trazabilidad oficial del sistema.

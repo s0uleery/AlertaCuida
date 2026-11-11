@@ -57,6 +57,12 @@
 			<scope>runtime</scope>
 		</dependency>
 
+		<!-- Correo institucional por SMTP (canal de avisos); la versión la fija Spring Boot -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-mail</artifactId>
+		</dependency>
+
 		<!-- Pruebas de las migraciones con un PostgreSQL real (Docker) -->
 		<dependency>
 			<groupId>org.testcontainers</groupId>

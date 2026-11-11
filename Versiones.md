@@ -13,6 +13,7 @@ Sistema operativo: Windows 11 (64 bits)
 | Docker | 29.0.1 | Docker Desktop | `docker --version` |
 | Docker Compose | 2.x | Incluido en Docker Desktop | `docker compose version` |
 | PostgreSQL | 18 (`postgres:18-alpine`) | Imagen de Docker, no se instala | `docker compose ps` |
+| Mailpit | 1.27 (`axllent/mailpit:v1.27`) | Imagen de Docker: correos de prueba en local, no se instala | `docker compose ps` |
 
 
 ### Codificación

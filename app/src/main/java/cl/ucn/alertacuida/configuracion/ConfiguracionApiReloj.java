@@ -5,6 +5,7 @@ import cl.ucn.alertacuida.application.alerta.RevisionDiscrepancias;
 import cl.ucn.alertacuida.application.alerta.puerto.Alertas;
 import cl.ucn.alertacuida.application.asignacion.AutenticarReloj;
 import cl.ucn.alertacuida.application.asignacion.puerto.Asignaciones;
+import cl.ucn.alertacuida.application.calendario.ReglaEnrutamiento;
 import cl.ucn.alertacuida.application.clinica.PerfilClinicoPaciente;
 import cl.ucn.alertacuida.application.comun.puerto.SecretosUnSoloUso;
 import cl.ucn.alertacuida.application.comun.puerto.Transacciones;
@@ -63,8 +64,8 @@ public class ConfiguracionApiReloj {
 	/** Alertas del reloj, cancelaciones del paciente, agravamiento y estado de cada alerta. */
 	@Bean
 	RecibirAlerta recibirAlerta(Alertas alertas, RevisionDiscrepancias revision, PropiedadesAlertas propiedades,
-			Transacciones transacciones, Clock reloj) {
-		return new RecibirAlerta(alertas, revision, propiedades.limite(), transacciones, reloj);
+			ReglaEnrutamiento enrutamiento, Transacciones transacciones, Clock reloj) {
+		return new RecibirAlerta(alertas, revision, propiedades.limite(), enrutamiento, transacciones, reloj);
 	}
 
 	/** Token de Firebase de cada reloj, para enviarle avisos. */

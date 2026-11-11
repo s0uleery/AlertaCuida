@@ -252,7 +252,8 @@ Table TIPO_CONTACTO {
 
 Table CONTACTO {
   id_contacto uuid [pk]
-  nombre varchar [not null, note: 'cifrado. Persona o institución']
+  id_usuario uuid [unique, note: 'Solo en el contacto interno: la cuenta del equipo. Vacío en el externo']
+  nombre varchar [note: 'cifrado. Persona o institución. Obligatorio en el externo; vacío en el interno']
   whatsapp varchar [note: 'cifrado']
   whatsapp_hash varchar [unique, note: 'Un número es una sola persona. Permite encontrarla cuando Meta informa un número (ej. baja del opt-in)']
   fecha_opt_in timestamptz [note: 'Opt-in de WhatsApp: Meta lo registra por número, así que es de la persona, no del paciente']
@@ -263,8 +264,14 @@ Table CONTACTO {
   La persona se guarda una sola vez, aunque sea contacto de varios pacientes (ej. Seguridad Ciudadana).
   Solo nombre y medio de contacto (minimización): no se guarda RUN, fecha de nacimiento ni sexo.
   El nombre viaja al reloj ("Alerta recibida por..."). El último cambio sale de REGISTRO_AUDITORIA.
-  Al terminar el piloto, el backend borra los contactos que quedan sin pacientes.
-  CHECK (whatsapp IS NOT NULL OR correo IS NOT NULL).
+  Al terminar el piloto, el backend borra los contactos externos que quedan sin pacientes.
+  Contacto interno (V11): una cuenta del equipo PRLAC que recibe avisos del servidor (correo con recibe_avisos,
+  WhatsApp a la oficina y su respaldo). Es solo el enlace a USUARIO: sus datos se leen de la cuenta, sin copiarlos.
+  No entra en la lista de ningún paciente (disparador contacto_paciente_externo), así que el reloj no lo recorre,
+  y un contacto no cambia de interno a externo ni al revés (disparador contacto_tipo_fijo).
+  CHECK (id_usuario IS NOT NULL OR whatsapp IS NOT NULL OR correo IS NOT NULL).
+  CHECK (id_usuario IS NOT NULL OR nombre IS NOT NULL).
+  CHECK (id_usuario IS NULL OR (nombre IS NULL AND whatsapp IS NULL AND correo IS NULL AND fecha_opt_in IS NULL)).
   CHECK ((whatsapp IS NULL) = (whatsapp_hash IS NULL)).
   CHECK ((correo IS NULL) = (correo_hash IS NULL)).
   CHECK (fecha_revocacion_opt_in IS NULL OR fecha_opt_in IS NOT NULL).
@@ -577,9 +584,12 @@ Table REGISTRO_INTENTO {
   id_intento uuid [pk]
   event_id uuid [unique, not null, note: 'Lo genera el reloj al pedir el aviso: si reintenta, no se envía dos veces (2.10.2)']
   id_alerta uuid [not null]
-  id_contacto_paciente uuid [not null, note: 'Da la persona (número o correo) y el paciente']
+  id_contacto_paciente uuid [note: 'Aviso pedido por el reloj: da la persona (número o correo) y el paciente']
+  id_contacto_interno uuid [note: 'Aviso del servidor a una cuenta del equipo (contacto interno)']
   canal canal [not null]
-  ronda int [not null, note: '1 o 2. La informa el reloj']
+  ronda int [note: '1 o 2. La informa el reloj. Vacía en los avisos al equipo']
+  reintentos int [not null, default: 0, note: 'Reintentos de envío ya hechos']
+  fecha_hora_proximo_envio timestamptz [note: 'Pendiente de envío desde esa hora (bandeja de salida); vacía si ya salió o falló']
   id_externo varchar [unique, note: 'ID del mensaje en Meta o en el correo; evita procesar dos veces un webhook']
   fecha_hora_envio timestamptz
   fecha_hora_entrega timestamptz
@@ -591,9 +601,21 @@ Table REGISTRO_INTENTO {
   Indexes {
     (id_alerta, id_contacto_paciente, canal, ronda) [unique, note: 'Un aviso por contacto, canal y ronda, aunque el reloj genere otro event_id (ej. tras reiniciarse)']
     (id_contacto_paciente) [note: 'Lo revisa la clave diferida al borrar vínculos']
+    (id_alerta, id_contacto_interno, canal) [unique, note: 'Un aviso por cuenta, canal y alerta, aunque el servidor lo encole varias veces']
+    fecha_hora_proximo_envio [note: 'Índice parcial (WHERE fecha_hora_proximo_envio IS NOT NULL): lo que la tarea programada envía']
   }
   Note: '''
-  Cada aviso que el reloj pidió y el servidor envió a un contacto.
+  Cada aviso que el reloj pidió y el servidor envió a un contacto, y cada aviso que el servidor decidió
+  enviar a una cuenta del equipo (correo con recibe_avisos o respaldo de un WhatsApp fallido).
+  Va a un vínculo de la lista del paciente (con ronda) o a un contacto interno (sin ronda), nunca a los dos.
+  Los avisos al equipo no cuentan para AVISANDO_CONTACTO, y solo un contacto del paciente responde.
+  Si un envío falla, se reprograma y suma un reintento; agotados, queda con fecha_hora_fallo y motivo_fallo.
+  CHECK ((id_contacto_paciente IS NULL) <> (id_contacto_interno IS NULL)).
+  CHECK ((ronda IS NULL) = (id_contacto_paciente IS NULL)).
+  CHECK (reintentos >= 0).
+  CHECK (respuesta IS NULL OR id_contacto_paciente IS NOT NULL).
+  CHECK (fecha_hora_proximo_envio IS NULL OR (fecha_hora_envio IS NULL AND fecha_hora_fallo IS NULL)).
+  Disparador intento_contacto_interno: id_contacto_interno debe ser un contacto interno.
   El estado de entrega no se guarda: es la fecha más avanzada (fallo > lectura > entrega > envío).
   CHECK (ronda IN (1, 2)).
   CHECK ((respuesta IS NULL) = (fecha_hora_respuesta IS NULL)).
@@ -688,7 +710,7 @@ Table USUARIO {
   hash_contrasena varchar [note: 'Vacío hasta que el usuario activa su cuenta']
   totp_secreto varchar [note: 'cifrado']
   totp_activo boolean [not null, default: false]
-  recibe_avisos boolean [not null, default: false, note: 'Recibe por correo las alertas técnicas, medias y graves. Apagado por defecto (V10). No aplica al rol COORDINADOR, que recibe por WhatsApp el aviso de la oficina PRLAC']
+  recibe_avisos boolean [not null, default: false, note: 'Recibe por correo las alertas técnicas (las de salud las enruta el reloj). Apagado por defecto (V10). También aplica al rol COORDINADOR, además del WhatsApp de la oficina PRLAC']
   recibe_resumen_diario boolean [not null, default: false]
   activo boolean [not null, default: false, note: 'Se activa al definir la contraseña']
   Note: '''
@@ -805,6 +827,9 @@ Ref: ATENCION_ALERTA.id_usuario_responsable > USUARIO.id_usuario
 Ref: ATENCION_ALERTA.id_usuario_resolutor > USUARIO.id_usuario
 Ref: REGISTRO_INTENTO.id_alerta > ALERTA.id_alerta [delete: cascade]
 Ref: REGISTRO_INTENTO.id_contacto_paciente > CONTACTO_PACIENTE.id_contacto_paciente
+Ref: REGISTRO_INTENTO.id_contacto_interno > CONTACTO.id_contacto
+// Uno a uno: id_usuario es único en CONTACTO (se escribe como > para que la clave quede en CONTACTO)
+Ref: CONTACTO.id_usuario > USUARIO.id_usuario
 Ref: AVISO_FCM.id_alerta > ALERTA.id_alerta [delete: cascade]
 
 // 5. Seguimiento

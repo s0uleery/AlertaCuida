@@ -75,7 +75,7 @@ class ModeloDatosTest {
 		Object[][] lista = {
 			{"ANA", 1}, {"LUIS", 2}, {"ADMIN", 3}, {"NUEVA", 4},
 			{"MARIA", 11}, {"PEDRO", 12}, {"ROSA", 13}, {"PAC_NUEVO", 18}, {"PAC_SIN_CONSENTIMIENTO", 19},
-			{"HIJA", 21}, {"SEG_CIUDADANA", 22}, {"VECINO", 23}, {"CUIDADORA", 24},
+			{"HIJA", 21}, {"SEG_CIUDADANA", 22}, {"VECINO", 23}, {"CUIDADORA", 24}, {"INTERNO_ANA", 25},
 			{"M1", 31}, {"M2", 32}, {"P1", 33}, {"P2", 34}, {"P3", 35}, {"R1", 36}, {"R2", 37},
 			{"W1", 41}, {"W2", 42}, {"W3", 43}, {"W4", 44}, {"W5", 45},
 			{"A_MARIA", 51}, {"A_PEDRO", 52}, {"A_ROSA_VIEJA", 53}, {"A_ROSA", 54},
@@ -153,6 +153,19 @@ class ModeloDatosTest {
 	/** INSERT de un intento de aviso por WhatsApp, sin columnas extra. */
 	private static String aviso(String alerta, String vinculo, int ronda) {
 		return aviso(alerta, vinculo, ronda, "", "", "WHATSAPP");
+	}
+
+	/**
+	 * INSERT de un correo del servidor a una cuenta del equipo (contacto interno), sin ronda.
+	 *
+	 * @param contacto el contacto interno de la cuenta
+	 * @param cols     columnas extra, empezando con coma, o ""
+	 * @param vals     sus valores, en el mismo orden
+	 */
+	private static String avisoInterno(String alerta, String contacto, String cols, String vals) {
+		return "INSERT INTO registro_intento (id_intento, event_id, id_alerta, id_contacto_interno, canal" + cols
+				+ ") VALUES (gen_random_uuid(), gen_random_uuid(), '{" + alerta + "}', '{" + contacto + "}', 'CORREO'"
+				+ vals + ")";
 	}
 
 	/** La receta de la nota de atencion_alerta para asumir un caso sin carreras. */
@@ -273,13 +286,13 @@ class ModeloDatosTest {
 	private DynamicContainer estructura() {
 		return grupo("1. Estructura de la base (migraciones)",
 			c.vale("Migraciones aplicadas por Flyway", """
-					SELECT count(*) n FROM flyway_schema_history WHERE success AND version IS NOT NULL""", 10),
+					SELECT count(*) n FROM flyway_schema_history WHERE success AND version IS NOT NULL""", 11),
 			c.vale("Cantidad de tablas", """
 					SELECT count(*) n FROM information_schema.tables WHERE table_schema = 'public'
 					AND table_type = 'BASE TABLE' AND table_name <> 'flyway_schema_history'""", 30),
 			c.vale("Cantidad de relaciones (claves foráneas)", """
 					SELECT count(*) n FROM information_schema.table_constraints
-					WHERE table_schema = 'public' AND constraint_type = 'FOREIGN KEY'""", 33),
+					WHERE table_schema = 'public' AND constraint_type = 'FOREIGN KEY'""", 35),
 			c.vale("Tablas sueltas (sin ninguna relación)", """
 					SELECT count(*) n FROM information_schema.tables t
 					WHERE t.table_schema = 'public' AND t.table_type = 'BASE TABLE'
@@ -1119,7 +1132,60 @@ class ModeloDatosTest {
 			c.backend("Aviso por WhatsApp a una persona que solo tiene correo (el vecino)",
 					aviso("MEDIA_ROSA", "R2", 2)),
 			c.backend("Aviso por WhatsApp a una persona que revocó el opt-in (la cuidadora de Pedro)",
-					aviso("LEVE_PEDRO", "P1", 1)));
+					aviso("LEVE_PEDRO", "P1", 1)),
+			c.acepta("Ana como contacto interno: solo el enlace a su cuenta, sin copiar sus datos",
+					"INSERT INTO contacto (id_contacto, id_usuario) VALUES ('{INTERNO_ANA}', '{ANA}')"),
+			c.rechaza("Segundo contacto interno para la misma cuenta",
+					"INSERT INTO contacto (id_contacto, id_usuario) VALUES (gen_random_uuid(), '{ANA}')", UNICO),
+			c.rechaza("Contacto interno con nombre propio (se lee de la cuenta)", """
+					INSERT INTO contacto (id_contacto, id_usuario, nombre)
+					VALUES (gen_random_uuid(), '{LUIS}', 'Luis')""", CHECK),
+			c.rechaza("Contacto interno con correo propio (se lee de la cuenta)", """
+					INSERT INTO contacto (id_contacto, id_usuario, correo, correo_hash)
+					VALUES (gen_random_uuid(), '{LUIS}', 'x', 'c-interno')""", CHECK),
+			c.rechaza("Contacto externo sin nombre", """
+					INSERT INTO contacto (id_contacto, correo, correo_hash)
+					VALUES (gen_random_uuid(), 'x', 'c-sin-nombre')""", CHECK),
+			c.rechaza("Contacto interno de una cuenta que no existe",
+					"INSERT INTO contacto (id_contacto, id_usuario) VALUES (gen_random_uuid(), '{INEXISTENTE}')",
+					FORANEA),
+			c.rechaza("El contacto interno en la lista de un paciente (el reloj no recorre al equipo)", """
+					INSERT INTO contacto_paciente (id_contacto_paciente, id_paciente, id_contacto, codigo_tipo_contacto,
+					orden_prioridad) VALUES (gen_random_uuid(), '{ROSA}', '{INTERNO_ANA}', 'OTRO', 9)""", CHECK),
+			c.rechaza("Cambiar un vínculo de la lista para que apunte al contacto interno",
+					"UPDATE contacto_paciente SET id_contacto = '{INTERNO_ANA}' WHERE id_contacto_paciente = '{R2}'",
+					CHECK),
+			c.rechaza("Convertir en interno a una persona de la lista", """
+					UPDATE contacto SET id_usuario = '{LUIS}', nombre = NULL, whatsapp = NULL, whatsapp_hash = NULL,
+					correo = NULL, correo_hash = NULL, fecha_opt_in = NULL, fecha_revocacion_opt_in = NULL
+					WHERE id_contacto = '{VECINO}'""", CHECK),
+			c.acepta("Correo del servidor a Ana por un silencio de datos, pendiente de envío",
+					avisoInterno("SILENCIO_2", "INTERNO_ANA", ", fecha_hora_proximo_envio", ", now()")),
+			estado("Un aviso al equipo no cambia el estado de contacto (no es el recorrido del reloj)", "SILENCIO_2",
+					"RECIBIDA", "SIN_ASIGNAR"),
+			c.rechaza("Segundo correo a la misma cuenta por la misma alerta",
+					avisoInterno("SILENCIO_2", "INTERNO_ANA", "", ""), UNICO),
+			c.rechaza("Aviso interno dirigido a una persona de la lista de un paciente",
+					avisoInterno("MEDIA_ROSA", "SEG_CIUDADANA", "", ""), CHECK),
+			c.rechaza("Aviso interno con ronda (las rondas son del recorrido del reloj)",
+					avisoInterno("MEDIA_ROSA", "INTERNO_ANA", ", ronda", ", 1"), CHECK),
+			c.rechaza("Aviso a un vínculo sin ronda", """
+					INSERT INTO registro_intento (id_intento, event_id, id_alerta, id_contacto_paciente, canal)
+					VALUES (gen_random_uuid(), gen_random_uuid(), '{MEDIA_ROSA}', '{R2}', 'CORREO')""", CHECK),
+			c.rechaza("Aviso a un vínculo y a un contacto interno a la vez",
+					aviso("MEDIA_ROSA", "R2", 2, ", id_contacto_interno", ", '{INTERNO_ANA}'", "CORREO"), CHECK),
+			c.rechaza("Aviso sin destino", """
+					INSERT INTO registro_intento (id_intento, event_id, id_alerta, canal)
+					VALUES (gen_random_uuid(), gen_random_uuid(), '{MEDIA_ROSA}', 'CORREO')""", CHECK),
+			c.rechaza("Respuesta \"Voy en camino\" de una cuenta del equipo (solo confirma un contacto del paciente)",
+					avisoInterno("MEDIA_ROSA", "INTERNO_ANA", ", respuesta, fecha_hora_respuesta",
+							", 'VOY_EN_CAMINO', now()"), CHECK),
+			c.rechaza("Reintentos negativos",
+					avisoInterno("MEDIA_ROSA", "INTERNO_ANA", ", reintentos", ", -1"), CHECK),
+			c.rechaza("Pendiente de envío pero ya enviado",
+					aviso("MEDIA_ROSA", "R2", 2, ", fecha_hora_proximo_envio", ", now()", "CORREO"), CHECK),
+			c.rechaza("Pendiente de envío pero ya marcado como fallido", avisoInterno("MEDIA_ROSA", "INTERNO_ANA",
+					", fecha_hora_proximo_envio, fecha_hora_fallo", ", now(), now()"), CHECK));
 	}
 
 	/** Datos que se calculan y no se guardan (estados de la alerta, edad, vigencias). */
@@ -1219,12 +1285,15 @@ class ModeloDatosTest {
 					"SELECT count(*) n FROM registro_auditoria WHERE id_entidad LIKE '{MARIA}%'", 2),
 			c.vale("Seguridad Ciudadana se conserva (sigue siendo contacto de Pedro y Rosa)",
 					"SELECT count(*) n FROM contacto WHERE id_contacto = '{SEG_CIUDADANA}'", 1),
-			c.acepta("Limpieza: el backend borra las personas que quedaron sin pacientes", """
-					DELETE FROM contacto k WHERE NOT EXISTS
+			c.acepta("Limpieza: el backend borra las personas que quedaron sin pacientes (no los contactos internos)",
+					"""
+					DELETE FROM contacto k WHERE k.id_usuario IS NULL AND NOT EXISTS
 					(SELECT 1 FROM contacto_paciente cp WHERE cp.id_contacto = k.id_contacto)"""),
 			c.vale("Se borró solo la hija de María", """
-					SELECT count(*) || ' / ' || count(*) FILTER (WHERE id_contacto = '{HIJA}') n FROM contacto""",
-					"3 / 0"),
+					SELECT count(*) || ' / ' || count(*) FILTER (WHERE id_contacto = '{HIJA}') n FROM contacto
+					WHERE id_usuario IS NULL""", "3 / 0"),
+			c.vale("El contacto interno de Ana se conserva",
+					"SELECT count(*) n FROM contacto WHERE id_contacto = '{INTERNO_ANA}'", 1),
 			c.vale("Se conservan profesionales y relojes", """
 					SELECT (SELECT count(*) FROM usuario) || ' / ' || (SELECT count(*) FROM smartwatch) n""", "4 / 5"));
 	}

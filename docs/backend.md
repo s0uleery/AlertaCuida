@@ -8,7 +8,7 @@ Resumen del backend a la fecha (22-10-2026). Hoy hace cuatro cosas:
 
 Cómo levantarlo: [README](../README.md). Cada clase tiene Javadoc con el detalle.
 
-Referencia rápida de los endpoints disponibles, con ejemplos JSON: [para el dashboard](endpoints-dashboard.md) y [para el reloj](endpoints-reloj.md). En formato OpenAPI: [api-dashboard.yaml](api-dashboard.yaml) y [api-reloj.yaml](api-reloj.yaml).
+Referencia rápida de los endpoints disponibles, con ejemplos JSON: [para el dashboard](endpoints-dashboard.md) y [para el reloj](endpoints-reloj.md). En formato OpenAPI: [api-dashboard.yaml](api-dashboard.yaml) y [api-reloj.yaml](api-reloj.yaml). Las alertas, sus reglas y sus decisiones están reunidas en [alertas.md](alertas.md).
 
 ## Capas (arquitectura hexagonal)
 
@@ -25,7 +25,7 @@ Así, las reglas del login se prueban sin base de datos ni Spring (`IniciarSesio
 
 ## Carpetas
 
-Dentro de cada capa, una carpeta por funcionalidad: `sesion`, `personal` (cuentas del equipo), `paciente`, `condicion` (enfermedades y situaciones del paciente), `clinica` (perfil clínico: módulos y umbrales), `contacto` (contactos de cada paciente), `reloj` (inventario), `asignacion` (vínculo reloj-paciente), `telemetria` (lotes que envía el reloj), `alerta`, `calendario` (horario hábil, feriados y enrutamiento por gravedad) y `auditoria`. Los controladores y la seguridad de la API del reloj van en `adapters/web/dispositivo` y `adapters/seguridad/dispositivo`. Cada una tiene estas subcarpetas:
+Dentro de cada capa, una carpeta por funcionalidad: `sesion`, `personal` (cuentas del equipo), `paciente`, `condicion` (enfermedades y situaciones del paciente), `clinica` (perfil clínico: módulos y umbrales), `contacto` (contactos de cada paciente), `reloj` (inventario), `asignacion` (vínculo reloj-paciente), `telemetria` (lotes que envía el reloj), `alerta`, `vigilancia` (reglas de ausencia), `aviso` (correo institucional), `calendario` (horario hábil, feriados y enrutamiento por gravedad) y `auditoria`. Los controladores y la seguridad de la API del reloj van en `adapters/web/dispositivo` y `adapters/seguridad/dispositivo`. Cada una tiene estas subcarpetas:
 
 ```
 application/<funcionalidad>/        casos de uso (las clases que "hacen" algo)
@@ -41,6 +41,7 @@ adapters/persistencia/<funcionalidad>/  implementaciones JDBC de los puertos
 adapters/seguridad/                     configuración de Spring Security y token JWT
 adapters/seguridad/hash/                hashes y secretos (bcrypt, HMAC del RUN, tokens aleatorios)
 adapters/seguridad/cifrado/             cifrado de los datos personales (CifradoCampos, ColumnaCifrada)
+adapters/correo/                        canales de correo: SMTP (Spring Mail) y simulado (solo log)
 adapters/web/<funcionalidad>/           controladores REST y sus cuerpos de entrada y salida
 adapters/web/                           Permisos y ManejadorErrores, comunes a todos los controladores
 
@@ -261,6 +262,7 @@ Reglas:
 - **Alertas:** nunca se rechazan por su contenido, solo si están mal formadas. Una media o grave marcada "espera día hábil" se guarda sin la marca (esas avisan siempre). Un `BOTON_AYUDA` que llega con otra gravedad se guarda como leve (regla `alerta_boton_leve` de V9), para no perder un pedido de ayuda. `SILENCIO_DATOS` no lo envía el reloj.
 - **Discrepancias (`RevisionDiscrepancias`, 2.1.2):** al recibir una alerta nueva (no las cancelaciones) se compara con lo vigente del paciente y se guarda en `discrepancia_alerta` lo que no calza. Revisa cuatro cosas: `VERSION_DISTINTA` (la versión que informa no es la que calcula hoy `ConfiguracionDelReloj`), `MODULO_APAGADO` (el módulo de ese tipo está apagado; `FC_SPO2` exige FC y SpO2), `GRAVEDAD_DISTINTA` (tendencia distinta de `severidad-tendencia`, zona distinta de la de su zona; FC y SpO2 esperan la matriz del Anexo B) y `LECTURAS_EN_RANGO` (FC o SpO2: ninguna lectura más allá del límite grave; tendencia y `FC_SPO2`: todas dentro del rango normal; sin lecturas no se marca). Si la revisión misma falla, la alerta se guarda igual, sin discrepancias.
 - **Exceso de alertas (2.1.4):** en la misma transacción se cuentan las alertas del reloj del vínculo en la ventana: no cuentan las que el paciente canceló, y una recibida hace justo 60 minutos ya no entra (decidido por ella el 05-11-2026). Desde la alerta número `avisar-desde` (10), contando la que llega, se crea una alerta técnica `EXCESO_ALERTAS` leve, salvo que ya haya una abierta (sin cierre del equipo) del mismo vínculo; `pg_advisory_xact_lock` evita crear dos si llegan a la vez. Nunca se responde 429 por esto.
+- **Reglas de ausencia (`VigilarRelojes`, 2.2):** cada `intervalo` (5 min) la tarea programada aplica tres reglas a cada vínculo vigente, cada reloj en su transacción; si uno falla, se registra el error y sigue con los demás. Cada regla (`ReglaAusencia`) responde `ACTIVA` (crea la técnica, salvo que haya una abierta), `NORMAL` (la cierra, sin responsable) o `SIN_CAMBIO` (no alcanza para decidir). `ReglaSilencioDatos`: `silencio` (4 h) desde la última sincronización o, si nunca sincronizó, desde el vínculo; media. `ReglaBateriaBaja`: las 2 últimas sincronizaciones bajo `bateria-minima` (20 %); leve. `ReglaRelojNoPuesto`: las 2 últimas informan que no está puesto, ambas del mismo día y entre `hora-inicio-dia` y `hora-fin-dia` (hora de Chile); leve. Un lote que no informó el dato da `SIN_CAMBIO`. Los simulacros no bloquean una alerta real ni se cierran con ella. Si la última alerta de la regla la cerró una persona (`id_usuario_resolutor` con valor), no se crea otra hasta que una sincronización posterior demuestre que el reloj se normalizó (`ReglaAusencia.normaliza`); se calcula desde `sincronizacion`, sin columna nueva. Las técnicas leves creadas fuera del horario hábil, incluida `EXCESO_ALERTAS`, se guardan con `espera_dia_habil` (`ReglaEnrutamiento.esperaDiaHabil`) y quedan como `PENDIENTE_DIA_HABIL`. El cierre automático solo toca alertas con origen `SERVIDOR`: si el reloj llegara a enviar una `BATERIA_BAJA` o `RELOJ_NO_PUESTO` (pregunta 2 de [api-reloj.md](api-reloj.md)), la cierra el equipo y, mientras siga abierta, el servidor no crea otra. Los 2 lotes son la constante `VigilarRelojes.LOTES_SEGUIDOS`. Si el servidor estuvo caído más de 4 horas, la primera revisión puede crear silencios que se cierran solos cuando los relojes vuelven a sincronizar.
 - **Agravamiento (2.1.3):** solo una caída leve o media, no cancelada (si no, 409 `NO_APLICA`); de otro reloj o desconocida, 404. La actualización tiene la condición `fecha_hora_agravamiento IS NULL`: repetirlo no cambia la hora.
 - **Errores:** `ErroresApiReloj` responde en RFC 9457 con `codigo` (`MENSAJE_INVALIDO`, `ALERTA_DESCONOCIDA`, `NO_APLICA`, `LOTE_GRANDE`), solo para los controladores del reloj.
 - **Hora del reloj:** si difiere más de 120 s de la del servidor, se acepta igual y la respuesta informa `desfaseRelojSegundos`.
@@ -281,6 +283,21 @@ Todo lo que el reloj necesita para evaluar y escalar sin conexión: módulos, GP
 - **Regla de tendencia:** `alertacuida.clinica.minutos-tendencia` y `severidad-tendencia` viajan en `reglas.tendencia`. El servidor solo entrega los parámetros; quien evalúa es el reloj. Alerta cuando FC o SpO2 lleva ese tiempo fuera del rango normal, sin llegar al límite grave; si una lectura vuelve al rango normal, el tiempo parte de cero. El interruptor sigue siendo `modulos.tendencia`, por paciente. Ver [dónde cambiar cada parte](#regla-de-tendencia-dónde-cambiar-cada-parte).
 - **Token de Firebase:** `RegistrarTokenFcm` lo guarda en el reloj físico (`smartwatch`), no en el vínculo; el nuevo reemplaza al anterior.
 - **Qué versión aplica cada reloj (dashboard):** `ConsultarConfiguracionAplicada` compara la versión del último lote del reloj **vigente** con la que rige hoy: `AL_DIA`, `PENDIENTE`, `SIN_SINCRONIZAR` o `SIN_RELOJ`. "Aplicada desde" es el primer lote de la racha actual con esa versión (`SincronizacionesJdbc.versionInformada`). `GET /api/pacientes/{id}/reloj/configuracion` (`USUARIOS:VER`) lo entrega y la ficha lo muestra en la sección del reloj.
+
+## Correo institucional
+
+Avisos por correo desde la cuenta institucional, sin datos clínicos. Una tarea programada (`TareasProgramadas.avisarPorCorreo`, cada `alertacuida.correo.intervalo`) hace dos pasos; ni `RecibirAlerta` ni el vigilante saben del correo, así que guardar una alerta nunca espera ni falla por él.
+
+1. **Encolar (`EncolarCorreos`).** Deja en la bandeja de salida (`registro_intento`, canal `CORREO`, con `fecha_hora_proximo_envio`):
+   - el correo a cada cuenta activa con `recibe_avisos`, de cualquier rol (los coordinadores también, además de su WhatsApp), por las alertas técnicas (`TipoEvento.tecnicas()`), solo si la alerta ocurrió en horario hábil (`CalendarioHabil.esHabil`; fuera de él no se envía nada, ni al empezar la jornada). Las de salud no: a quién se avisa lo decide el reloj. La cuenta recibe el aviso como contacto interno (`contacto.id_usuario`), que se crea la primera vez. No se avisa de simulacros ni de alertas resueltas;
+   - el respaldo de cada WhatsApp fallido (`fecha_hora_fallo`), al mismo destino y con la misma ronda, si tiene correo, a cualquier hora. El canal de WhatsApp (2.9) solo tiene que registrar la falla.
+
+   Solo mira lo ocurrido dentro de `ventana` (1 h), para no avisar de alertas viejas. Encolar dos veces no duplica: lo impiden las claves únicas de `registro_intento`.
+2. **Enviar (`EnviarCorreosPendientes`).** Toma hasta 100 correos cuyo próximo envío ya llegó, los redacta con `PlantillasCorreo` y los envía por el `CanalNotificacion` configurado. Si sale, guarda la hora y el `Message-ID` (`id_externo`). Si falla, lo reprograma a los 1, 5 y 15 minutos (`reintentos`); agotados, queda con `fecha_hora_fallo` y `motivo_fallo`. Un correo que falla no detiene a los demás.
+
+**Plantillas (`PlantillasCorreo`).** Del paciente solo va el alias o, si no tiene, el folio de la alerta (`#142`). De una alerta clínica, solo su gravedad; de una técnica, qué le pasa al reloj (batería baja, reloj no puesto, exceso de alertas). Al equipo: silencio de datos, o alerta, con el enlace al dashboard (`url-dashboard`). Al contacto de un paciente: que se comunique con la persona y, si es grave, que llame al SAMU (131); sin el enlace al dashboard.
+
+**Canales (`alertacuida.correo.canal`).** `SMTP` envía con Spring Mail (`CanalCorreoSmtp`); el servidor, el usuario y la clave llegan por `SMTP_HOST`, `SMTP_PUERTO`, `SMTP_USUARIO` y `SMTP_CLAVE`, y `SMTP_AUTH` y `SMTP_TLS` los activan. `SIMULADO`, el valor por defecto, no envía nada: escribe en el log el asunto y el destinatario enmascarado (`CanalCorreoSimulado`). Con `docker compose`, el backend usa `SMTP` contra Mailpit, que guarda los correos sin enviarlos y los muestra en http://localhost:8025. El chequeo de salud del correo está apagado (`management.health.mail.enabled=false`): un servidor de correo caído no debe marcar el backend como caído.
 
 ## Cifrado de datos personales
 
@@ -340,7 +357,7 @@ Sin las claves, el backend no arranca. El perfil `dev` trae claves de desarrollo
 
 `server.forward-headers-strategy=native` hace que el backend tome la IP real de `X-Forwarded-For`, que nginx reemplaza con la dirección de quien se conecta. Solo se le cree a un proxy de la red interna, así que en producción el puerto del backend no debe quedar expuesto: la entrada debe ser nginx.
 
-`docker-compose.yml` levanta el backend (`app/Dockerfile`) con el perfil `dev`. Recibe las credenciales por variables de entorno, y `SPRING_DATASOURCE_URL` reemplaza la dirección del perfil porque dentro de Docker la base está en `postgres` y no en `localhost`. El dashboard (`frontend/Dockerfile`) se sirve con nginx, que reenvía `/api` al backend (`frontend/nginx.conf`). Esta configuración es solo para desarrollo y demos: producción necesita sus propias claves y no debe cargar los datos de ejemplo.
+`docker-compose.yml` levanta el backend (`app/Dockerfile`) con el perfil `dev`. Recibe las credenciales por variables de entorno, y `SPRING_DATASOURCE_URL` reemplaza la dirección del perfil porque dentro de Docker la base está en `postgres` y no en `localhost`. El dashboard (`frontend/Dockerfile`) se sirve con nginx, que reenvía `/api` al backend (`frontend/nginx.conf`). Mailpit recibe los correos del backend y los muestra en http://localhost:8025, sin enviarlos. Esta configuración es solo para desarrollo y demos: producción necesita sus propias claves y no debe cargar los datos de ejemplo.
 
 Valores base del Anexo B (`alertacuida.clinica.*`), **provisionales** hasta que los valide el equipo clínico. Cambiarlos cambia la configuración de todos los relojes que no tienen ajustes propios:
 
@@ -352,6 +369,15 @@ Valores base del Anexo B (`alertacuida.clinica.*`), **provisionales** hasta que 
 | `minutos-tendencia` | 120 (mínimo 30, el intervalo de las lecturas) |
 | `severidad-tendencia` | `MEDIA` (`LEVE`, `MEDIA` o `GRAVE`) |
 | `alertacuida.alertas.avisar-desde` / `ventana-minutos` | 10 / 60: desde la 10.ª alerta del mismo reloj en 60 min se crea `EXCESO_ALERTAS` |
+| `alertacuida.vigilancia.intervalo` | `PT5M`: cada cuánto corre el vigilante (formato ISO-8601) |
+| `alertacuida.vigilancia.silencio` | 4h: tiempo sin sincronizar para crear `SILENCIO_DATOS` |
+| `alertacuida.vigilancia.bateria-minima` | 20: bajo este % en 2 sincronizaciones seguidas se crea `BATERIA_BAJA` |
+| `alertacuida.vigilancia.hora-inicio-dia` / `hora-fin-dia` | 8 / 22: horario (Chile) en que cuentan las sincronizaciones para `RELOJ_NO_PUESTO` |
+| `alertacuida.correo.canal` | `SIMULADO` (variable `CORREO_CANAL`): `SMTP` envía de verdad |
+| `alertacuida.correo.remitente` | Cuenta institucional (variable `CORREO_REMITENTE`) |
+| `alertacuida.correo.intervalo` / `ventana` | `PT30S` / `PT1H`: cada cuánto se encola y envía, y hasta qué tan atrás se busca |
+| `alertacuida.correo.reintentos` | `PT1M,PT5M,PT15M`: espera antes de cada reintento |
+| `spring.mail.*` | Servidor SMTP (variables `SMTP_*`); por defecto, Mailpit en `localhost:1025` |
 
 ### Regla de tendencia: dónde cambiar cada parte
 
@@ -371,8 +397,9 @@ Todos estos valores son provisionales hasta que los valide el equipo clínico. L
 
 ## Pruebas
 
-- `RunTest`, `PoliticaContrasenaTest`, `UmbralTest`, `MediosDeContactoTest`, `HorarioYCoberturaTest`, `IniciarSesionTest`, `RenovarSesionTest`, `AltaYActivacionTest`, `PacientesTest`, `CondicionesPacienteTest`, `PerfilClinicoPacienteTest`, `ContactosPacienteTest`, `VinculoRelojTest`, `RecibirSincronizacionTest`, `RecibirAlertaTest`, `CifradoCamposTest` y `RegistroDeLecturasTest`: unitarias, sin base de datos. Los dobles en memoria compartidos están en `application/src/test/.../soporte/`.
+- `RunTest`, `PoliticaContrasenaTest`, `UmbralTest`, `MediosDeContactoTest`, `HorarioYCoberturaTest`, `IniciarSesionTest`, `RenovarSesionTest`, `AltaYActivacionTest`, `PacientesTest`, `CondicionesPacienteTest`, `PerfilClinicoPacienteTest`, `ContactosPacienteTest`, `VinculoRelojTest`, `RecibirSincronizacionTest`, `RecibirAlertaTest`, `PlantillasCorreoTest`, `EncolarCorreosTest`, `EnviarCorreosPendientesTest`, `CifradoCamposTest` y `RegistroDeLecturasTest`: unitarias, sin base de datos. Los dobles en memoria compartidos están en `application/src/test/.../soporte/`.
 - `InicioSesionTest`, `AuditoriaTest`, `IpRealTest`, `CuentasPersonalTest`, `PacientesYRelojesTest`, `PerfilYContactosTest`, `ApiRelojTest` y `ModeloDatosTest`: contra un PostgreSQL real en Docker (Testcontainers). Sin Docker, se omiten.
+- `RequisitosCorreoTest`: el correo contra PostgreSQL real y GreenMail, un servidor SMTP de prueba en memoria (puerto 3025): ningún correo sale a internet. Sin Docker se omite.
 
 ## Duración de la sesión
 

@@ -38,11 +38,26 @@ public interface Alertas {
 	 * mismo vínculo y tipo. Debe llamarse dentro de una transacción: usa un candado de la base para
 	 * que dos llamadas a la vez no creen dos.
 	 *
-	 * @param detalle se guarda como evidencia (texto JSON)
+	 * @param detalle        se guarda como evidencia (texto JSON)
+	 * @param esperaDiaHabil si queda pendiente para el día hábil (solo las leves fuera de horario)
 	 * @return si la creó
 	 */
 	boolean crearTecnicaSiNoHayAbierta(UUID idAsignacion, TipoEvento tipo, Severidad severidad, String detalle,
-			Instant ahora);
+			boolean esperaDiaHabil, Instant ahora);
+
+	/**
+	 * @return cuándo se creó la última alerta técnica del servidor de ese vínculo y tipo, solo si esa
+	 *         última la cerró una persona; vacío si no hay, si sigue abierta o si la cerró el sistema
+	 */
+	Optional<Instant> ultimaCerradaPorPersona(UUID idAsignacion, TipoEvento tipo);
+
+	/**
+	 * Cierra, sin responsable, la alerta técnica abierta de ese vínculo y tipo que creó el servidor. Los
+	 * simulacros no se tocan.
+	 *
+	 * @return si había una abierta y la cerró
+	 */
+	boolean cerrarTecnicaAbierta(UUID idAsignacion, TipoEvento tipo, Instant ahora);
 
 	/**
 	 * Registra que una caída pasó a grave. No cambia una hora ya registrada.

@@ -65,6 +65,8 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
   - Solo nombre y medio de contacto (minimización): WhatsApp y correo, cifrados, al menos uno de los dos.
   - El opt-in de WhatsApp es de la persona, porque Meta lo registra por número.
   - `whatsapp_hash` y `correo_hash` son únicos: un número o un correo es una sola persona. Así se la encuentra cuando Meta informa un número (por ejemplo, la baja del opt-in).
+  - **Contacto interno (V11):** una cuenta del equipo PRLAC que recibe avisos del servidor (correo por `recibe_avisos`, WhatsApp a la oficina y su correo de respaldo). Es solo el enlace a `USUARIO` (`id_usuario`, único): nombre, correo, teléfono y opt-in se leen de la cuenta, sin copiarlos. El externo es la persona de la lista de un paciente, como antes.
+  - Un contacto interno no entra en la lista de ningún paciente, así que el reloj nunca lo recorre, y un contacto no cambia de interno a externo ni al revés. Lo impiden dos disparadores que responden como un `CHECK`.
 - **`CONTACTO_PACIENTE`**: la lista de contactos de cada paciente. Guarda lo que depende del vínculo:
   - tipo (alguien puede ser cuidadora de un paciente y vecina de otro) y parentesco (solo si es `FAMILIA`);
   - si es el cuidador principal (uno activo por paciente);
@@ -156,6 +158,8 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
 - **`DISCREPANCIA_ALERTA`** (2.1.2, V10): lo que no calzó entre una alerta del reloj y la configuración vigente al recibirla: otra versión, módulo apagado, gravedad distinta de la configurada (tendencia o zona segura) o lecturas que no superan los umbrales. La alerta se acepta igual. Una fila por código (1FN), con un detalle legible. **Se guarda y no se calcula** porque los valores base del backend no tienen historial: después no se podría saber qué regía. Las cancelaciones no se revisan.
 - **Agravamiento** (2.1.3): `fecha_hora_agravamiento` y `segundos_inmovilidad_agravamiento` (solo con la fecha) se completan una vez; repetirlo no cambia la hora.
 - **`REGISTRO_INTENTO`**: cada aviso que el reloj pidió y el servidor envió a un contacto, con canal, ronda (1 o 2), horas de envío, entrega, lectura (solo WhatsApp) o falla, y la respuesta (botón de WhatsApp o enlace del correo). El estado de entrega es la fecha más avanzada.
+  - Desde V11 también guarda los avisos que decide el servidor para el equipo: van a un contacto interno (`id_contacto_interno`), sin ronda. Cada aviso va a un vínculo o a un contacto interno, nunca a los dos. Los avisos al equipo no cuentan para `AVISANDO_CONTACTO`, y solo un contacto del paciente puede responder "Voy en camino".
+  - Es también la bandeja de salida del correo: `fecha_hora_proximo_envio` marca un envío pendiente y desde cuándo puede salir; `reintentos` cuenta los reintentos hechos. Agotados, queda con `fecha_hora_fallo` y `motivo_fallo`.
   - `event_id` lo genera el reloj al pedir el aviso: si reintenta, no se envía dos veces (2.10.2).
   - Además, un aviso por contacto, canal y ronda (`unique`), aunque el reloj genere otro `event_id` tras reiniciarse.
   - `id_externo` es el identificador del mensaje en Meta o en el correo: un webhook repetido no se procesa dos veces.
@@ -205,12 +209,12 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
 
 ## Relaciones
 
-33 relaciones, todas 1 a muchos (dos de ellas uno a uno):
+35 relaciones, todas 1 a muchos (tres de ellas uno a uno):
 
 | Tabla padre | Tablas hijas |
 |---|---|
 | `PACIENTE` | `FICHA_PACIENTE` (1 a 1), `CONDICION_PACIENTE`, `DOCUMENTO`, `CONFIGURACION`, `UMBRAL`, `ZONA_SEGURA`, `CONTACTO_PACIENTE`, `ASIGNACION_RELOJ` |
-| `CONTACTO` | `CONTACTO_PACIENTE` |
+| `CONTACTO` | `CONTACTO_PACIENTE` (externo), `REGISTRO_INTENTO` (interno) |
 | `TIPO_CONTACTO` | `CONTACTO_PACIENTE` |
 | `SMARTWATCH` | `ASIGNACION_RELOJ` |
 | `ASIGNACION_RELOJ` | `SINCRONIZACION`, `ALERTA` |
@@ -219,11 +223,12 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
 | `CONTACTO_PACIENTE` | `REGISTRO_INTENTO` |
 | `DESTINO_DERIVACION` | `SEGUIMIENTO` |
 | `ROL` | `USUARIO`, `PERMISO_ROL` |
-| `USUARIO` | `DOCUMENTO`, `ATENCION_ALERTA` (responsable), `ATENCION_ALERTA` (resolutor), `SEGUIMIENTO`, `CODIGO_RESPALDO`, `TOKEN_SESION`, `TOKEN_ACCION`, `REGISTRO_AUDITORIA` |
+| `USUARIO` | `CONTACTO` (interno, 1 a 1), `DOCUMENTO`, `ATENCION_ALERTA` (responsable), `ATENCION_ALERTA` (resolutor), `SEGUIMIENTO`, `CODIGO_RESPALDO`, `TOKEN_SESION`, `TOKEN_ACCION`, `REGISTRO_AUDITORIA` |
 
 - **Uno a uno con `>` en el DBML.** En DBML, `Ref: A.x - B.y` pone la clave foránea en `B`, al revés de lo que se quiere: el paciente dependería de su ficha y la alerta de su atención. Por eso se escriben con `>`. La clave primaria de la tabla hija (que es la misma del padre) ya garantiza que sean uno a uno.
 - **Las dos relaciones de `ATENCION_ALERTA` con `USUARIO`** no se repiten: son dos hechos distintos (quién asumió el caso y quién lo cerró), que pueden ser personas diferentes.
 - **`CONTACTO_PACIENTE`** es la tabla intermedia de una relación muchos a muchos.
+- **`CONTACTO.id_usuario`** es uno a uno con `USUARIO` (columna única) y se escribe con `>` por la misma razón. No repite la relación de `ROL`: dice qué contacto representa a la cuenta, no qué permisos tiene.
 - **`REGISTRO_INTENTO`** une una alerta con un vínculo contacto-paciente, y ambos llevan al mismo paciente por caminos distintos. Es propio de una tabla que une dos cosas del mismo dueño. Que los dos caminos coincidan lo valida el backend.
 - **`hash_configuracion`** no es clave foránea: se compara con el hash que calcula el backend, así que no crea otro camino.
 
@@ -260,6 +265,9 @@ Las tablas las crea Flyway con las migraciones de [`adapters/src/main/resources/
 | `V6__catalogos_iniciales` | Roles (el `ADMINISTRADOR` con todos los permisos), tipos de contacto y destinos de derivación |
 | `V7__auditoria_token_reutilizado` | Agrega la acción `TOKEN_REUTILIZADO` a `REGISTRO_AUDITORIA` |
 | `V8__tendencia_activa_por_defecto` | Activa el módulo de tendencia por defecto y agrega una versión nueva, auditada, a quienes lo tenían apagado |
+| `V9__zona_segura_boton_ayuda_y_optin_equipo` | Zona segura, botón de ayuda y opt-in de WhatsApp de las cuentas del equipo |
+| `V10__discrepancias_agravamiento_y_avisos` | `discrepancia_alerta`, segundos de inmovilidad del agravamiento, `EXCESO_ALERTAS` y `recibe_avisos` apagado por defecto |
+| `V11__correo_y_contacto_interno` | Contacto interno (`contacto.id_usuario`), avisos al equipo y reintentos en `registro_intento`, sus disparadores, y la vista `alerta_estado` sin contar los avisos al equipo |
 
 Una migración ya aplicada no se edita: los cambios van en una migración nueva (`V7__...`).
 
@@ -276,7 +284,11 @@ Resumen de lo que DBML no dibuja (está dentro de cada tabla en las migraciones 
   - `ALERTA`: el origen coherente con el tipo y con el hash, agravamiento solo de caídas no graves, espera del día hábil solo en leves, cancelada sin "sin respuesta";
   - `ATENCION_ALERTA`: sin filas vacías, clasificación solo al cerrar, `POSITIVA` con responsable;
   - rangos: batería 0–100, prioridad ≥ 1, cantidades e intentos ≥ 0, ronda 1 o 2;
-  - `USUARIO`: activo solo con contraseña, correo en minúsculas.
+  - `USUARIO`: activo solo con contraseña, correo en minúsculas;
+  - `CONTACTO`: el externo con nombre y algún canal, el interno sin datos propios;
+  - `REGISTRO_INTENTO`: un solo destino (vínculo o contacto interno), ronda solo con vínculo, respuesta solo de un vínculo, reintentos ≥ 0, y pendiente de envío solo si no salió ni falló.
+- **Disparadores (V11)**, que responden con el código de un `CHECK`: un contacto interno no entra en `CONTACTO_PACIENTE`, un contacto no cambia de interno a externo, y `REGISTRO_INTENTO.id_contacto_interno` apunta a un contacto interno. Son reglas entre tablas que un `CHECK` no puede revisar.
+- **Bandeja de salida:** índice parcial `registro_intento (fecha_hora_proximo_envio) WHERE fecha_hora_proximo_envio IS NOT NULL`, y único `(id_alerta, id_contacto_interno, canal)` para no repetir un aviso al equipo.
 - **Vista** `ALERTA_ESTADO`, con las dos tablas de estados de arriba.
 - **Permisos de la base:** el usuario del dashboard no tiene `UPDATE` sobre `ALERTA`; el de la recepción del reloj, solo `UPDATE (fecha_hora_agravamiento, fecha_hora_cancelacion, fecha_hora_sin_respuesta)`.
 - **UUID** generados con `gen_random_uuid()`, salvo los `event_id`, que los genera el reloj (o el servidor, en sus alertas).
@@ -299,7 +311,7 @@ Reglas que cruzan tablas. Están anotadas en la nota de cada tabla y probadas (�
 ### Borrado al fin del piloto (4.4.5)
 
 - Las relaciones `[delete: cascade]` borran todo lo del paciente: ficha, condiciones, documentos (el backend borra además los archivos del disco), configuración, umbrales, vínculos, asignaciones, lotes, lecturas, alertas, atenciones, intentos, avisos y seguimientos.
-- Los `CONTACTO` no se borran en cascada, porque pueden ser de otro paciente. Después, el backend borra los que quedaron sin pacientes.
+- Los `CONTACTO` no se borran en cascada, porque pueden ser de otro paciente. Después, el backend borra los externos que quedaron sin pacientes; los internos son de las cuentas del equipo y se conservan.
 - `USUARIO`, `SMARTWATCH`, los catálogos y los `CONTACTO` con pacientes no se pueden borrar mientras algo los use.
 - `REGISTRO_AUDITORIA` no tiene datos personales y se conserva.
 

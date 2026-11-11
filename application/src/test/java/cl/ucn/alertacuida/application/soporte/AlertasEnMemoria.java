@@ -39,8 +39,16 @@ public final class AlertasEnMemoria implements Alertas {
 	public final Map<UUID, Fila> filas = new LinkedHashMap<>();
 	/** Discrepancias guardadas, por id de alerta. */
 	public final Map<UUID, List<Discrepancia>> discrepancias = new HashMap<>();
-	/** Alertas técnicas creadas por el servidor, como "tipo|vínculo". Ninguna se cierra en estas pruebas. */
+	/** Alertas técnicas abiertas creadas por el servidor, como "tipo|vínculo". */
 	public final List<String> tecnicas = new ArrayList<>();
+	/** Alertas técnicas que el sistema cerró, como "tipo|vínculo". */
+	public final List<String> cerradas = new ArrayList<>();
+	/** Gravedad con que se creó cada alerta técnica, por "tipo|vínculo". */
+	public final Map<String, Severidad> gravedades = new HashMap<>();
+	/** Si cada alerta técnica quedó pendiente para el día hábil, por "tipo|vínculo". */
+	public final Map<String, Boolean> esperas = new HashMap<>();
+	/** Cuándo se creó la última alerta técnica, si la cerró una persona, por "tipo|vínculo". */
+	public final Map<String, Instant> cerradasPorPersona = new HashMap<>();
 	/** Último folio entregado, como la columna numero. */
 	private long folio;
 
@@ -85,13 +93,30 @@ public final class AlertasEnMemoria implements Alertas {
 
 	@Override
 	public boolean crearTecnicaSiNoHayAbierta(UUID idAsignacion, TipoEvento tipo, Severidad severidad,
-			String detalle, Instant ahora) {
+			String detalle, boolean esperaDiaHabil, Instant ahora) {
 		String clave = tipo + "|" + idAsignacion;
 		if (tecnicas.contains(clave)) {
 			return false;
 		}
 		tecnicas.add(clave);
+		gravedades.put(clave, severidad);
+		esperas.put(clave, esperaDiaHabil);
 		return true;
+	}
+
+	@Override
+	public Optional<Instant> ultimaCerradaPorPersona(UUID idAsignacion, TipoEvento tipo) {
+		return Optional.ofNullable(cerradasPorPersona.get(tipo + "|" + idAsignacion));
+	}
+
+	@Override
+	public boolean cerrarTecnicaAbierta(UUID idAsignacion, TipoEvento tipo, Instant ahora) {
+		String clave = tipo + "|" + idAsignacion;
+		boolean habia = tecnicas.remove(clave);
+		if (habia) {
+			cerradas.add(clave);
+		}
+		return habia;
 	}
 
 	@Override

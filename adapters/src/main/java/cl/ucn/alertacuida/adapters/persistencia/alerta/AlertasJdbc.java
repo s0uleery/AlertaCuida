@@ -127,29 +127,69 @@ public class AlertasJdbc implements Alertas {
 	/**
 	 * El candado (pg_advisory_xact_lock por vínculo y tipo, nota de ALERTA en el modelo) hace esperar a
 	 * una segunda llamada simultánea hasta que la primera termine su transacción; así ve la alerta ya
-	 * creada y no crea otra. "Abierta" = sin cierre en atencion_alerta.
+	 * creada y no crea otra. "Abierta" = sin cierre en atencion_alerta; un simulacro no cuenta.
 	 */
 	@Override
 	public boolean crearTecnicaSiNoHayAbierta(UUID idAsignacion, TipoEvento tipo, Severidad severidad,
-			String detalle, Instant ahora) {
+			String detalle, boolean esperaDiaHabil, Instant ahora) {
 		jdbc.sql("SELECT pg_advisory_xact_lock(hashtextextended(:clave, 0))")
 				.param("clave", idAsignacion + ":" + tipo.name())
 				.query((fila, n) -> 1)
 				.single();
 		return jdbc.sql("""
 				INSERT INTO alerta (event_id, id_asignacion, origen, tipo_evento, severidad, evidencia,
-					fecha_hora_deteccion, fecha_hora_recepcion)
+					espera_dia_habil, fecha_hora_deteccion, fecha_hora_recepcion)
 				SELECT gen_random_uuid(), :asignacion, 'SERVIDOR', :tipo, :severidad, CAST(:detalle AS jsonb),
-					:ahora, :ahora
+					:espera, :ahora, :ahora
 				WHERE NOT EXISTS (
 					SELECT 1 FROM alerta a LEFT JOIN atencion_alerta t USING (id_alerta)
-					WHERE a.id_asignacion = :asignacion AND a.tipo_evento = :tipo AND t.fecha_hora_cierre IS NULL)""")
+					WHERE a.id_asignacion = :asignacion AND a.tipo_evento = :tipo AND NOT a.es_simulacro
+						AND t.fecha_hora_cierre IS NULL)""")
 				.param("asignacion", idAsignacion)
 				.param("tipo", tipo.name())
 				.param("severidad", severidad.name())
 				.param("detalle", detalle)
+				.param("espera", esperaDiaHabil)
 				.param("ahora", marca(ahora))
 				.update() == 1;
+	}
+
+	/** Cerrada por una persona = tiene cierre y resolutor; el sistema cierra sin resolutor. */
+	@Override
+	public Optional<Instant> ultimaCerradaPorPersona(UUID idAsignacion, TipoEvento tipo) {
+		return jdbc.sql("""
+				SELECT a.fecha_hora_recepcion, t.fecha_hora_cierre, t.id_usuario_resolutor
+				FROM alerta a LEFT JOIN atencion_alerta t USING (id_alerta)
+				WHERE a.id_asignacion = :asignacion AND a.tipo_evento = :tipo AND a.origen = 'SERVIDOR'
+					AND NOT a.es_simulacro
+				ORDER BY a.fecha_hora_recepcion DESC LIMIT 1""")
+				.param("asignacion", idAsignacion)
+				.param("tipo", tipo.name())
+				.query((fila, n) -> fila.getTimestamp("fecha_hora_cierre") != null
+						&& fila.getObject("id_usuario_resolutor") != null
+								? Optional.of(fila.getTimestamp("fecha_hora_recepcion").toInstant())
+								: Optional.<Instant>empty())
+				.optional()
+				.flatMap(cerrada -> cerrada);
+	}
+
+	/**
+	 * Si alguien ya la tomó existe su fila en atencion_alerta: se completa el cierre y se conserva quién
+	 * la tomó. Sin resolutor, la alerta queda como cerrada por el sistema.
+	 */
+	@Override
+	public boolean cerrarTecnicaAbierta(UUID idAsignacion, TipoEvento tipo, Instant ahora) {
+		return jdbc.sql("""
+				INSERT INTO atencion_alerta (id_alerta, fecha_hora_cierre)
+				SELECT a.id_alerta, :ahora FROM alerta a LEFT JOIN atencion_alerta t USING (id_alerta)
+				WHERE a.id_asignacion = :asignacion AND a.tipo_evento = :tipo AND a.origen = 'SERVIDOR'
+					AND NOT a.es_simulacro AND t.fecha_hora_cierre IS NULL
+				ON CONFLICT (id_alerta) DO UPDATE SET fecha_hora_cierre = EXCLUDED.fecha_hora_cierre
+				WHERE atencion_alerta.fecha_hora_cierre IS NULL""")
+				.param("asignacion", idAsignacion)
+				.param("tipo", tipo.name())
+				.param("ahora", marca(ahora))
+				.update() > 0;
 	}
 
 	/** La condición {@code fecha_hora_agravamiento IS NULL} hace que repetirlo no cambie la hora. */
