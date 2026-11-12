@@ -38,6 +38,12 @@ Los tipos de TypeScript de cada respuesta ya están en `frontend/src/features/*/
 | `POST /api/personal/{id}/enlace-activacion` | `ADMINISTRACION:CREAR` | 200 `RespuestaEnlace` |
 | **Auditoría** | | |
 | `GET /api/auditoria?limite=500&incluirLecturas=false` | `ADMINISTRACION:VER` | 200 `RegistroAuditoria[]` |
+| **Alertas** | | |
+| `GET /api/alertas` | `ALERTAS:VER` | 200 `ResumenAlerta[]` |
+| `GET /api/alertas/{id}` | `ALERTAS:VER` | 200 `DetalleAlerta` |
+| `POST /api/alertas/{id}/asumir` | `ALERTAS:EDITAR` | 204 |
+| `POST /api/alertas/{id}/resolver` | `ALERTAS:EDITAR` | 204 |
+| `POST /api/alertas/{id}/seguimiento/cerrar` | `ALERTAS:EDITAR` | 204 |
 | **Pacientes** | | |
 | `GET /api/pacientes?incluirBajas=false` | `USUARIOS:VER` | 200 `ResumenPaciente[]` |
 | `GET /api/pacientes/{id}` | `USUARIOS:VER` | 200 `DetallePaciente` |
@@ -354,13 +360,52 @@ Lo ve todo el equipo: basta con tener sesión. Es de solo lectura; el horario y 
 - `horarioHabil` trae un tramo por día hábil (en el ejemplo se omiten martes a jueves). Los días que no aparecen no son hábiles. El `inicio` cuenta; a la hora de `fin` ya es fuera de horario.
 - `feriados` vienen ordenados por fecha: los nacionales del año en curso y el siguiente.
 
+## Alertas
+
+### `GET /api/alertas`
+Hasta 200 alertas no canceladas: primero las `SIN_RESPUESTA` abiertas y después las más recientes. Las canceladas por el paciente no aparecen, porque solo sirven para métricas. El front todavía usa datos de ejemplo.
+```json
+[{
+  "id": "…", "numero": 142,
+  "paciente": { "id": "…", "nombres": "María", "apellidos": "Soto Rojas", "edad": 82 },
+  "tipoEvento": "CAIDA", "severidad": "GRAVE",
+  "estadoContacto": "SIN_RESPUESTA", "estadoAtencion": "SIN_ASIGNAR",
+  "responsable": null, "recepcion": "2026-11-11T15:00:00Z", "prioridadMaxima": true
+}]
+```
+`severidad` es la actual: `GRAVE` si se agravó. `prioridadMaxima` es `true` si nadie de la lista confirmó y la alerta sigue abierta.
+
+### `GET /api/alertas/{id}`
+Los mismos campos de la lista, más `atencion` (`null` si sigue abierta; si no, `fechaHora`, `resolutor`, `clasificacion` y `observaciones`) y `lineaTiempo`, del paso más antiguo al más reciente:
+```json
+{ "fechaHora": "…", "tipo": "AVISO_ENVIADO", "contacto": "Hija Ana", "canal": "WHATSAPP", "ronda": 1, "detalle": null, "usuario": null }
+```
+- `tipo`: `ALERTA_RECIBIDA`, `ALERTA_AGRAVADA`, `ALERTA_CANCELADA`, `SALTO_CONTACTO`, `AVISO_ENVIADO`, `AVISO_ENTREGADO`, `AVISO_LEIDO`, `AVISO_FALLIDO`, `RESPUESTA_CONTACTO`, `SIN_RESPUESTA`, `CASO_ASUMIDO`, `SEGUIMIENTO`, `ALERTA_RESUELTA`, `SEGUIMIENTO_CERRADO`, `FCM_PENDIENTE`, `FCM_ENVIADO`, `FCM_RECIBIDO` o `FCM_NO_CONFIRMADO`.
+- `detalle`: el motivo del fallo, la respuesta del contacto, el tipo de aviso al reloj, la clasificación o la nota de seguimiento.
+- Las fechas son las registradas: lo que informa el reloj usa la hora del reloj, así que una cancelación aparece antes que la recepción.
+
+### `POST /api/alertas/{id}/asumir`
+Sin cuerpo. La persona queda a cargo. 409 si otra ya la tomó, si está cerrada o si el paciente la canceló.
+
+### `POST /api/alertas/{id}/resolver`
+```json
+{ "clasificacion": "POSITIVA", "observaciones": "Se llamó a la hija" }
+```
+- `observaciones` es obligatorio siempre.
+- `clasificacion` (`POSITIVA` o `FALSA_ALARMA`) es obligatoria en las alertas de salud y debe ir vacía en las técnicas.
+- La puede resolver cualquier cuenta con el permiso. Si nadie la había asumido, quien resuelve queda como responsable.
+- Una `POSITIVA` queda `EN_SEGUIMIENTO`.
+- 409 si ya está cerrada o si el paciente la canceló.
+
+### `POST /api/alertas/{id}/seguimiento/cerrar`
+Sin cuerpo. Termina el seguimiento de una `POSITIVA`. 409 si la alerta no tiene uno abierto.
+
 ## Todavía no existen
 
 El front no debe llamarlos aún. Si los necesita, puede usar datos de ejemplo con el mismo formato, como hace hoy la página de inicio.
 
 | Qué | Para | Cronograma |
 |---|---|---|
-| `/api/alertas` (lista, detalle con línea de tiempo, resolver) | Página de inicio y alertas activas. El formato que espera el front está en `features/alertas/tipos.ts` | 3.4 |
 | Panel de estado general (última sincronización, estado del reloj) | Página de inicio | 3.4.1 |
 | Tendencias de FC y SpO2, ubicaciones | Gráficos en la ficha | 3.5 |
 | Reportes diarios y semanales | Reportes | 3.6 |

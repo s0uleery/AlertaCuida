@@ -34,7 +34,11 @@ public enum ColumnaCifrada {
 	/** Latitud del centro de la zona segura (suele ser el domicilio), como texto antes de cifrar. */
 	ZONA_SEGURA_LATITUD("zona_segura.latitud"),
 	/** Longitud del centro de la zona segura, como texto antes de cifrar. */
-	ZONA_SEGURA_LONGITUD("zona_segura.longitud");
+	ZONA_SEGURA_LONGITUD("zona_segura.longitud"),
+	/** Lo que anotó quien resolvió la alerta. */
+	ATENCION_OBSERVACIONES("atencion_alerta.observaciones_cierre"),
+	/** Nota de una acción de seguimiento del caso. */
+	SEGUIMIENTO_NOTA("seguimiento.nota");
 
 	private final String nombre;
 

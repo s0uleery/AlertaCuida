@@ -1,0 +1,103 @@
+# Textos de los correos de AlertaCuida. Lo importa application.properties, igual que calendario.yml.
+# Está en YAML y no en application.properties porque Spring lee los .properties en Latin-1, y los textos llevan
+# tildes. Cambiarlo requiere reiniciar el backend (con Docker: docker compose up -d --build).
+#
+# Reglas que no se pueden romper (las revisa TextosCorreoRealesTest al correr las pruebas):
+#   - Sin datos clínicos: del paciente solo su alias; de la alerta, su folio y su gravedad. No nombrar qué se
+#     detectó en una alerta de salud (caída, frecuencia cardíaca, oxígeno...).
+#   - En las graves, pedirle al contacto que llame al 131. El enlace al dashboard va solo al equipo; el
+#     contacto solo recibe el enlace para responder si va o no ({responder}, obligatorio).
+#
+# Marcadores: se escriben entre llaves, como {folio}, y el backend los reemplaza al enviar. Cada texto solo
+# admite los marcadores que dice su comentario. Si un marcador está mal escrito o falta un texto, el backend
+# no arranca y avisa cuál es: así nunca sale un correo con un {marcador} sin rellenar.
+# Con mayúscula inicial, como {Reloj}, el valor sale con la primera letra en mayúscula (útil al comenzar una
+# oración).
+#
+# Los textos de varias líneas usan "|": se respetan los saltos de línea tal cual. Una línea en blanco separa
+# párrafos. Si un marcador queda vacío (por ejemplo {grave} en una alerta media), su párrafo desaparece sin
+# dejar líneas en blanco de más.
+#
+# Las alertas graves salen marcadas como importantes; eso no se configura aquí.
+alertacuida:
+  correo:
+    textos:
+      # Cierre de los correos ({pie}). Sin marcadores.
+      pie-equipo: "Este correo no incluye datos clínicos. Lo envía AlertaCuida automáticamente: no lo responda."
+      pie-contacto: "Este correo no incluye datos de salud. Lo envía AlertaCuida, de la oficina PRLAC, automáticamente: no lo responda."
+
+      # Al equipo, cuando un reloj deja de enviar datos.
+      #   {reloj}     "el reloj de Mary" o "un reloj" (ver abajo)
+      #   {folio}     folio de la alerta, ej. #142
+      #   {dashboard} dirección del dashboard
+      #   {pie}       pie-equipo (solo en el cuerpo)
+      silencio-datos:
+        asunto: "AlertaCuida: {reloj} dejó de sincronizar ({folio})"
+        cuerpo: |
+          {Reloj} dejó de enviar datos al servidor (alerta {folio}). Puede estar apagado, sin batería o sin señal.
+
+          Revise la alerta en el dashboard: {dashboard}
+
+          {pie}
+        # Valor de {reloj}. Con alias admite {alias}; sin alias, sin marcadores.
+        reloj-con-alias: "el reloj de {alias}"
+        reloj-sin-alias: "un reloj"
+
+      # Al equipo, por una alerta: las graves y el respaldo de un WhatsApp a la oficina.
+      #   {alerta}    "alerta grave #142" o "alerta técnica #142 (batería baja)" (ver abajo)
+      #   {deQuien}   " de Mary", o vacío si el paciente no tiene alias (ver abajo)
+      #   {folio}     folio de la alerta, ej. #142
+      #   {dashboard} dirección del dashboard
+      #   {pie}       pie-equipo (solo en el cuerpo)
+      alerta-equipo:
+        asunto: "AlertaCuida: {alerta}{deQuien}"
+        cuerpo: |
+          Hay una {alerta}{deQuien} que requiere atención.
+
+          Revísela en el dashboard: {dashboard}
+
+          {pie}
+        # Valor de {alerta} en una alerta de salud: admite {gravedad} (ver gravedades) y {folio}.
+        alerta-salud: "alerta {gravedad} {folio}"
+        # Valor de {alerta} en una alerta técnica: admite {tecnica} (ver tecnicas) y {folio}.
+        alerta-tecnica: "alerta técnica {folio} ({tecnica})"
+        # Valor de {deQuien} si el paciente tiene alias; admite {alias}. Ojo con el espacio inicial.
+        de-quien-con-alias: " de {alias}"
+
+      # A un contacto del paciente (respaldo de su WhatsApp).
+      #   {quien} el alias del paciente, o quien-sin-alias
+      #   {folio} folio de la alerta, ej. #142
+      #   {grave} el texto "grave" si la alerta es grave; vacío en las demás (solo en el cuerpo)
+      #   {pie}   pie-contacto (solo en el cuerpo)
+      #   {responder} enlace a la página donde elige "Confirmo que voy" o "No puedo asistir" (obligatorio en
+      #               el cuerpo). Abrirlo no responde por la persona: responde al presionar un botón.
+      contacto:
+        asunto: "AlertaCuida: {quien} necesita ayuda (alerta {folio})"
+        cuerpo: |
+          Recibimos una alerta de {quien} (alerta {folio}).
+
+          Por favor, comuníquese con {quien} o vaya a verle lo antes posible.
+
+          {grave}
+
+          Cuéntenos si puede ir en este enlace:
+          {responder}
+
+          {pie}
+        # Valor de {quien} si el paciente no tiene alias. Sin marcadores.
+        quien-sin-alias: "la persona a su cuidado"
+        # Valor de {grave} en una alerta grave. Sin marcadores.
+        grave: "Es una alerta grave: si no logra comunicarse, llame al SAMU (131)."
+
+      # Cómo se nombra cada gravedad ({gravedad}). Deben estar las tres.
+      gravedades:
+        LEVE: "leve"
+        MEDIA: "media"
+        GRAVE: "grave"
+
+      # Cómo se nombra cada alerta técnica ({tecnica}). Deben estar todas: el silencio de datos tiene su propia
+      # plantilla y no va aquí.
+      tecnicas:
+        BATERIA_BAJA: "batería baja"
+        RELOJ_NO_PUESTO: "reloj no puesto"
+        EXCESO_ALERTAS: "exceso de alertas"

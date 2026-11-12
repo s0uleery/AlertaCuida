@@ -59,7 +59,7 @@ class ContactosPacienteTest {
 				return "c:" + correo.valor();
 			}
 		};
-		contactos = new ContactosPaciente(guardados, pacientes, hash, registro, enTransaccion, reloj);
+		contactos = new ContactosPaciente(guardados, pacientes, hash, registro, enTransaccion, id -> { }, reloj);
 		maria = pacientes.crear(new DatosPaciente("12345678-5", "María", "Rojas", null, null, null, null, null, null,
 				LocalDate.of(2026, 1, 10)), "h1");
 		pedro = pacientes.crear(new DatosPaciente("9999999-3", "Pedro", "Soto", null, null, null, null, null, null,

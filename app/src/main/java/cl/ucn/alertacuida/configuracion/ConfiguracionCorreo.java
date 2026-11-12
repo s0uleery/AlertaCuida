@@ -10,6 +10,7 @@ import cl.ucn.alertacuida.application.aviso.puerto.BandejaSalida;
 import cl.ucn.alertacuida.application.aviso.puerto.CanalNotificacion;
 import cl.ucn.alertacuida.application.aviso.puerto.ColaCorreos;
 import cl.ucn.alertacuida.application.comun.puerto.Transacciones;
+import cl.ucn.alertacuida.application.respuesta.puerto.FirmaRespuesta;
 import cl.ucn.alertacuida.domain.calendario.CalendarioHabil;
 import java.time.Clock;
 import org.springframework.beans.factory.ObjectProvider;
@@ -35,10 +36,13 @@ public class ConfiguracionCorreo {
 		};
 	}
 
-	/** Plantillas con la dirección del dashboard. */
+	/**
+	 * Plantillas con la dirección del dashboard, los textos de correos.yml y la firma de los enlaces con que
+	 * el contacto responde.
+	 */
 	@Bean
-	PlantillasCorreo plantillasCorreo(PropiedadesCorreo propiedades) {
-		return new PlantillasCorreo(propiedades.urlDashboard());
+	PlantillasCorreo plantillasCorreo(PropiedadesCorreo propiedades, FirmaRespuesta firma) {
+		return new PlantillasCorreo(propiedades.urlDashboard(), propiedades.textos(), firma);
 	}
 
 	/** Esperas entre reintentos de un correo fallido. */

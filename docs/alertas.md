@@ -148,7 +148,14 @@ Programado el 10-11-2026. Detalle técnico en [backend.md](backend.md#correo-ins
 - **A quién y cuándo:** a las cuentas activas con `recibe_avisos`, de cualquier rol (los coordinadores también, además de su WhatsApp), por cada alerta técnica, solo si ocurrió en horario hábil. No se avisa de simulacros ni de alertas resueltas.
 - **Respaldo de WhatsApp:** cada WhatsApp fallido, a un contacto del paciente o a una cuenta del equipo, genera un correo al mismo destino, si tiene correo, a cualquier hora.
 - **Reintentos:** a los 1, 5 y 15 minutos; después queda fallido, con el motivo, en `registro_intento`.
-- **Contenido:** sin datos clínicos. Va el alias del paciente o, si no tiene, el folio de la alerta. Al contacto de una alerta grave se le pide llamar al 131.
+- **Contenido:** sin datos clínicos. Va el alias del paciente o, si no tiene, el folio de la alerta. Al contacto de una alerta grave se le pide llamar al 131. Los textos se editan en `app/src/main/resources/correos.yml`, sin tocar código; un marcador mal escrito impide arrancar el backend.
+- **Importante:** las alertas graves salen marcadas como importantes (`Importance: High` y `X-Priority: 1`). Outlook lo muestra; Gmail suele decidir por su cuenta.
+- **Respuesta por correo (hecha el 12-11-2026):** el correo al contacto lleva **un solo enlace** a la página pública `/responder` del dashboard, que muestra la alerta (alias o folio, tipo, gravedad y hora; en una grave, el 131) y dos botones, "Confirmo que voy" y "No puedo asistir", que cuentan igual que los botones del WhatsApp. No se usan acuses de lectura: casi siempre se bloquean.
+  - **La respuesta se registra al presionar el botón**, no al abrir el enlace: Gmail y Outlook abren enlaces solos para revisarlos.
+  - El enlace lleva un token firmado por el servidor (HMAC con `RESPUESTA_CLAVE`) después de `#`, así que no se guarda en la base ni llega a los registros del servidor. Solo sirve para correos a contactos del paciente, no a cuentas del equipo.
+  - **Vale solo la primera respuesta.** Si la alerta fue resuelta o cancelada, no se registra y la página lo dice. Si otro contacto ya confirmó o el reloj terminó la lista sin respuesta, se registra igual.
+  - "Voy" confirma la alerta y deja el aviso `ALERTA_CONFIRMADA` al reloj para que deje de escalar. "No puedo" queda registrado y el reloj sigue con el siguiente.
+  - Hoy el correo al contacto solo sale como respaldo de un WhatsApp fallido; cuando exista la solicitud de aviso del reloj (2.10.2), también saldrá cuando el reloj lo pida por correo.
 - **Registro:** cada correo queda en `registro_intento`. Las cuentas del equipo figuran como **contacto interno**, que es solo un enlace a su cuenta y nunca entra en la lista que recorre el reloj. Estos avisos no cambian el estado de contacto de la alerta.
 
 ## Estado y cierre
@@ -165,7 +172,13 @@ El estado no se guarda: se calcula con la vista `ALERTA_ESTADO`. `ALERTA` es la 
 | `PENDIENTE_DIA_HABIL` | Leve fuera de horario, a la espera del día hábil |
 | `RECIBIDA` | Ninguna de las anteriores |
 
-El estado de atención es `SIN_ASIGNAR`, `EN_ATENCION` o `RESUELTA`. Al cerrar, una alerta clínica se clasifica como `POSITIVA` o `FALSA_ALARMA`; una positiva abre su seguimiento.
+El estado de atención es `SIN_ASIGNAR`, `EN_ATENCION`, `EN_SEGUIMIENTO` o `RESUELTA`. Al cerrar, una alerta clínica se clasifica como `POSITIVA` o `FALSA_ALARMA`; una positiva queda `EN_SEGUIMIENTO` hasta que se cierre su seguimiento.
+
+- **Asumir:** la persona queda a cargo. No se puede si otra ya la tomó, si está cerrada o si el paciente la canceló.
+- **Resolver:** puede hacerlo cualquier cuenta con `ALERTAS:EDITAR`, aunque otra la tenga a cargo. Si nadie la había asumido, quien resuelve queda como responsable. Las observaciones son obligatorias en todas. La clasificación es obligatoria en las alertas de salud y no se admite en las técnicas.
+- **Aviso al reloj:** resolver una alerta del reloj deja en la bandeja el aviso FCM `ALERTA_RESUELTA`. Sin acuse se reintenta a 1, 1 y 2 minutos; agotados los reintentos, la línea de tiempo muestra que el reloj no lo confirmó. Si el reloj no tiene token, el aviso espera sin gastar reintentos. Las alertas del servidor no lo generan, porque el reloj no las escala.
+- **Prioridad máxima:** las `SIN_RESPUESTA` abiertas van primero en la lista, aunque otra sea más grave o más nueva. Al resolverlas pierden la prioridad.
+- **Línea de tiempo:** cada alerta muestra su recorrido, armado con las fechas registradas. Un salto de contacto es un aviso a otra persona de la lista; el correo de respaldo al mismo contacto y los avisos al equipo no cuentan.
 
 ## Dónde se cambia cada valor
 
@@ -187,7 +200,7 @@ Los de `application.properties` requieren reiniciar el backend.
 | Reintentos del correo | 1, 5 y 15 minutos | `alertacuida.correo.reintentos` |
 | Antigüedad máxima de lo que se avisa por correo | 1 hora | `alertacuida.correo.ventana` |
 | Qué alertas van por correo a `recibe_avisos` | Las técnicas | `TipoEvento.tecnicas()` |
-| Texto de los correos | Ver arriba | `PlantillasCorreo` |
+| Texto de los correos | Ver arriba | `app/src/main/resources/correos.yml` |
 | Horario hábil y feriados | Ver arriba | `app/src/main/resources/calendario.yml` |
 | Gravedad de cada técnica | Tabla de tipos | Código de cada regla (`ReglaSilencioDatos`, `ReglaBateriaBaja`, `ReglaRelojNoPuesto`) y `RecibirAlerta` |
 
@@ -233,17 +246,36 @@ Los de `application.properties` requieren reiniciar el backend.
 | 10-11-2026 | El respaldo de WhatsApp sale para cualquier alerta y a cualquier hora, si el destino tiene correo | Un aviso que no llegó debe intentar otra vía | Sin confirmar |
 | 10-11-2026 | Solo se avisa lo ocurrido en la última hora | No avisar de alertas viejas tras encender `recibe_avisos` o tras una caída del servidor | Sin confirmar |
 | 10-11-2026 | Solo un contacto del paciente puede confirmar ("Voy en camino") | El estado que consulta el reloj depende del contacto que confirmó | Sin confirmar |
+| 11-11-2026 | Resolver deja pendiente el aviso FCM hasta que exista el envío | No perder el aviso de las alertas resueltas antes de tener Firebase | Confirmada |
+| 11-11-2026 | Resuelve cualquier cuenta con `ALERTAS:EDITAR`; sin responsable, quien resuelve queda a cargo | Una emergencia no se traba porque el responsable no esté | Confirmada |
+| 11-11-2026 | Observaciones obligatorias al resolver, también en las técnicas | | Confirmada |
+| 11-11-2026 | Reintentos FCM sin acuse: 1, 1 y 2 minutos desde el envío anterior | Terminan antes de los 5 minutos que el reloj espera por contacto | Confirmada, valor provisional |
+| 11-11-2026 | Agotados los reintentos FCM, queda visible en la línea de tiempo, sin aviso extra | El reloj consulta el estado antes de cambiar de contacto | Confirmada |
+| 11-11-2026 | Un reloj sin token no gasta reintentos | El aviso sale cuando registre su token | Confirmada |
+| 11-11-2026 | Un envío que Firebase no acepta no cuenta como intento; un token rechazado se borra | El reloj nunca pudo recibirlo | Sin confirmar |
+| 11-11-2026 | Aviso de configuración nueva solo al cambiar contactos, intento único y sin registro | Lo pide el cronograma; si falla, llega en la sincronización | Sin confirmar |
+| 11-11-2026 | La lista muestra hasta 200 alertas y no incluye las canceladas | Las canceladas solo sirven para métricas | Sin confirmar |
+| 11-11-2026 | Las alertas del servidor no generan aviso FCM al resolverse | El reloj no las escala | Sin confirmar |
+| 11-11-2026 | Los textos de los correos van en `correos.yml`, editables sin tocar código | Que el equipo ajuste la redacción | Confirmada |
+| 11-11-2026 | Solo las alertas graves salen marcadas como importantes | Si todo es importante, nada lo es | Confirmada |
+| 11-11-2026 | El correo al contacto tendrá enlaces para confirmar y para decir que no puede asistir; se hace con la 2.9 | Misma lógica que la respuesta por WhatsApp | Reemplazada el 12-11 (un solo enlace) |
+| 12-11-2026 | El enlace abre una página y la respuesta se registra al presionar un botón | Los revisores de enlaces del correo no responden por la persona | Confirmada |
+| 12-11-2026 | Un solo enlace en el correo; la persona elige en la página | Con dos enlaces y un clic más, elegiría dos veces | Confirmada |
+| 12-11-2026 | La página muestra alias o folio, tipo, gravedad y hora de la alerta | Sin datos personales del paciente | Confirmada |
+| 12-11-2026 | Vale solo la primera respuesta del contacto | | Confirmada |
+| 12-11-2026 | Con la alerta resuelta o cancelada no se registra; confirmada por otro o sin respuesta, sí | Un "voy" tardío le sirve al equipo | Confirmada |
+| 12-11-2026 | El token del enlace va firmado (HMAC), sin guardarlo en la base | No cambia el modelo de datos | Confirmada |
 
 ## Qué falta
 
 **Por programar en el servidor** (tareas del [cronograma](cronograma.md)):
 
-- Avisos al reloj por FCM (2.3).
 - Mostrar en el dashboard los correos fallidos (hoy quedan en `registro_intento`).
-- Registro de cada paso y resolución de una alerta por un profesional (2.5).
+- Crear el proyecto de Firebase y probar los avisos con Firebase y el simulador de reloj (2.3).
 - Red de seguridad sobre las lecturas (2.7) y simulacro (2.8).
 - Canal de WhatsApp (2.9) y escalamiento del lado del servidor (2.10), que incluye el aviso a la oficina.
-- Pantalla de alertas y discrepancias (3.4). Hoy las alertas solo se consultan por la API.
+- Pantalla de alertas y discrepancias (3.4). Hoy las alertas solo se consultan y atienden por la API.
+- Registrar notas y derivaciones de un caso: la línea de tiempo ya las muestra, pero aún no hay endpoint para crearlas.
 - Editar el teléfono y el opt-in de una cuenta ya creada, y registrar la baja del opt-in de un coordinador por webhook.
 
 **Por definir:**

@@ -204,6 +204,17 @@ public class AlertasJdbc implements Alertas {
 				.update() == 1;
 	}
 
+	/** La condición {@code fecha_hora_sin_respuesta IS NULL} hace que repetirlo no cambie la hora. */
+	@Override
+	public void registrarSinRespuesta(UUID idAlerta, Instant fecha) {
+		jdbc.sql("""
+				UPDATE alerta SET fecha_hora_sin_respuesta = :fecha
+				WHERE id_alerta = :id AND fecha_hora_sin_respuesta IS NULL""")
+				.param("fecha", marca(fecha))
+				.param("id", idAlerta)
+				.update();
+	}
+
 	/** Arma una {@link AlertaGuardada} desde una fila de buscar o crear. */
 	private static AlertaGuardada guardada(ResultSet fila) throws SQLException {
 		return new AlertaGuardada(fila.getObject("id_alerta", UUID.class), fila.getObject("id_asignacion", UUID.class),

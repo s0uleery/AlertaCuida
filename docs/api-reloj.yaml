@@ -16,8 +16,9 @@ info:
       sin duplicar nada.
     - Los errores siguen RFC 9457 (`application/problem+json`) con un `codigo` estable.
 
-    **Estado al 27-10-2026.** Ya los atiende el servidor: sincronización, alerta, cancelación,
-    estado de una alerta, configuración y token de Firebase. Los demás llevan "[Pendiente X.Y]" en
+    **Estado al 11-11-2026.** Ya los atiende el servidor: sincronización, alerta, cancelación,
+    agravamiento, fin de la lista, estado de una alerta, configuración, token de Firebase y acuse de
+    los avisos FCM. Los demás llevan "[Pendiente X.Y]" en
     su resumen, con la tarea del cronograma que los implementa.
 servers:
   - url: http://localhost:8080
@@ -239,7 +240,7 @@ paths:
     post:
       tags: [Escalamiento]
       operationId: informarSinRespuesta
-      summary: "[Pendiente 2.10] El reloj recorrió la lista dos veces sin confirmación"
+      summary: "El reloj recorrió la lista dos veces sin confirmación"
       description: La alerta pasa a `SIN_RESPUESTA` y queda con prioridad máxima en el dashboard.
       requestBody:
         required: true
@@ -286,9 +287,11 @@ paths:
     post:
       tags: [Avisos FCM]
       operationId: acusarAvisoFcm
-      summary: "[Pendiente 2.3] Confirma que el reloj recibió un aviso FCM de una alerta"
+      summary: Confirma que el reloj recibió un aviso FCM de una alerta
       description: |
-        Apenas lo recibe. Si no llega en el plazo, el servidor reintenta el aviso. Repetirlo no
+        Apenas lo recibe. Si no llega, el servidor reintenta el aviso a 1, 1 y 2 minutos del envío
+        anterior (provisional, hasta medir FCM por LTE). Un mismo `idAviso` puede llegar más de una
+        vez: el reloj debe tratarlo como un solo aviso. Repetirlo no
         cambia la hora ya registrada. Los avisos `CONFIGURACION_NUEVA` no se acusan: el reloj
         simplemente descarga la configuración.
       requestBody:

@@ -13,7 +13,8 @@ import org.springframework.mail.javamail.MimeMessageHelper;
 
 /**
  * Correo institucional por SMTP (Spring Mail). El servidor, el usuario y la clave llegan como secreto
- * por variables de entorno (spring.mail.* en application.properties). Envía texto plano en UTF-8.
+ * por variables de entorno (spring.mail.* en application.properties). Envía texto plano en UTF-8, y
+ * marca como importantes los mensajes que lo piden (Importance: High y X-Priority: 1).
  */
 public class CanalCorreoSmtp implements CanalNotificacion {
 
@@ -42,6 +43,11 @@ public class CanalCorreoSmtp implements CanalNotificacion {
 			ayudante.setTo(mensaje.destinatario());
 			ayudante.setSubject(mensaje.asunto());
 			ayudante.setText(mensaje.texto(), false);
+			if (mensaje.importante()) {
+				// Outlook y otros lo muestran como importante; Gmail suele decidir por su cuenta
+				mime.setHeader("Importance", "High");
+				mime.setHeader("X-Priority", "1");
+			}
 			correo.send(mime);
 			String id = mime.getMessageID();
 			return id == null ? "correo-" + UUID.randomUUID() : id;

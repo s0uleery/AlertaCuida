@@ -98,7 +98,7 @@ Si nadie confirma, el reloj recorre la lista dos veces y termina con `POST /aler
 
 1. **Simulacro:** propuesta: el servidor crea la alerta de prueba y manda el aviso FCM `SIMULACRO` con su `eventIdAlerta`; el reloj muestra "PRUEBA" y escala como siempre con ese `eventId`, y el servidor usa la plantilla "PRUEBA". ¿Le sirve, o el servidor debe avisar solo, sin pasar por el reloj?
 2. ¿El reloj puede enviar alertas `BATERIA_BAJA` y `RELOJ_NO_PUESTO`, o esas las detecta solo el servidor con la sincronización (2.2.4)?
-3. ¿Cuánto tarda en llegar un aviso FCM por LTE en la prueba de factibilidad? Define el plazo para reintentarlo.
+3. ¿Cuánto tarda en llegar un aviso FCM por LTE en la prueba de factibilidad? Define el plazo para reintentarlo. Hoy, provisional: 1, 1 y 2 minutos desde el envío anterior, y un mismo `idAviso` puede llegar más de una vez.
 4. ¿El reloj puede guardar la cola y los temporizadores de forma que sobrevivan a un reinicio (Room)?
 5. ¿Los rangos válidos de las lecturas (FC de 20 a 250 y SpO2 de 50 a 100) calzan con lo que entrega el Samsung Health Sensor SDK?
 6. ¿Le basta la `version` como hash, o prefiere además un número correlativo para mostrar en pantalla?
@@ -112,5 +112,5 @@ Si nadie confirma, el reloj recorre la lista dos veces y termina con `POST /aler
 
 - Ya implementados: sincronización, alertas, cancelaciones y estado de una alerta (25-10-2026, tarea 1.4); configuración y token de Firebase (27-10-2026, tarea 1.7). Detalle en [backend.md](backend.md#api-del-reloj).
 - Implementado el 05-11-2026 (tarea 2.1): agravamiento, discrepancias y exceso de alertas.
-- Por implementar: 2.3 (avisos FCM y acuse), 2.9 (webhook) y 2.10 (solicitud de aviso y fin del escalamiento).
+- Por implementar: 2.9 (webhook) y 2.10 (solicitud de aviso). Los avisos FCM y su acuse están programados con canal simulado; falta probarlos con Firebase y el reloj real.
 - Definir con TI el subdominio público (0.8); en el contrato figura uno de ejemplo.

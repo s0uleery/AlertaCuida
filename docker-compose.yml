@@ -54,6 +54,13 @@ services:
       CORREO_CANAL: SMTP
       SMTP_HOST: mailpit
       SMTP_PUERTO: 1025
+      # Avisos al reloj: SIMULADO solo los anota en el log; SIMULADOR se los entrega al simulador de reloj
+      # (simulador-reloj/), que corre en este computador, fuera de Docker. Se elige con FCM_CANAL en .env
+      FCM_CANAL: ${FCM_CANAL:-SIMULADO}
+      FCM_SIMULADOR_URL: http://host.docker.internal:${SIM_PUERTO:-9090}/avisos
+    # En Linux host.docker.internal no existe por defecto; en Windows y Mac ya existe
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${BACK_PUERTO:-8080}:8080"
     depends_on:

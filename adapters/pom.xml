@@ -63,6 +63,13 @@
 			<artifactId>spring-boot-starter-mail</artifactId>
 		</dependency>
 
+		<!-- Avisos al reloj por Firebase Cloud Messaging -->
+		<dependency>
+			<groupId>com.google.firebase</groupId>
+			<artifactId>firebase-admin</artifactId>
+			<version>${firebase-admin.version}</version>
+		</dependency>
+
 		<!-- Pruebas de las migraciones con un PostgreSQL real (Docker) -->
 		<dependency>
 			<groupId>org.testcontainers</groupId>

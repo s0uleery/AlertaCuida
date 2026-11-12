@@ -6,6 +6,7 @@ import cl.ucn.alertacuida.application.clinica.modelo.ValoresBase;
 import cl.ucn.alertacuida.application.clinica.puerto.PerfilesClinicos;
 import cl.ucn.alertacuida.application.comun.puerto.Transacciones;
 import cl.ucn.alertacuida.application.contacto.ContactosPaciente;
+import cl.ucn.alertacuida.application.contacto.puerto.AvisoCambioContactos;
 import cl.ucn.alertacuida.application.contacto.puerto.Contactos;
 import cl.ucn.alertacuida.application.contacto.puerto.HashMedioContacto;
 import cl.ucn.alertacuida.application.paciente.puerto.Pacientes;
@@ -48,8 +49,9 @@ public class ConfiguracionPerfilYContactos {
 	/** Lista de contactos de cada paciente. */
 	@Bean
 	ContactosPaciente contactosPaciente(Contactos contactos, Pacientes pacientes, HashMedioContacto hash,
+			AvisoCambioContactos avisoCambio,
 			RegistroAuditoria auditoria, Transacciones transacciones, Clock reloj) {
-		return new ContactosPaciente(contactos, pacientes, hash, auditoria, transacciones, reloj);
+		return new ContactosPaciente(contactos, pacientes, hash, auditoria, transacciones, avisoCambio, reloj);
 	}
 
 }

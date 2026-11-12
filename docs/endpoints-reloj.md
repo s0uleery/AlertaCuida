@@ -33,9 +33,11 @@ Lo que el backend **ya atiende** para el reloj (o el simulador), al 26 de octubr
 | `POST /api/reloj/v1/alertas` | Al terminar la ventana de 30 s sin cancelación | 201 nueva, 200 reenvío |
 | `POST /api/reloj/v1/cancelaciones` | Si el paciente canceló dentro de los 30 s (solo métricas) | 201 nueva, 200 reenvío |
 | `POST /api/reloj/v1/alertas/{eventId}/agravamiento` | Si una caída leve o media pasa a grave por inmovilidad | 200 |
+| `POST /api/reloj/v1/alertas/{eventId}/sin-respuesta` | Al terminar la lista dos veces sin confirmación | 200 |
 | `GET /api/reloj/v1/alertas/{eventId}` | Antes de pasar al siguiente contacto | 200 |
 | `GET /api/reloj/v1/configuracion` | Si la sincronización responde `configuracionNueva: true` | 200, 304 si no cambió |
 | `PUT /api/reloj/v1/token-fcm` | Al instalarse y cada vez que Firebase renueva el token | 204 |
+| `POST /api/reloj/v1/avisos-fcm/{idAviso}/recepcion` | Apenas llega un aviso de una alerta | 204 |
 
 ## `POST /api/reloj/v1/sincronizaciones`
 
@@ -172,6 +174,15 @@ La alerta que el paciente canceló en los 30 s nunca se envió como alerta. Se i
 ```
 La respuesta tiene el mismo formato que la de una alerta, con `estado: "CANCELADA"`. 409 `NO_APLICA` si ese `eventId` ya se había enviado como alerta.
 
+## `POST /api/reloj/v1/alertas/{eventId}/sin-respuesta`
+
+El reloj la llama al terminar la lista dos veces sin que nadie confirme. La alerta queda con prioridad máxima en el dashboard.
+
+```json
+{ "fechaHora": "2026-10-26T15:40:00Z" }
+```
+Responde 200 con el mismo formato que la consulta de estado. Repetirla responde 200 y conserva la primera hora. 404 `ALERTA_DESCONOCIDA` si este reloj no envió esa alerta, 409 `NO_APLICA` si el paciente la canceló y 400 `MENSAJE_INVALIDO` si falta `fechaHora`.
+
 ## `GET /api/reloj/v1/alertas/{eventId}`
 
 El reloj la consulta antes de avisar al siguiente contacto, para saber si alguien ya respondió.
@@ -234,13 +245,26 @@ Todo lo que el reloj necesita para evaluar y escalar sin conexión. Con `If-None
 ```
 Responde 204. El nuevo token reemplaza al anterior. 400 `MENSAJE_INVALIDO` si viene vacío o supera 4.096 caracteres.
 
+## `POST /api/reloj/v1/avisos-fcm/{idAviso}/recepcion`
+
+El reloj lo llama apenas le llega un aviso de una alerta, con el `idAviso` que venía en él.
+
+```json
+{ "fechaHoraRecepcion": "2026-10-26T15:14:06Z" }
+```
+Responde 204. Repetirlo responde 204 y conserva la primera hora. 404 si no hay un aviso con ese id para este reloj y 400 `MENSAJE_INVALIDO` si falta la hora.
+
+## Avisos que recibe el reloj por Firebase
+
+Son de alta prioridad y solo llevan identificadores (`data`): `tipo`, y según el caso `idAviso`, `eventIdAlerta` e `idContacto`.
+
+- `ALERTA_CONFIRMADA`, `ALERTA_RESUELTA` y `SIMULACRO` se acusan. Sin acuse, el servidor reintenta a 1, 1 y 2 minutos del envío anterior, así que **un mismo `idAviso` puede llegar más de una vez**.
+- `CONFIGURACION_NUEVA` solo trae el `tipo` y no se acusa: el reloj descarga la configuración. Se envía cuando cambia la lista de contactos; es un intento único, y si no llega, el reloj se entera en su siguiente sincronización.
+
 ## Todavía no existen
 
 Están definidos en el contrato ([api-reloj.yaml](api-reloj.yaml)), pero el servidor aún no los atiende.
 
 | Método y ruta | Para qué | Cronograma |
 |---|---|---|
-| `POST /api/reloj/v1/avisos-fcm/{idAviso}/recepcion` | Acusar que llegó un aviso FCM | 2.3 |
 | `POST /api/reloj/v1/alertas/{eventId}/avisos` | Pedir al servidor que avise a un contacto | 2.10 |
-| `POST /api/reloj/v1/alertas/{eventId}/sin-respuesta` | Informar que se recorrió la lista dos veces sin confirmación | 2.10 |
-| Avisos FCM (servidor → reloj) | Alerta confirmada o resuelta, simulacro, configuración nueva | 2.3 |

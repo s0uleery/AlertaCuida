@@ -2,6 +2,7 @@ package cl.ucn.alertacuida.configuracion;
 
 import cl.ucn.alertacuida.application.aviso.EncolarCorreos;
 import cl.ucn.alertacuida.application.aviso.EnviarCorreosPendientes;
+import cl.ucn.alertacuida.application.avisoreloj.EnviarAvisosReloj;
 import cl.ucn.alertacuida.application.sesion.LimpiarTokensVencidos;
 import cl.ucn.alertacuida.application.vigilancia.VigilarRelojes;
 import org.springframework.context.annotation.Configuration;
@@ -17,19 +18,30 @@ public class TareasProgramadas {
 	private final VigilarRelojes vigilarRelojes;
 	private final EncolarCorreos encolarCorreos;
 	private final EnviarCorreosPendientes enviarCorreos;
+	private final EnviarAvisosReloj enviarAvisosReloj;
 
 	/**
-	 * @param limpiarTokens  borra los tokens de renovación vencidos
-	 * @param vigilarRelojes aplica las reglas de ausencia a los relojes
-	 * @param encolarCorreos deja en la bandeja de salida los correos que corresponden
-	 * @param enviarCorreos  envía los correos pendientes, con reintentos
+	 * @param limpiarTokens     borra los tokens de renovación vencidos
+	 * @param vigilarRelojes    aplica las reglas de ausencia a los relojes
+	 * @param encolarCorreos    deja en la bandeja de salida los correos que corresponden
+	 * @param enviarCorreos     envía los correos pendientes, con reintentos
+	 * @param enviarAvisosReloj envía los avisos pendientes al reloj, con reintentos
 	 */
 	public TareasProgramadas(LimpiarTokensVencidos limpiarTokens, VigilarRelojes vigilarRelojes,
-			EncolarCorreos encolarCorreos, EnviarCorreosPendientes enviarCorreos) {
+			EncolarCorreos encolarCorreos, EnviarCorreosPendientes enviarCorreos,
+			EnviarAvisosReloj enviarAvisosReloj) {
 		this.limpiarTokens = limpiarTokens;
 		this.vigilarRelojes = vigilarRelojes;
 		this.encolarCorreos = encolarCorreos;
 		this.enviarCorreos = enviarCorreos;
+		this.enviarAvisosReloj = enviarAvisosReloj;
+	}
+
+	/** Envía los avisos al reloj cada cierto tiempo; la primera vez, un intervalo después de arrancar. */
+	@Scheduled(fixedDelayString = "${alertacuida.fcm.intervalo}",
+			initialDelayString = "${alertacuida.fcm.intervalo}")
+	void avisarAlReloj() {
+		enviarAvisosReloj.enviar();
 	}
 
 	/** Revisa los relojes cada cierto tiempo; la primera vez, un intervalo después de arrancar. */

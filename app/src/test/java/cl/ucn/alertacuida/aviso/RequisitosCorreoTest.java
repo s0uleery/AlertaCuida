@@ -61,6 +61,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * con el motivo, visible para el equipo.</li>
  * <li>R7 Un correo al equipo no se repite, y no cambia el estado de contacto de la alerta (el recorrido
  * de contactos es del reloj).</li>
+ * <li>R8 Las graves salen marcadas como importantes (Importance: High y X-Priority: 1); las demás, sin
+ * marca (decisión del 11-11-2026).</li>
  * </ul>
  */
 @SpringBootTest(properties = {"alertacuida.correo.canal=SMTP", "spring.mail.host=localhost",
@@ -256,6 +258,32 @@ class RequisitosCorreoTest {
 		String texto = correo.getSubject() + correo.getContent();
 		assertThat(((InternetAddress) correo.getFrom()[0]).getAddress()).isEqualTo("alertacuida@muni.cl");
 		assertThat(texto).contains("Rosa", "#" + folio).doesNotContain("142 ", "lecturas", "FC");
+	}
+
+	/** R8: el respaldo de una grave sale marcado como importante. */
+	@Test
+	void unaGraveSaleComoImportante() throws Exception {
+		UUID alerta = alertaReloj("CAIDA", "GRAVE", MEDIODIA, "");
+		whatsappFallido(alerta, vinculoHija, null, MEDIODIA);
+
+		avisar(MEDIODIA.plusSeconds(30));
+
+		MimeMessage correo = SMTP.getReceivedMessages()[0];
+		assertThat(correo.getHeader("Importance")).containsExactly("High");
+		assertThat(correo.getHeader("X-Priority")).containsExactly("1");
+	}
+
+	/** R8: el respaldo de una media sale sin marca de importancia. */
+	@Test
+	void unaMediaSaleSinMarca() throws Exception {
+		UUID alerta = alertaReloj("CAIDA", "MEDIA", MEDIODIA, "");
+		whatsappFallido(alerta, vinculoHija, null, MEDIODIA);
+
+		avisar(MEDIODIA.plusSeconds(30));
+
+		MimeMessage correo = SMTP.getReceivedMessages()[0];
+		assertThat(correo.getHeader("Importance")).isNull();
+		assertThat(correo.getHeader("X-Priority")).isNull();
 	}
 
 	/** R5: sin alias, el correo usa el folio de la alerta. */

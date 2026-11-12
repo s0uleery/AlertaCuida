@@ -34,6 +34,7 @@
 		<checkstyle.version>14.2.0</checkstyle.version>
 		<!-- Servidor de correo de prueba (Jakarta Mail 2), solo para las pruebas de app -->
 		<greenmail.version>2.1.3</greenmail.version>
+		<firebase-admin.version>9.11.0</firebase-admin.version>
 	</properties>
 
 	<!-- Versiones de los módulos propios, para no repetirlas en cada hijo -->

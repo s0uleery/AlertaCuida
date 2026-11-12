@@ -132,6 +132,12 @@ public final class AlertasEnMemoria implements Alertas {
 		return true;
 	}
 
+	/** Las pruebas unitarias no usan este estado: las del fin de la lista van contra la base real. */
+	@Override
+	public void registrarSinRespuesta(UUID idAlerta, Instant fecha) {
+		throw new UnsupportedOperationException("No se usa en las pruebas unitarias");
+	}
+
 	/** @return la fila de esa alerta */
 	private Fila porId(UUID idAlerta) {
 		return filas.values().stream().filter(f -> f.guardada().idAlerta().equals(idAlerta)).findFirst()

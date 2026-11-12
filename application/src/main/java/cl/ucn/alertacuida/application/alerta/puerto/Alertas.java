@@ -67,4 +67,7 @@ public interface Alertas {
 	 */
 	boolean agravar(UUID idAlerta, Instant fecha, Integer segundosInmovilidad);
 
+	/** Registra que el reloj terminó la lista sin confirmación. No cambia una hora ya registrada. */
+	void registrarSinRespuesta(UUID idAlerta, Instant fecha);
+
 }

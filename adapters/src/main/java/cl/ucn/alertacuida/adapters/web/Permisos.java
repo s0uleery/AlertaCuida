@@ -27,6 +27,12 @@ public final class Permisos {
 	/** Dar de baja a un paciente (no se borra: queda su historial). */
 	public static final String USUARIOS_ELIMINAR = "hasAuthority('USUARIOS:ELIMINAR')";
 
+	/** Ver las alertas y su línea de tiempo. */
+	public static final String ALERTAS_VER = "hasAuthority('ALERTAS:VER')";
+
+	/** Asumir y resolver alertas, y cerrar su seguimiento. */
+	public static final String ALERTAS_EDITAR = "hasAuthority('ALERTAS:EDITAR')";
+
 	/** Solo constantes: no se crean objetos de esta clase. */
 	private Permisos() {
 	}

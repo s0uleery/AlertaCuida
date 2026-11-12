@@ -86,7 +86,7 @@ class CifradoCamposTest {
 	/** @return el cifrado con esa llave y el resto de la configuración en valores cualquiera */
 	private static CifradoCampos conLlave(String llave) {
 		return new CifradoCampos(new PropiedadesSeguridad("clave-run-de-prueba", "x".repeat(32), llave,
-				Duration.ofMinutes(15),
+				"r".repeat(32), Duration.ofMinutes(15),
 				new PropiedadesSeguridad.Sesion(Duration.ofHours(10), Duration.ofMinutes(15), Duration.ofSeconds(10),
 						true),
 				new PropiedadesSeguridad.Bloqueo(5, Duration.ofMinutes(15)),

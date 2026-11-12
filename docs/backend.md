@@ -239,9 +239,33 @@ Deciden si una alerta leve avisa o espera al día hábil, y a quién se avisa.
 - **`ReglaEnrutamiento`** (aplicación), fija en el código: una alerta leve fuera de horario o en feriado espera al día hábil; en cualquier otro caso se avisa a los contactos activos, con algún canal y cuyo horario cubre ese momento, por prioridad. Con el botón de ayuda (`BOTON_AYUDA`, siempre leve) van primero los `VECINO` por prioridad y después el resto por prioridad. El horario de cada contacto se respeta siempre, también en horario hábil.
 - **Quién la usa**: el reloj, porque escala (lo recibe en su configuración); el servidor, para revisar el `esperaDiaHabil` de las alertas que recibe (2.1.2) y para sus alertas técnicas (2.2).
 
+## Atención de alertas en el dashboard
+
+Paquete `application/alerta`. `ConsultarAlertas` lee la lista y el detalle; `AtenderAlerta` asume, resuelve y cierra el seguimiento. Sin migración: usa `atencion_alerta`, `aviso_fcm` y la vista `alerta_estado`.
+
+- **Línea de tiempo (`LineaTiempoAlerta`):** no se guarda. Se arma con las fechas de `alerta`, `registro_intento`, `atencion_alerta`, `seguimiento` y `aviso_fcm`, y se ordena por fecha. Hay `SALTO_CONTACTO` cuando un aviso a la lista del paciente va a otra persona que el aviso anterior a esa lista; el respaldo al mismo contacto y los avisos al equipo no cuentan.
+- **Sin carreras:** asumir y resolver son un `INSERT … ON CONFLICT … WHERE` en `AtencionAlertasJdbc`. De dos personas a la vez, la segunda no afecta filas y recibe 409.
+- **Resolver:** si nadie la asumió, se guarda a quien resuelve como responsable, con la hora de toma igual a la del cierre. Por eso la línea de tiempo omite `CASO_ASUMIDO` cuando ambas horas coinciden.
+- **Aviso al reloj:** al resolver una alerta con origen `RELOJ`, la misma transacción deja en `aviso_fcm` una fila `ALERTA_RESUELTA` sin fecha de envío, que toma `EnviarAvisosReloj`.
+- **Cifrado:** `observaciones_cierre` y `seguimiento.nota` van cifradas (`ColumnaCifrada`).
+- **Auditoría:** las lecturas quedan como `LEER ALERTA` y los cambios como `MODIFICAR ATENCION_ALERTA`, sin las observaciones.
+
+## Avisos al reloj por Firebase
+
+Paquete `application/avisoreloj`. Sin migración: usa `aviso_fcm` y `smartwatch.token_fcm`.
+
+- **Canal:** `alertacuida.fcm.canal` elige `SIMULADO` (por defecto: solo registra en el log), `SIMULADOR` o `FIREBASE`.
+  - `FIREBASE`: `FCM_CREDENCIALES` con la ruta de la llave de la cuenta de servicio, fuera del repositorio (`.gitignore` bloquea `firebase*.json`). Sin llave legible, el backend no arranca. `CanalAvisoRelojFirebaseTest` prueba la llave contra Firebase real: solo corre si existe `FCM_CREDENCIALES`, así que en las pruebas normales y en GitHub se omite.
+  - `SIMULADOR` (`CanalAvisoRelojSimulador`): entrega el aviso por HTTP al simulador de reloj (`simulador-reloj/`) en `FCM_SIMULADOR_URL` (por defecto `http://localhost:9090/avisos`), con el token y los mismos datos que irían por Firebase. 404 o 410 cuentan como token rechazado; otro error o el simulador apagado, como falla. Con Docker, el backend llega al simulador por `host.docker.internal`.
+- **Bandeja (`EnviarAvisosReloj`):** corre cada `alertacuida.fcm.intervalo` (15 s) sobre los avisos sin acuse de relojes con token. `fecha_hora_envio` guarda el último envío e `intentos` cuenta los envíos.
+- **Reintentos:** `alertacuida.fcm.reintentos` (`PT1M,PT1M,PT2M`), contados desde el envío anterior; a la hora justa ya toca. Son 4 envíos como máximo.
+- **Fallas:** un envío que Firebase no acepta no cuenta como intento y se repite en la siguiente pasada. Si rechaza el token (`UNREGISTERED` o `INVALID_ARGUMENT`), se borra y el aviso espera uno nuevo; la condición sobre el token evita borrar uno registrado mientras tanto.
+- **Sin confirmar:** agotados los reintentos, pasada una espera igual a la última sin acuse, la línea de tiempo muestra `FCM_NO_CONFIRMADO`. Se calcula, no se guarda.
+- **Configuración nueva (`AvisarConfiguracionNueva`):** `ContactosPaciente` la llama después de guardar cada cambio de la lista. Es un intento único y no queda registrado. Si la persona es contacto de varios pacientes, solo se avisa al reloj del paciente que se editó; los demás se enteran en su sincronización.
+
 ## API del reloj
 
-Lo que llama el reloj (o el simulador), según el contrato de [api-reloj.md](api-reloj.md). Implementado: sincronización, alertas (con discrepancias y exceso), cancelaciones, agravamiento, estado de una alerta, configuración y token de Firebase. Falta: solicitud de aviso y fin del escalamiento (2.10), acuse de avisos FCM (2.3) y webhook de WhatsApp (2.9).
+Lo que llama el reloj (o el simulador), según el contrato de [api-reloj.md](api-reloj.md). Implementado: sincronización, alertas (con discrepancias y exceso), cancelaciones, agravamiento, fin de la lista, estado de una alerta, configuración, token de Firebase y acuse de avisos FCM. Falta: solicitud de aviso (2.10) y webhook de WhatsApp (2.9).
 
 | Endpoint | Caso de uso | Guarda en |
 |---|---|---|
@@ -249,9 +273,11 @@ Lo que llama el reloj (o el simulador), según el contrato de [api-reloj.md](api
 | `POST /api/reloj/v1/alertas` | `RecibirAlerta.recibir` | `alerta` (origen `RELOJ`, evidencia en `jsonb`), `discrepancia_alerta` y, si hay exceso, una `alerta` técnica |
 | `POST /api/reloj/v1/cancelaciones` | `RecibirAlerta.registrarCancelacion` | `alerta` con `fecha_hora_cancelacion` |
 | `POST /api/reloj/v1/alertas/{eventId}/agravamiento` | `RecibirAlerta.agravar` | `alerta.fecha_hora_agravamiento` y `segundos_inmovilidad_agravamiento` |
+| `POST /api/reloj/v1/alertas/{eventId}/sin-respuesta` | `RecibirAlerta.informarSinRespuesta` | `alerta.fecha_hora_sin_respuesta` (repetirlo no cambia la hora) |
 | `GET /api/reloj/v1/alertas/{eventId}` | `RecibirAlerta.estado` | — (lee la vista `alerta_estado`) |
 | `GET /api/reloj/v1/configuracion` | `ConfiguracionDelReloj.armar` | — (se calcula de lo vigente) |
 | `PUT /api/reloj/v1/token-fcm` | `RegistrarTokenFcm` | `smartwatch.token_fcm` y `fecha_token_fcm` |
+| `POST /api/reloj/v1/avisos-fcm/{idAviso}/recepcion` | `AcusarAvisoReloj` | `aviso_fcm.fecha_hora_recepcion` (repetirlo no cambia la hora) |
 
 **Autenticación (cadena de seguridad aparte).** `/api/reloj/**` tiene su propia `SecurityFilterChain`, que va antes que la del dashboard. Solo acepta el token del reloj: Spring lo trata como token "opaco" y `IntrospectorTokenReloj` lo busca por su SHA-256 entre los vínculos **vigentes** (`AutenticarReloj`). Un token de un vínculo cerrado, desconocido o ausente responde 401 `TOKEN_INVALIDO`. El token del reloj no abre el dashboard (no es un JWT) y el del dashboard no abre la API del reloj. El controlador recibe el vínculo (`PrincipalReloj`), nunca un id de paciente enviado por el reloj.
 
@@ -295,7 +321,13 @@ Avisos por correo desde la cuenta institucional, sin datos clínicos. Una tarea 
    Solo mira lo ocurrido dentro de `ventana` (1 h), para no avisar de alertas viejas. Encolar dos veces no duplica: lo impiden las claves únicas de `registro_intento`.
 2. **Enviar (`EnviarCorreosPendientes`).** Toma hasta 100 correos cuyo próximo envío ya llegó, los redacta con `PlantillasCorreo` y los envía por el `CanalNotificacion` configurado. Si sale, guarda la hora y el `Message-ID` (`id_externo`). Si falla, lo reprograma a los 1, 5 y 15 minutos (`reintentos`); agotados, queda con `fecha_hora_fallo` y `motivo_fallo`. Un correo que falla no detiene a los demás.
 
-**Plantillas (`PlantillasCorreo`).** Del paciente solo va el alias o, si no tiene, el folio de la alerta (`#142`). De una alerta clínica, solo su gravedad; de una técnica, qué le pasa al reloj (batería baja, reloj no puesto, exceso de alertas). Al equipo: silencio de datos, o alerta, con el enlace al dashboard (`url-dashboard`). Al contacto de un paciente: que se comunique con la persona y, si es grave, que llame al SAMU (131); sin el enlace al dashboard.
+**Plantillas (`PlantillasCorreo`).** Los textos están en `app/src/main/resources/correos.yml` (`TextosCorreo`), con marcadores como `{folio}` o `{alias}`; los comentarios del archivo dicen cuáles admite cada texto. Al arrancar se revisan: un marcador que no existe en ese texto, un texto vacío o una gravedad o técnica sin nombre impiden arrancar. `TextosCorreoRealesTest` comprueba que los textos reales sigan cumpliendo las reglas de abajo. Las graves salen con `Importance: High` y `X-Priority: 1`. Del paciente solo va el alias o, si no tiene, el folio de la alerta (`#142`). De una alerta clínica, solo su gravedad; de una técnica, qué le pasa al reloj (batería baja, reloj no puesto, exceso de alertas). Al equipo: silencio de datos, o alerta, con el enlace al dashboard (`url-dashboard`). Al contacto de un paciente: que se comunique con la persona y, si es grave, que llame al SAMU (131); sin el enlace al dashboard, pero con el enlace de respuesta (`{responder}`, obligatorio en su cuerpo; ver abajo).
+
+**Respuesta del contacto por correo.** El enlace es `<url-dashboard>/responder#<token>`; la persona elige en la página. El token (`FirmaRespuesta`, implementado en `FirmaRespuestaHmac`) es `<id del intento>.<HMAC-SHA256>`, ambos en base64 para direcciones, firmado con `clave-respuesta`: no se guarda en la base y va después de `#` para que no llegue a los registros del servidor. La página pública `/responder` del dashboard llama a dos rutas públicas (`RespuestasContactoController`), las dos `POST` y con el token en el cuerpo:
+- `POST /api/respuestas-contacto/consulta`: la alerta y lo que ya respondió, sin registrar nada.
+- `POST /api/respuestas-contacto`: registra `VOY_EN_CAMINO` o `NO_PUEDO` en `registro_intento.respuesta` (`ResponderAviso`, `RespuestasContactoJdbc`).
+
+Solo sirven los correos a un contacto de la lista del paciente; un token alterado o de una cuenta del equipo responde 400 con el mismo mensaje. Vale la primera respuesta (`UPDATE … WHERE respuesta IS NULL`). Con la alerta resuelta o cancelada no se registra. Un "voy" deja `ALERTA_CONFIRMADA` en `aviso_fcm`, y `alerta_estado` ya cuenta la alerta como confirmada. Decisiones en [alertas.md](alertas.md#correo-institucional).
 
 **Canales (`alertacuida.correo.canal`).** `SMTP` envía con Spring Mail (`CanalCorreoSmtp`); el servidor, el usuario y la clave llegan por `SMTP_HOST`, `SMTP_PUERTO`, `SMTP_USUARIO` y `SMTP_CLAVE`, y `SMTP_AUTH` y `SMTP_TLS` los activan. `SIMULADO`, el valor por defecto, no envía nada: escribe en el log el asunto y el destinatario enmascarado (`CanalCorreoSimulado`). Con `docker compose`, el backend usa `SMTP` contra Mailpit, que guarda los correos sin enviarlos y los muestra en http://localhost:8025. El chequeo de salud del correo está apagado (`management.health.mail.enabled=false`): un servidor de correo caído no debe marcar el backend como caído.
 
@@ -344,6 +376,7 @@ En `app/src/main/resources/application.properties`:
 | `clave-run` | variable `RUN_CLAVE` | Si cambia, hay que recalcular el `rut_hash` de todos los usuarios y los hash de los contactos |
 | `clave-jwt` | variable `JWT_CLAVE` | Al menos 32 caracteres |
 | `clave-cifrado` | variable `CIFRADO_CLAVE` | 32 bytes en base64. Si se pierde, los datos cifrados no se recuperan |
+| `clave-respuesta` | variable `RESPUESTA_CLAVE` | Al menos 32 caracteres. Firma los enlaces de respuesta del correo al contacto; si cambia, los ya enviados dejan de servir |
 | `duracion-token` | 15 min | No puede superar `sesion.inactividad`: el backend no arranca si lo hace |
 | `sesion.duracion-maxima` | 10 h | Desde el login hasta volver a pedir la contraseña; renovar no la alarga |
 | `sesion.inactividad` | 15 min | Sin renovar en ese plazo, la sesión termina |
@@ -397,9 +430,10 @@ Todos estos valores son provisionales hasta que los valide el equipo clínico. L
 
 ## Pruebas
 
-- `RunTest`, `PoliticaContrasenaTest`, `UmbralTest`, `MediosDeContactoTest`, `HorarioYCoberturaTest`, `IniciarSesionTest`, `RenovarSesionTest`, `AltaYActivacionTest`, `PacientesTest`, `CondicionesPacienteTest`, `PerfilClinicoPacienteTest`, `ContactosPacienteTest`, `VinculoRelojTest`, `RecibirSincronizacionTest`, `RecibirAlertaTest`, `PlantillasCorreoTest`, `EncolarCorreosTest`, `EnviarCorreosPendientesTest`, `CifradoCamposTest` y `RegistroDeLecturasTest`: unitarias, sin base de datos. Los dobles en memoria compartidos están en `application/src/test/.../soporte/`.
+- `RunTest`, `PoliticaContrasenaTest`, `UmbralTest`, `MediosDeContactoTest`, `HorarioYCoberturaTest`, `IniciarSesionTest`, `RenovarSesionTest`, `AltaYActivacionTest`, `PacientesTest`, `CondicionesPacienteTest`, `PerfilClinicoPacienteTest`, `ContactosPacienteTest`, `VinculoRelojTest`, `RecibirSincronizacionTest`, `RecibirAlertaTest`, `PlantillasCorreoTest`, `EncolarCorreosTest`, `EnviarCorreosPendientesTest`, `ResponderAvisoTest`, `FirmaRespuestaHmacTest`, `CifradoCamposTest` y `RegistroDeLecturasTest`: unitarias, sin base de datos. Los dobles en memoria compartidos están en `application/src/test/.../soporte/`.
 - `InicioSesionTest`, `AuditoriaTest`, `IpRealTest`, `CuentasPersonalTest`, `PacientesYRelojesTest`, `PerfilYContactosTest`, `ApiRelojTest` y `ModeloDatosTest`: contra un PostgreSQL real en Docker (Testcontainers). Sin Docker, se omiten.
 - `RequisitosCorreoTest`: el correo contra PostgreSQL real y GreenMail, un servidor SMTP de prueba en memoria (puerto 3025): ningún correo sale a internet. Sin Docker se omite.
+- `RequisitosRespuestaContactoTest`: la respuesta del contacto por las rutas públicas, contra PostgreSQL real, con el token sacado del texto del correo. Sin Docker se omite.
 
 ## Duración de la sesión
 

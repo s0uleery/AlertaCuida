@@ -12,6 +12,7 @@ import cl.ucn.alertacuida.application.contacto.modelo.ListaContactos;
 import cl.ucn.alertacuida.application.contacto.modelo.Persona;
 import cl.ucn.alertacuida.application.contacto.modelo.TipoContacto;
 import cl.ucn.alertacuida.application.contacto.modelo.Vinculo;
+import cl.ucn.alertacuida.application.contacto.puerto.AvisoCambioContactos;
 import cl.ucn.alertacuida.application.contacto.puerto.Contactos;
 import cl.ucn.alertacuida.application.contacto.puerto.HashMedioContacto;
 import cl.ucn.alertacuida.application.paciente.puerto.Pacientes;
@@ -55,16 +56,23 @@ public class ContactosPaciente {
 	private final HashMedioContacto hash;
 	private final RegistroAuditoria auditoria;
 	private final Transacciones transacciones;
+	private final AvisoCambioContactos avisoCambio;
 	private final Clock reloj;
 
-	/** Recibe los puertos que usa; los arma ConfiguracionPerfilYContactos. */
+	/**
+	 * Recibe los puertos que usa; los arma ConfiguracionPerfilYContactos.
+	 *
+	 * @param avisoCambio se le informa cada cambio de la lista, después de guardarlo
+	 */
 	public ContactosPaciente(Contactos contactos, Pacientes pacientes, HashMedioContacto hash,
-			RegistroAuditoria auditoria, Transacciones transacciones, Clock reloj) {
+			RegistroAuditoria auditoria, Transacciones transacciones, AvisoCambioContactos avisoCambio,
+			Clock reloj) {
 		this.contactos = contactos;
 		this.pacientes = pacientes;
 		this.hash = hash;
 		this.auditoria = auditoria;
 		this.transacciones = transacciones;
+		this.avisoCambio = avisoCambio;
 		this.reloj = reloj;
 	}
 
@@ -122,7 +130,7 @@ public class ContactosPaciente {
 		int prioridad = lista.stream().filter(ContactoDelPaciente::activo)
 				.mapToInt(ContactoDelPaciente::prioridad).max().orElse(0) + 1;
 		Instant ahora = reloj.instant();
-		return transacciones.ejecutar(() -> {
+		UUID creado = transacciones.ejecutar(() -> {
 			UUID idPersona;
 			if (existente.isPresent()) {
 				idPersona = existente.get().id();
@@ -139,6 +147,8 @@ public class ContactosPaciente {
 			auditoria.registrar(idUsuario, "CREAR", "CONTACTO_PACIENTE", id.toString(), ip, ahora);
 			return id;
 		});
+		avisoCambio.listaCambiada(idPaciente);
+		return creado;
 	}
 
 	/**
@@ -176,6 +186,7 @@ public class ContactosPaciente {
 					ahora);
 			return null;
 		});
+		avisoCambio.listaCambiada(idPaciente);
 	}
 
 	/**
@@ -206,6 +217,7 @@ public class ContactosPaciente {
 			auditoria.registrar(idUsuario, "MODIFICAR", "CONTACTO", persona.id().toString(), ip, ahora);
 			return null;
 		});
+		avisoCambio.listaCambiada(idPaciente);
 	}
 
 	/**
@@ -231,6 +243,7 @@ public class ContactosPaciente {
 					ahora);
 			return null;
 		});
+		avisoCambio.listaCambiada(idPaciente);
 	}
 
 	/**
@@ -251,6 +264,7 @@ public class ContactosPaciente {
 					ahora);
 			return null;
 		});
+		avisoCambio.listaCambiada(idPaciente);
 	}
 
 	/**
@@ -280,6 +294,7 @@ public class ContactosPaciente {
 			}
 			return null;
 		});
+		avisoCambio.listaCambiada(idPaciente);
 	}
 
 	/** @return los vínculos activos del paciente, por prioridad */

@@ -85,7 +85,8 @@ class ConfiguracionDelRelojTest {
 		};
 		perfiles = new PerfilClinicoPaciente(perfilesGuardados, pacientes, new ValoresBase(FC_BASE, SPO2_BASE, 5),
 				registro, enTransaccion, reloj);
-		contactos = new ContactosPaciente(contactosGuardados, pacientes, hash, registro, enTransaccion, reloj);
+		contactos = new ContactosPaciente(contactosGuardados, pacientes, hash, registro, enTransaccion, id -> { },
+				reloj);
 		configuraciones = conReloj(reloj);
 		maria = pacientes.crear(new DatosPaciente("12345678-5", "María", "Rojas", null, null, null, null, null, null,
 				LocalDate.of(2026, 1, 10)), "h");

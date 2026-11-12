@@ -136,6 +136,29 @@ public class RecibirAlerta {
 	}
 
 	/**
+	 * El reloj recorrió la lista dos veces sin confirmación. Repetirlo no cambia la hora ya registrada.
+	 *
+	 * @param quien   el reloj que lo informa, según su token
+	 * @param eventId el de la alerta
+	 * @param fecha   cuándo terminó la lista
+	 * @return el estado de la alerta
+	 * @throws NoEncontrado       si no hay una alerta con ese eventId de este reloj
+	 * @throws Conflicto          si la canceló el paciente
+	 * @throws SolicitudRechazada si falta la hora
+	 */
+	public EstadoAlerta informarSinRespuesta(RelojAutenticado quien, UUID eventId, Instant fecha) {
+		if (fecha == null) {
+			throw new SolicitudRechazada("Falta fechaHora");
+		}
+		AlertaGuardada alerta = deEsteReloj(quien, eventId);
+		if (alerta.cancelada()) {
+			throw new Conflicto("El paciente canceló esa alerta");
+		}
+		alertas.registrarSinRespuesta(alerta.idAlerta(), fecha);
+		return alertas.estado(alerta.idAlerta());
+	}
+
+	/**
 	 * @param quien   el reloj que pregunta, según su token
 	 * @param eventId el de la alerta
 	 * @return su estado actual

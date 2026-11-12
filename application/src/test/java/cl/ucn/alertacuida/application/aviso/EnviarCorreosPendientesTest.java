@@ -8,6 +8,8 @@ import cl.ucn.alertacuida.application.aviso.modelo.Mensaje;
 import cl.ucn.alertacuida.application.aviso.modelo.PoliticaReintentos;
 import cl.ucn.alertacuida.application.aviso.puerto.BandejaSalida;
 import cl.ucn.alertacuida.application.aviso.puerto.CanalNotificacion;
+import cl.ucn.alertacuida.application.respuesta.puerto.FirmaRespuesta;
+import cl.ucn.alertacuida.application.soporte.TextosCorreoDePrueba;
 import cl.ucn.alertacuida.domain.alerta.Severidad;
 import cl.ucn.alertacuida.domain.alerta.TipoEvento;
 import java.time.Clock;
@@ -19,6 +21,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -51,8 +54,21 @@ class EnviarCorreosPendientesTest {
 		return "id-" + enviados.size();
 	};
 
+	private static final PlantillasCorreo PLANTILLAS =
+			new PlantillasCorreo("https://dashboard", TextosCorreoDePrueba.textos(), new FirmaRespuesta() {
+				@Override
+				public String firmar(UUID idIntento) {
+					return "token";
+				}
+
+				@Override
+				public Optional<UUID> verificar(String token) {
+					return Optional.empty();
+				}
+			});
+
 	private final EnviarCorreosPendientes enviar = new EnviarCorreosPendientes(bandeja, canal,
-			new PlantillasCorreo("https://dashboard"), POLITICA, Clock.fixed(AHORA, ZoneOffset.UTC));
+			PLANTILLAS, POLITICA, Clock.fixed(AHORA, ZoneOffset.UTC));
 
 	/** Un correo que sale bien queda enviado, con el identificador que devolvió el servidor. */
 	@Test
@@ -139,7 +155,7 @@ class EnviarCorreosPendientesTest {
 			}
 			enviados.add(mensaje);
 			return "id";
-		}, new PlantillasCorreo("https://dashboard"), POLITICA, Clock.fixed(AHORA, ZoneOffset.UTC));
+		}, PLANTILLAS, POLITICA, Clock.fixed(AHORA, ZoneOffset.UTC));
 
 		conError.enviar();
 

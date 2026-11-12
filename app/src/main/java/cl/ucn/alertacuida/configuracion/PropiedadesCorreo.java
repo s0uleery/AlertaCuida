@@ -1,5 +1,6 @@
 package cl.ucn.alertacuida.configuracion;
 
+import cl.ucn.alertacuida.application.aviso.modelo.TextosCorreo;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -19,11 +20,13 @@ import org.springframework.validation.annotation.Validated;
  * @param intervalo    cada cuánto corre la tarea programada; lo lee directamente TareasProgramadas
  * @param ventana      hasta qué tan atrás se buscan alertas y WhatsApp fallidos para encolar
  * @param reintentos   espera antes de cada reintento de un correo fallido
+ * @param textos       textos de los correos, en correos.yml; PlantillasCorreo los revisa al arrancar
  */
 @Validated
 @ConfigurationProperties("alertacuida.correo")
 public record PropiedadesCorreo(@NotNull Canal canal, @NotBlank @Email String remitente, @NotBlank String urlDashboard,
-		@NotNull Duration intervalo, @NotNull Duration ventana, @NotEmpty List<Duration> reintentos) {
+		@NotNull Duration intervalo, @NotNull Duration ventana, @NotEmpty List<Duration> reintentos,
+		@NotNull TextosCorreo textos) {
 
 	/** Por dónde salen los correos. */
 	public enum Canal {
