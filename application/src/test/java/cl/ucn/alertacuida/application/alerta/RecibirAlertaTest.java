@@ -286,7 +286,7 @@ class RecibirAlertaTest {
 		ReglaEnrutamiento enrutamiento = new ReglaEnrutamiento(CalendarioHabil.de(
 				Map.of(diaHabil, new TramoHabil(LocalTime.of(8, 30), LocalTime.of(17, 30))), List.of()));
 		PerfilClinicoPaciente perfiles = new PerfilClinicoPaciente(new PerfilesClinicosEnMemoria(), pacientes,
-				new ValoresBase(FC_BASE, SPO2_BASE, 5), (usuario, accion, entidad, id, ip, fecha) -> { },
+				new ValoresBase(FC_BASE, SPO2_BASE, 5), (usuario, accion, entidad, id, ip, fecha, detalle) -> { },
 				Supplier::get, reloj);
 		Transacciones enTransaccion = Supplier::get;
 		RevisionDiscrepancias revision = new RevisionDiscrepancias(idPaciente -> VIGENTE, perfiles, Severidad.MEDIA);

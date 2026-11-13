@@ -28,7 +28,7 @@ info:
 
     **Todavía no existen:** panel de estado general (3.4.1), tendencias de FC y SpO2
     (3.5), reportes (3.6), bandeja de día hábil (3.7), estado técnico de los relojes (3.8),
-    cierre de sesión y renovación del token (1.3.4) y el listado de cuentas del equipo.
+    cierre de sesión y renovación del token (1.3.4), y editar los datos o desactivar una cuenta del equipo.
 servers:
   - url: http://localhost:8080
     description: Backend en desarrollo (desde el front, usar rutas relativas `/api/...`)
@@ -36,7 +36,9 @@ tags:
   - name: Sesión
     description: Inicio de sesión y activación de cuentas.
   - name: Cuentas del equipo
-    description: Alta de cuentas del personal. Solo el administrador.
+    description: Alta, lista, cambio de rol y aviso técnico por correo de las cuentas del personal. Solo el administrador.
+  - name: Roles y permisos
+    description: Permisos de cada rol (pestaña Permisos de Administración). Solo el administrador.
   - name: Alertas
     description: Lista, línea de tiempo y atención de las alertas.
   - name: Pacientes
@@ -326,6 +328,21 @@ paths:
               schema: { $ref: '#/components/schemas/Problema' }
 
   /api/personal:
+    get:
+      tags: [Cuentas del equipo]
+      operationId: listarCuentas
+      summary: Cuentas del equipo por nombre, con estado, último acceso y aviso técnico
+      description: 'Permiso: `ADMINISTRACION:VER`. No trae el RUN ni el teléfono, que van cifrados.'
+      responses:
+        '200':
+          description: Cuentas del equipo.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PerfilEquipo' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
     post:
       tags: [Cuentas del equipo]
       operationId: crearCuenta
@@ -365,6 +382,109 @@ paths:
         '403': { $ref: '#/components/responses/SinPermiso' }
         '404':
           description: La cuenta no existe o ya está activa.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problema' }
+
+  /api/personal/{idUsuario}/rol:
+    parameters:
+      - $ref: '#/components/parameters/IdUsuario'
+    put:
+      tags: [Cuentas del equipo]
+      operationId: cambiarRol
+      summary: Cambia el rol de otra cuenta
+      description: >-
+        Permiso: `ADMINISTRACION:EDITAR`. Rige cuando la persona vuelve a iniciar sesión. Al pasar a
+        COORDINADOR una cuenta sin teléfono (`tieneTelefono: false`) hay que enviar el teléfono.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SolicitudCambioRol' }
+      responses:
+        '204': { description: Rol cambiado; sin cambios si ya tenía ese rol. }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '409':
+          description: Es la cuenta propia, o el sistema quedaría sin un administrador activo.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problema' }
+
+  /api/personal/{idUsuario}/recibe-avisos:
+    parameters:
+      - $ref: '#/components/parameters/IdUsuario'
+    put:
+      tags: [Cuentas del equipo]
+      operationId: cambiarRecibeAvisos
+      summary: Enciende o apaga el correo de las alertas técnicas de una cuenta
+      description: 'Permiso: `ADMINISTRACION:EDITAR`. Sirve también para la cuenta propia.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recibeAvisos]
+              properties:
+                recibeAvisos: { type: boolean }
+      responses:
+        '204': { description: Guardado. }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
+  /api/roles:
+    get:
+      tags: [Roles y permisos]
+      operationId: listarRoles
+      summary: Roles activos con sus permisos, el administrador primero
+      description: 'Permiso: `ADMINISTRACION:VER`.'
+      responses:
+        '200':
+          description: Roles con sus permisos.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/RolConPermisos' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+
+  /api/roles/{codigo}/permisos:
+    parameters:
+      - name: codigo
+        in: path
+        required: true
+        description: Código del rol, por ejemplo PERSONAL.
+        schema: { type: string }
+    put:
+      tags: [Roles y permisos]
+      operationId: guardarPermisos
+      summary: Reemplaza todos los permisos de un rol
+      description: 'Permiso: `ADMINISTRACION:EDITAR`. Rigen cuando cada persona vuelve a iniciar sesión.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [permisos]
+              properties:
+                permisos:
+                  type: array
+                  items: { $ref: '#/components/schemas/Permiso' }
+      responses:
+        '204': { description: Guardado; sin cambios si ya los tenía. }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '409':
+          description: Es el administrador, cuyos permisos no se cambian.
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problema' }
@@ -1035,7 +1155,7 @@ components:
     SinPermiso:
       description: El token no tiene el permiso que exige el endpoint. Sin cuerpo.
     NoEncontrado:
-      description: El paciente, contacto o reloj no existe.
+      description: Lo pedido no existe (paciente, contacto, reloj, cuenta del equipo o rol).
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problema' }
@@ -1230,6 +1350,55 @@ components:
         aceptaWhatsapp:
           type: ['boolean', 'null']
           description: La persona aceptó recibir esos avisos por WhatsApp (opt-in de Meta). Exige teléfono. null = no.
+        recibeAvisos:
+          type: ['boolean', 'null']
+          description: Recibe por correo los avisos de las alertas técnicas, solo en horario hábil. null = no.
+    SolicitudCambioRol:
+      type: object
+      required: [rol]
+      properties:
+        rol: { $ref: '#/components/schemas/Rol' }
+        telefono:
+          type: ['string', 'null']
+          maxLength: 30
+          description: Solo al pasar a COORDINADOR una cuenta sin teléfono (400 si falta). Se guarda cifrado.
+        aceptaWhatsapp:
+          type: ['boolean', 'null']
+          description: La persona aceptó recibir los avisos por WhatsApp. Exige teléfono. null = no.
+    EstadoCuenta:
+      type: string
+      enum: [ACTIVA, PENDIENTE, DESACTIVADA]
+      description: PENDIENTE = no ha usado su enlace; DESACTIVADA = tenía contraseña y se le quitó el acceso.
+    PerfilEquipo:
+      type: object
+      required: [id, nombre, correo, rol, estado, recibeAvisos, tieneTelefono]
+      properties:
+        id: { type: string, format: uuid }
+        nombre: { type: string }
+        cargo: { type: ['string', 'null'] }
+        correo: { type: string, format: email }
+        rol: { $ref: '#/components/schemas/Rol' }
+        estado: { $ref: '#/components/schemas/EstadoCuenta' }
+        ultimoAcceso:
+          type: ['string', 'null']
+          format: date-time
+          description: Último inicio de sesión; null si nunca ha entrado.
+        recibeAvisos: { type: boolean, description: Recibe por correo los avisos de las alertas técnicas. }
+        tieneTelefono: { type: boolean, description: Tiene celular con WhatsApp registrado. }
+    Permiso:
+      type: string
+      pattern: '^(ALERTAS|USUARIOS|REPORTES|ADMINISTRACION):(VER|CREAR|EDITAR|ELIMINAR|EXPORTAR)$'
+      examples: ['ALERTAS:VER']
+    RolConPermisos:
+      type: object
+      required: [codigo, nombre, esSistema, permisos]
+      properties:
+        codigo: { type: string }
+        nombre: { type: string }
+        esSistema: { type: boolean, description: El administrador; sus permisos no se editan. }
+        permisos:
+          type: array
+          items: { $ref: '#/components/schemas/Permiso' }
     RespuestaEnlace:
       type: object
       required: [idUsuario, enlaceActivacion, expiraEn]

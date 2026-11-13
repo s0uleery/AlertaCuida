@@ -36,6 +36,12 @@ Los tipos de TypeScript de cada respuesta ya están en `frontend/src/features/*/
 | **Cuentas del equipo** | | |
 | `POST /api/personal` | `ADMINISTRACION:CREAR` | 201 `RespuestaEnlace` |
 | `POST /api/personal/{id}/enlace-activacion` | `ADMINISTRACION:CREAR` | 200 `RespuestaEnlace` |
+| `GET /api/personal` | `ADMINISTRACION:VER` | 200 `PerfilEquipo[]` |
+| `PUT /api/personal/{id}/rol` | `ADMINISTRACION:EDITAR` | 204 |
+| `PUT /api/personal/{id}/recibe-avisos` | `ADMINISTRACION:EDITAR` | 204 |
+| **Roles y permisos** | | |
+| `GET /api/roles` | `ADMINISTRACION:VER` | 200 `RolConPermisos[]` |
+| `PUT /api/roles/{codigo}/permisos` | `ADMINISTRACION:EDITAR` | 204 |
 | **Auditoría** | | |
 | `GET /api/auditoria?limite=500&incluirLecturas=false` | `ADMINISTRACION:VER` | 200 `RegistroAuditoria[]` |
 | **Alertas** | | |
@@ -127,9 +133,9 @@ La persona llega desde el enlace de activación (`/activar?token=…`) y elige s
 ### `POST /api/personal`
 ```json
 { "run": "12.345.678-5", "nombre": "Camila Vera", "cargo": "Enfermera", "correo": "camila@ejemplo.cl", "rol": "COORDINADOR",
-  "telefono": "+56 9 1234 5678", "aceptaWhatsapp": true }
+  "telefono": "+56 9 1234 5678", "aceptaWhatsapp": true, "recibeAvisos": false }
 ```
-`rol`: `ADMINISTRADOR`, `COORDINADOR` o `PERSONAL`; 400 si no existe o está desactivado. `telefono` (celular con WhatsApp) es obligatorio para `COORDINADOR`, porque recibe los avisos de la oficina PRLAC; se guarda normalizado y cifrado. `aceptaWhatsapp: true` registra el opt-in con la fecha de hoy y exige el teléfono. Respuesta 201:
+`rol`: `ADMINISTRADOR`, `COORDINADOR` o `PERSONAL`; 400 si no existe o está desactivado. `telefono` (celular con WhatsApp) es obligatorio para `COORDINADOR`, porque recibe los avisos de la oficina PRLAC; se guarda normalizado y cifrado. `aceptaWhatsapp: true` registra el opt-in con la fecha de hoy y exige el teléfono. `recibeAvisos` (correo de las alertas técnicas) es opcional y vale `false` si no viene. Respuesta 201:
 ```json
 { "idUsuario": "…", "enlaceActivacion": "http://localhost:5173/activar?token=…", "expiraEn": "2026-10-28T14:00:00Z" }
 ```
@@ -137,6 +143,45 @@ La persona llega desde el enlace de activación (`/activar?token=…`) y elige s
 
 ### `POST /api/personal/{id}/enlace-activacion`
 Otro enlace para una cuenta que aún no se activa; el anterior deja de servir. Misma respuesta. 404 si la cuenta no existe o ya está activa.
+
+### `GET /api/personal`
+Todas las cuentas, por nombre. No trae el RUN ni el teléfono (van cifrados).
+```json
+[
+  { "id": "…", "nombre": "Camila Vera", "cargo": "Enfermera", "correo": "camila@ejemplo.cl", "rol": "COORDINADOR",
+    "estado": "ACTIVA", "ultimoAcceso": "2026-11-13T12:30:00Z", "recibeAvisos": true, "tieneTelefono": true }
+]
+```
+`estado`: `ACTIVA`, `PENDIENTE` (no ha usado su enlace) o `DESACTIVADA`. `ultimoAcceso` es `null` si nunca ha entrado. `tieneTelefono: false` indica que, para pasarla a `COORDINADOR`, hay que enviar el teléfono.
+
+### `PUT /api/personal/{id}/rol`
+```json
+{ "rol": "COORDINADOR", "telefono": "+56 9 1234 5678", "aceptaWhatsapp": true }
+```
+`telefono` y `aceptaWhatsapp` solo hacen falta al pasar a `COORDINADOR` una cuenta sin teléfono. 204 si resulta; el rol rige cuando la persona vuelve a iniciar sesión. 400 si el rol no existe o falta el teléfono; 404 si la cuenta no existe; 409 si es la cuenta propia o dejaría el sistema sin un administrador activo. Se audita con el rol anterior y el nuevo.
+
+### `PUT /api/personal/{id}/recibe-avisos`
+```json
+{ "recibeAvisos": true }
+```
+Correo de las alertas técnicas (reloj sin datos, batería baja, reloj no puesto, exceso de alertas), solo en horario hábil. Sirve también para la cuenta propia. 204; 400 si falta el campo; 404 si la cuenta no existe.
+
+## Roles y permisos
+
+### `GET /api/roles`
+```json
+[
+  { "codigo": "ADMINISTRADOR", "nombre": "Administrador", "esSistema": true, "permisos": ["ADMINISTRACION:CREAR", "…"] },
+  { "codigo": "PERSONAL", "nombre": "Personal", "esSistema": false, "permisos": ["ALERTAS:EDITAR", "ALERTAS:VER"] }
+]
+```
+Solo los roles activos, con el administrador primero.
+
+### `PUT /api/roles/{codigo}/permisos`
+```json
+{ "permisos": ["ALERTAS:VER", "ALERTAS:EDITAR", "REPORTES:VER"] }
+```
+Reemplaza todos los permisos del rol. Módulos: `ALERTAS`, `USUARIOS`, `REPORTES`, `ADMINISTRACION`; acciones: `VER`, `CREAR`, `EDITAR`, `ELIMINAR`, `EXPORTAR`. 204; rigen cuando cada persona vuelve a iniciar sesión. 400 si un permiso no existe; 404 si el rol no existe; 409 si es el administrador, cuyos permisos no se cambian.
 
 ## Pacientes
 

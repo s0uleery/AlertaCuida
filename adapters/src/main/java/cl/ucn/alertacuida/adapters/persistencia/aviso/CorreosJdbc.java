@@ -57,7 +57,8 @@ public class CorreosJdbc implements ColaCorreos, BandejaSalida {
 				AND a.tipo_evento IN (:tipos) AND a.fecha_hora_recepcion >= :desde
 				AND NOT EXISTS (SELECT 1 FROM registro_intento i
 					JOIN contacto c ON c.id_contacto = i.id_contacto_interno
-					WHERE i.id_alerta = a.id_alerta AND i.canal = 'CORREO' AND c.id_usuario = u.id_usuario)
+					WHERE i.id_alerta = a.id_alerta AND i.canal = 'CORREO' AND i.proposito = 'AVISO'
+					AND c.id_usuario = u.id_usuario)
 				ORDER BY a.fecha_hora_recepcion""")
 				.param("tipos", tipos.stream().map(TipoEvento::name).toList())
 				.param("desde", Timestamp.from(desde))
@@ -73,8 +74,9 @@ public class CorreosJdbc implements ColaCorreos, BandejaSalida {
 				.param("usuario", idUsuario)
 				.update();
 		jdbc.sql("""
-				INSERT INTO registro_intento (event_id, id_alerta, id_contacto_interno, canal, fecha_hora_proximo_envio)
-				SELECT gen_random_uuid(), :alerta, id_contacto, 'CORREO', :ahora
+				INSERT INTO registro_intento (event_id, id_alerta, id_contacto_interno, canal, fecha_hora_solicitud,
+					fecha_hora_proximo_envio)
+				SELECT gen_random_uuid(), :alerta, id_contacto, 'CORREO', :ahora, :ahora
 				FROM contacto WHERE id_usuario = :usuario
 				ON CONFLICT DO NOTHING""")
 				.param("alerta", idAlerta)
@@ -88,9 +90,9 @@ public class CorreosJdbc implements ColaCorreos, BandejaSalida {
 	public int encolarRespaldos(Instant desde, Instant ahora) {
 		return jdbc.sql("""
 				INSERT INTO registro_intento (event_id, id_alerta, id_contacto_paciente, id_contacto_interno, canal,
-					ronda, fecha_hora_proximo_envio)
+					ronda, fecha_hora_solicitud, fecha_hora_proximo_envio)
 				SELECT gen_random_uuid(), w.id_alerta, w.id_contacto_paciente, w.id_contacto_interno, 'CORREO', w.ronda,
-					:ahora
+					:ahora, :ahora
 				FROM registro_intento w
 				JOIN alerta a ON a.id_alerta = w.id_alerta
 				LEFT JOIN atencion_alerta t ON t.id_alerta = w.id_alerta
@@ -110,7 +112,7 @@ public class CorreosJdbc implements ColaCorreos, BandejaSalida {
 		return jdbc.sql("""
 				SELECT i.id_intento, i.reintentos, a.numero, p.alias, a.tipo_evento, e.severidad_actual,
 					i.id_contacto_interno IS NOT NULL AS al_equipo, u.correo AS correo_cuenta,
-					c.correo AS correo_contacto
+					c.correo AS correo_contacto, i.proposito = 'VIGILANTE' AS vigilante
 				FROM registro_intento i
 				JOIN alerta a ON a.id_alerta = i.id_alerta
 				JOIN alerta_estado e ON e.id_alerta = i.id_alerta
@@ -172,7 +174,8 @@ public class CorreosJdbc implements ColaCorreos, BandejaSalida {
 				: guardado == null ? null : cifrado.descifrar(guardado, ColumnaCifrada.CONTACTO_CORREO);
 		return new CorreoPendiente(fila.getObject("id_intento", UUID.class), destinatario, alEquipo,
 				fila.getLong("numero"), fila.getString("alias"), TipoEvento.valueOf(fila.getString("tipo_evento")),
-				Severidad.valueOf(fila.getString("severidad_actual")), fila.getInt("reintentos"));
+				Severidad.valueOf(fila.getString("severidad_actual")), fila.getInt("reintentos"),
+				fila.getBoolean("vigilante"));
 	}
 
 }

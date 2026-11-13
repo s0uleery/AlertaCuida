@@ -89,6 +89,23 @@ alertacuida:
         # Valor de {grave} en una alerta grave. Sin marcadores.
         grave: "Es una alerta grave: si no logra comunicarse, llame al SAMU (131)."
 
+      # Al equipo (los coordinadores), cuando una alerta no avanza: el reloj dejó de pedir avisos a mitad del
+      # recorrido de contactos (vigilante del escalamiento). Una vez por alerta, en horario laboral.
+      #   {alerta}    "alerta grave #142", igual que en alerta-equipo
+      #   {deQuien}   " de Mary", o vacío si el paciente no tiene alias
+      #   {folio}     folio de la alerta, ej. #142
+      #   {minutos}   minutos sin noticias del reloj (alertacuida.escalamiento.plazo) (solo en el cuerpo)
+      #   {dashboard} dirección del dashboard
+      #   {pie}       pie-equipo (solo en el cuerpo)
+      vigilante:
+        asunto: "AlertaCuida: la {alerta}{deQuien} no avanza"
+        cuerpo: |
+          La {alerta}{deQuien} sigue abierta y el reloj no ha avisado a nadie en los últimos {minutos} minutos. Puede haberse quedado sin batería o sin señal.
+
+          Comuníquese con la persona o sus contactos y revise la alerta en el dashboard: {dashboard}
+
+          {pie}
+
       # Cómo se nombra cada gravedad ({gravedad}). Deben estar las tres.
       gravedades:
         LEVE: "leve"

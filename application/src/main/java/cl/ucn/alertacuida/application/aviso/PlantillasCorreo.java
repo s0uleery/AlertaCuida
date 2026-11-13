@@ -6,6 +6,7 @@ import cl.ucn.alertacuida.application.aviso.modelo.TextosCorreo;
 import cl.ucn.alertacuida.application.respuesta.puerto.FirmaRespuesta;
 import cl.ucn.alertacuida.domain.alerta.Severidad;
 import cl.ucn.alertacuida.domain.alerta.TipoEvento;
+import java.time.Duration;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Map;
@@ -20,6 +21,7 @@ import java.util.regex.Pattern;
  * <ul>
  * <li>Silencio de datos, al equipo.</li>
  * <li>Alerta, al equipo: las graves y el respaldo de un WhatsApp a la oficina.</li>
+ * <li>Alerta que no avanza, al equipo (vigilante del escalamiento): el reloj dejó de pedir avisos.</li>
  * <li>Aviso a un contacto del paciente (respaldo de su WhatsApp): en las graves, le indica llamar al 131.
  * Lleva un solo enlace a la página /responder del dashboard, donde elige "Confirmo que voy" o "No puedo
  * asistir", con el token firmado del aviso después de "#"; sin ese marcador en su cuerpo, el backend no
@@ -42,28 +44,43 @@ public class PlantillasCorreo {
 	private final String urlDashboard;
 	private final TextosCorreo textos;
 	private final FirmaRespuesta firma;
+	private final Duration plazoVigilante;
 
 	/**
-	 * @param urlDashboard dirección del dashboard, para que el equipo abra la alerta y el contacto responda
-	 * @param textos       los textos de correos.yml
-	 * @param firma        crea el token del enlace de respuesta del contacto
+	 * @param urlDashboard   dirección del dashboard, para que el equipo abra la alerta y el contacto responda
+	 * @param textos         los textos de correos.yml
+	 * @param firma          crea el token del enlace de respuesta del contacto
+	 * @param plazoVigilante tiempo sin noticias del reloj tras el que avisa el vigilante ({minutos})
 	 * @throws IllegalArgumentException si un texto falta o usa un marcador que no existe en su plantilla, si
 	 *                                  al cuerpo del contacto le falta el enlace de respuesta, o si falta el
 	 *                                  nombre de una gravedad o de una alerta técnica
 	 */
-	public PlantillasCorreo(String urlDashboard, TextosCorreo textos, FirmaRespuesta firma) {
+	public PlantillasCorreo(String urlDashboard, TextosCorreo textos, FirmaRespuesta firma, Duration plazoVigilante) {
 		this.urlDashboard = urlDashboard;
 		this.textos = textos;
 		this.firma = firma;
+		this.plazoVigilante = plazoVigilante;
 		revisar(textos);
 	}
 
-	/** @return el mensaje que corresponde a ese correo, según su destino y su alerta */
+	/** @return el mensaje que corresponde a ese correo, según su destino, su propósito y su alerta */
 	public Mensaje redactar(CorreoPendiente correo) {
 		if (!correo.alEquipo()) {
 			return aContacto(correo);
 		}
+		if (correo.vigilante()) {
+			return alertaQueNoAvanza(correo);
+		}
 		return correo.tipo() == TipoEvento.SILENCIO_DATOS ? silencioDeDatos(correo) : alertaAlEquipo(correo);
+	}
+
+	/** Vigilante del escalamiento: el reloj dejó de pedir avisos a mitad del recorrido de contactos. */
+	private Mensaje alertaQueNoAvanza(CorreoPendiente correo) {
+		TextosCorreo.Vigilante t = textos.vigilante();
+		Map<String, String> valores = Map.of("alerta", nombreAlerta(correo), "deQuien", deQuien(correo),
+				"folio", folio(correo), "minutos", String.valueOf(plazoVigilante.toMinutes()),
+				"dashboard", urlDashboard, "pie", textos.pieEquipo());
+		return mensaje(correo, t.asunto(), t.cuerpo(), valores);
 	}
 
 	/** Silencio de datos: el reloj dejó de sincronizar. */
@@ -80,15 +97,26 @@ public class PlantillasCorreo {
 	/** Una alerta grave, o el respaldo de un WhatsApp a la oficina por cualquier alerta. */
 	private Mensaje alertaAlEquipo(CorreoPendiente correo) {
 		TextosCorreo.AlertaEquipo t = textos.alertaEquipo();
+		Map<String, String> valores = Map.of("alerta", nombreAlerta(correo), "deQuien", deQuien(correo),
+				"folio", folio(correo), "dashboard", urlDashboard, "pie", textos.pieEquipo());
+		return mensaje(correo, t.asunto(), t.cuerpo(), valores);
+	}
+
+	/** @return el valor de {alerta}: "alerta grave #142" o "alerta técnica #142 (batería baja)" */
+	private String nombreAlerta(CorreoPendiente correo) {
+		TextosCorreo.AlertaEquipo t = textos.alertaEquipo();
 		String tecnica = textos.tecnicas().get(correo.tipo());
-		String alerta = tecnica == null
+		return tecnica == null
 				? rellenar(t.alertaSalud(), Map.of("gravedad", textos.gravedades().get(correo.severidad()),
 						"folio", folio(correo)))
 				: rellenar(t.alertaTecnica(), Map.of("tecnica", tecnica, "folio", folio(correo)));
-		String deQuien = tieneAlias(correo) ? rellenar(t.deQuienConAlias(), Map.of("alias", alias(correo))) : "";
-		Map<String, String> valores = Map.of("alerta", alerta, "deQuien", deQuien, "folio", folio(correo),
-				"dashboard", urlDashboard, "pie", textos.pieEquipo());
-		return mensaje(correo, t.asunto(), t.cuerpo(), valores);
+	}
+
+	/** @return el valor de {deQuien}: " de Mary", o vacío si el paciente no tiene alias */
+	private String deQuien(CorreoPendiente correo) {
+		return tieneAlias(correo)
+				? rellenar(textos.alertaEquipo().deQuienConAlias(), Map.of("alias", alias(correo)))
+				: "";
 	}
 
 	/**
@@ -165,6 +193,10 @@ public class PlantillasCorreo {
 		exigir("contacto.cuerpo", contacto.cuerpo(), ENLACE);
 		revisar("contacto.quien-sin-alias", contacto.quienSinAlias(), Set.of());
 		revisar("contacto.grave", contacto.grave(), Set.of());
+		TextosCorreo.Vigilante vigilante = requerido("vigilante", textos.vigilante());
+		revisar("vigilante.asunto", vigilante.asunto(), Set.of("alerta", "deQuien", "folio", "dashboard"));
+		revisar("vigilante.cuerpo", vigilante.cuerpo(),
+				Set.of("alerta", "deQuien", "folio", "minutos", "dashboard", "pie"));
 		for (Severidad severidad : Severidad.values()) {
 			if (textos.gravedades() == null || vacio(textos.gravedades().get(severidad))) {
 				throw new IllegalArgumentException("correos.yml: falta el nombre de la gravedad " + severidad

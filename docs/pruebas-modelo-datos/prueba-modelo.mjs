@@ -167,7 +167,7 @@ await vale('Tablas sueltas (sin ninguna relación)', `SELECT count(*) n FROM inf
                   JOIN information_schema.table_constraints c ON c.constraint_name = u.constraint_name AND c.constraint_type = 'FOREIGN KEY'
                   WHERE u.table_name = t.table_name)`, 0);
 await vale('Cantidad de relaciones (claves foráneas)', `SELECT count(*) n FROM information_schema.table_constraints WHERE constraint_type = 'FOREIGN KEY'`, 35);
-await vale('Cantidad de tipos (Enum)', `SELECT count(*) n FROM pg_type t JOIN pg_namespace s ON s.oid = t.typnamespace WHERE s.nspname = 'public' AND t.typtype = 'e'`, 21);
+await vale('Cantidad de tipos (Enum)', `SELECT count(*) n FROM pg_type t JOIN pg_namespace s ON s.oid = t.typnamespace WHERE s.nspname = 'public' AND t.typtype = 'e'`, 22);
 await vale('Vistas de datos calculados', `SELECT count(*) n FROM information_schema.views WHERE table_schema = 'public'`, 1);
 await vale('Ninguna columna jsonb en la configuración clínica', `SELECT count(*) n FROM information_schema.columns
   WHERE table_name IN ('CONFIGURACION', 'UMBRAL') AND data_type = 'jsonb'`, 0);
@@ -625,6 +625,15 @@ await acepta('Correo del servidor a Ana por un silencio de datos, pendiente de e
   avisoInterno(SILENCIO_2, INTERNO_ANA, ', fecha_hora_proximo_envio', ', now()'));
 await estado('Un aviso al equipo no cambia el estado de contacto (no es el recorrido del reloj)', SILENCIO_2, 'RECIBIDA', 'SIN_ASIGNAR');
 await rechaza('Segundo correo a la misma cuenta por la misma alerta', avisoInterno(SILENCIO_2, INTERNO_ANA), 'unico');
+await vale('El aviso guarda cuándo se pidió (por defecto, ahora)',
+  `SELECT count(*) n FROM "REGISTRO_INTENTO" WHERE id_alerta = '${SILENCIO_2}' AND fecha_hora_solicitud IS NOT NULL`, 1);
+await acepta('Correo del vigilante del escalamiento a la misma cuenta por la misma alerta (otro propósito)',
+  avisoInterno(SILENCIO_2, INTERNO_ANA, ', proposito', `, 'VIGILANTE'`));
+await rechaza('Segundo correo del vigilante a la misma cuenta por la misma alerta (una vez por alerta)',
+  avisoInterno(SILENCIO_2, INTERNO_ANA, ', proposito', `, 'VIGILANTE'`), 'unico');
+await rechaza('Aviso del vigilante a un contacto del paciente (solo va al equipo)',
+  aviso(MEDIA_ROSA, R2, 2, ', proposito', `, 'VIGILANTE'`, 'CORREO'), 'check');
+await rechaza('Propósito que no existe', avisoInterno(MEDIA_ROSA, INTERNO_ANA, ', proposito', `, 'OTRO'`), 'enum');
 await rechaza('Aviso interno dirigido a una persona de la lista de un paciente', avisoInterno(MEDIA_ROSA, SEG_CIUDADANA), 'disparador');
 await rechaza('Aviso interno con ronda (las rondas son del recorrido del reloj)', avisoInterno(MEDIA_ROSA, INTERNO_ANA, ', ronda', ', 1'), 'check');
 await rechaza('Aviso a un vínculo sin ronda',

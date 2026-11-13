@@ -480,13 +480,15 @@ Depende de: 1.9, 2.1, 2.3, 2.9. Listo cuando: con el simulador de reloj, una ale
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
 | [ ] | 2.10.1 | Máquina de estados de la alerta en el servidor según lo que informa el reloj (recibida, avisando al contacto n, confirmada, sin respuesta, resuelta, pendiente de día hábil, cancelada) | 4 |
-| [ ] | 2.10.2 | Endpoint de solicitud de aviso: el reloj pide avisar a un contacto; el servidor verifica que sea del paciente y tenga opt-in, y envía por WhatsApp o correo. Una solicitud repetida no envía dos veces | 5 |
+| [x] | 2.10.2 | Endpoint de solicitud de aviso: el reloj pide avisar a un contacto; el servidor verifica que sea del paciente y tenga opt-in, y envía por WhatsApp o correo. Una solicitud repetida no envía dos veces | 5 |
 | [ ] | 2.10.3 | Endpoint de estado de la alerta, que el reloj consulta antes de pasar al siguiente contacto (respaldo si FCM se atrasa) | 2 |
 | [ ] | 2.10.4 | Al recibir la confirmación por webhook: marcar la alerta como confirmada y avisar al reloj por FCM | 2 |
 | [ ] | 2.10.5 | WhatsApp simultáneo a todos los coordinadores con opt-in, en paralelo al escalamiento del reloj, solo en horario laboral y para todas las gravedades; correo de respaldo si el WhatsApp falla. Medias y graves destacadas en el dashboard | 3 |
-| [ ] | 2.10.6 | Registrar el fin de la lista informado por el reloj (`SIN_RESPUESTA`), y vigilante: alerta abierta sin noticias del reloj en un plazo → correo a los profesionales | 3 |
+| [x] | 2.10.6 | Registrar el fin de la lista informado por el reloj (`SIN_RESPUESTA`), y vigilante: alerta abierta sin noticias del reloj en un plazo → correo a los profesionales | 3 |
 | [ ] | 2.10.7 | Pruebas, incluidos un reloj sin señal y un reinicio del servidor a mitad de un escalamiento | 4 |
 | [x] | 2.10.8 | Teléfono con WhatsApp (obligatorio para coordinadores, cifrado) y opt-in en las cuentas del equipo (V9) | 2 |
+
+Nota (13-11-2026): 2.10.2 y 2.10.6 hechas (el vigilante del escalamiento avisa por correo a los coordinadores; migración V12). Mientras WhatsApp no esté configurado, los avisos por WhatsApp caen al correo de respaldo; la 2.9 solo agrega el canal real.
 
 Notas (05-11-2026): la 2.10.5 depende del canal de WhatsApp (2.9). Falta poder editar el teléfono y el opt-in de una cuenta ya creada (hoy solo se piden al crearla) y que el webhook de Meta registre la baja del opt-in de un coordinador.
  
@@ -906,7 +908,7 @@ Estados de la alerta en el servidor: `RECIBIDA`, `AVISANDO_CONTACTO`, `CONFIRMAD
 - Cobertura LTE: en zonas sin señal (dentro o fuera de casa) la alerta queda en la cola del reloj hasta recuperar la señal. Verificar la señal en cada casa al instalar (5.6.1).
 - Reloj sin señal, apagado o con el plan de datos vencido: el sistema queda ciego. Redes de seguridad: el silencio de datos de 4 horas y el aviso de plan por vencer en el inventario (3.8).
 - El servidor municipal es la ruta crítica: aunque el reloj escala, cada WhatsApp lo envía el servidor. Si cae él, internet de la municipalidad o la API de Meta, no salen avisos. Mitigar con UPS, monitoreo externo y protocolo de soporte con TI.
-- Escalamiento en el reloj: si el reloj se apaga o pierde la señal a mitad de un escalamiento, nadie sigue avisando. El servidor vigila las alertas abiertas sin noticias del reloj y avisa a los profesionales (2.10.6).
+- Escalamiento en el reloj: si el reloj se apaga o pierde la señal a mitad de un escalamiento, nadie sigue avisando. El servidor vigila las alertas abiertas sin noticias del reloj y avisa a los coordinadores (2.10.6), pero solo en horario laboral: de noche el riesgo sigue y la alerta solo queda en el dashboard.
 - Batería: el LTE consume más que el Wi-Fi. Medirlo en la prueba de factibilidad antes de comprometer la sincronización cada 2 horas.
 - Costo: cada reloj necesita un plan de datos mensual, un costo fijo que antes no existía.
 - Nadie llama automáticamente al SAMU. Depende de que un contacto responda y llame al 131.
@@ -929,7 +931,7 @@ Estados de la alerta en el servidor: `RECIBIDA`, `AVISANDO_CONTACTO`, `CONFIRMAD
 - [ ] Contacto en TI municipal y fecha de la reunión (tarea 0.8).
 - [ ] Qué cuenta de correo institucional se usará y quién la administra (subtarea 2.4.2).
 - [ ] Plazo de espera por contacto antes de pasar al siguiente con WhatsApp (a acordar con el PRLAC y el equipo clínico).
-- [ ] Plazo sin noticias del reloj, durante un escalamiento, antes de avisar a los profesionales (2.10.6).
+- [x] Plazo sin noticias del reloj, durante un escalamiento, antes de avisar a los profesionales (2.10.6): 15 minutos, a los coordinadores, solo en horario laboral (decidido el 13-11-2026).
 - [ ] Cuántos pacientes tendrá el piloto (para estimar la instalación en terreno).
 - [ ] Modelo exacto del reloj con LTE, operador y plan de datos (costo mensual por reloj).
 - [x] Estructura Maven multi-módulo: confirmada (domain, application, adapters, app; subtarea 0.3.3).

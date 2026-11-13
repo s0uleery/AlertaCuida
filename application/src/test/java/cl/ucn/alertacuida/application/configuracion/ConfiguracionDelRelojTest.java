@@ -70,7 +70,7 @@ class ConfiguracionDelRelojTest {
 	@BeforeEach
 	void preparar() {
 		Clock reloj = Clock.fixed(Instant.parse("2026-10-25T15:00:00Z"), ZoneOffset.UTC);
-		RegistroAuditoria registro = (usuario, accion, entidad, id, ip, fecha) -> { };
+		RegistroAuditoria registro = (usuario, accion, entidad, id, ip, fecha, detalle) -> { };
 		Transacciones enTransaccion = Supplier::get;
 		HashMedioContacto hash = new HashMedioContacto() {
 			@Override

@@ -286,7 +286,7 @@ class ModeloDatosTest {
 	private DynamicContainer estructura() {
 		return grupo("1. Estructura de la base (migraciones)",
 			c.vale("Migraciones aplicadas por Flyway", """
-					SELECT count(*) n FROM flyway_schema_history WHERE success AND version IS NOT NULL""", 11),
+					SELECT count(*) n FROM flyway_schema_history WHERE success AND version IS NOT NULL""", 12),
 			c.vale("Cantidad de tablas", """
 					SELECT count(*) n FROM information_schema.tables WHERE table_schema = 'public'
 					AND table_type = 'BASE TABLE' AND table_name <> 'flyway_schema_history'""", 30),

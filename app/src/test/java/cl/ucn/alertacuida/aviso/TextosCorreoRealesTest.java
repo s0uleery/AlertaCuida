@@ -10,6 +10,7 @@ import cl.ucn.alertacuida.application.respuesta.puerto.FirmaRespuesta;
 import cl.ucn.alertacuida.domain.alerta.Severidad;
 import cl.ucn.alertacuida.domain.alerta.TipoEvento;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeAll;
@@ -61,7 +62,7 @@ class TextosCorreoRealesTest {
 				return Optional.empty();
 			}
 		};
-		plantillas = new PlantillasCorreo(DASHBOARD, textos, firma);
+		plantillas = new PlantillasCorreo(DASHBOARD, textos, firma, Duration.ofMinutes(15));
 	}
 
 	/** R2: al equipo, una grave lleva el folio, el alias, la gravedad y el enlace al dashboard. */
@@ -80,6 +81,20 @@ class TextosCorreoRealesTest {
 				+ texto(aContacto(TipoEvento.CAIDA, Severidad.GRAVE, "Rosa"))).toLowerCase();
 
 		assertThat(todo).doesNotContain("caída", "fc", "spo2", "frecuencia", "oxígeno", "saturación");
+	}
+
+	/**
+	 * Vigilante del escalamiento: el texto real dice que la alerta no avanza, con folio, alias, gravedad, los 15
+	 * minutos y el enlace al dashboard, sin nombrar lo detectado ni dejar marcadores.
+	 */
+	@Test
+	void vigilanteDiceQueLaAlertaNoAvanza() {
+		Mensaje mensaje = plantillas.redactar(new CorreoPendiente(UUID.randomUUID(), "coord@muni.cl", true, 142,
+				"Rosa", TipoEvento.CAIDA, Severidad.GRAVE, 0, true));
+
+		assertThat(mensaje.asunto()).contains("no avanza", "grave", "#142", "Rosa").doesNotContain("alerta alerta");
+		assertThat(mensaje.texto()).contains("15 minutos", "#142", "Rosa", DASHBOARD)
+				.doesNotContain("{", "}", "caída");
 	}
 
 	/** R2: una técnica dice qué le pasa al reloj. */

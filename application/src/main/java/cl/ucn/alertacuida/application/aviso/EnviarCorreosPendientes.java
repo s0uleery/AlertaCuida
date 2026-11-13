@@ -78,7 +78,7 @@ public class EnviarCorreosPendientes {
 	}
 
 	/** @return el motivo legible de la falla, acotado */
-	private static String motivo(RuntimeException falla) {
+	static String motivo(RuntimeException falla) {
 		String texto = falla.getMessage() == null ? falla.getClass().getSimpleName() : falla.getMessage();
 		return texto.length() <= LARGO_MOTIVO ? texto : texto.substring(0, LARGO_MOTIVO);
 	}

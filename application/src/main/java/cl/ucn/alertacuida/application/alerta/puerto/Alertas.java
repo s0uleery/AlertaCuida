@@ -3,7 +3,6 @@ package cl.ucn.alertacuida.application.alerta.puerto;
 import cl.ucn.alertacuida.application.alerta.modelo.AlertaGuardada;
 import cl.ucn.alertacuida.application.alerta.modelo.AlertaRecibida;
 import cl.ucn.alertacuida.application.alerta.modelo.Discrepancia;
-import cl.ucn.alertacuida.application.alerta.modelo.EstadoAlerta;
 import cl.ucn.alertacuida.domain.alerta.Severidad;
 import cl.ucn.alertacuida.domain.alerta.TipoEvento;
 import java.time.Instant;
@@ -11,11 +10,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-/** Alertas guardadas (tablas alerta y discrepancia_alerta) y su estado (vista alerta_estado). */
-public interface Alertas {
-
-	/** @return la alerta con ese eventId, si ya llegó */
-	Optional<AlertaGuardada> buscar(UUID eventId);
+/**
+ * Alertas guardadas (tablas alerta y discrepancia_alerta) y su estado (vista alerta_estado). La búsqueda
+ * por eventId y el estado vienen de {@link AlertasDelReloj}.
+ */
+public interface Alertas extends AlertasDelReloj {
 
 	/**
 	 * Guarda una alerta que envió el reloj.
@@ -23,9 +22,6 @@ public interface Alertas {
 	 * @return la alerta guardada, o vacío si otra con el mismo eventId llegó antes
 	 */
 	Optional<AlertaGuardada> crear(UUID idAsignacion, AlertaRecibida alerta, Instant recepcion);
-
-	/** @return el estado calculado de una alerta que existe */
-	EstadoAlerta estado(UUID idAlerta);
 
 	/** Guarda lo que no calzó con la configuración vigente, una fila por discrepancia. */
 	void guardarDiscrepancias(UUID idAlerta, List<Discrepancia> discrepancias);

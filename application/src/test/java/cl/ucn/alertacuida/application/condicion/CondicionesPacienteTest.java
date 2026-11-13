@@ -39,7 +39,8 @@ class CondicionesPacienteTest {
 	@BeforeEach
 	void preparar() {
 		Clock reloj = Clock.fixed(Instant.parse("2026-10-25T15:00:00Z"), ZoneOffset.UTC);
-		RegistroAuditoria registro = (usuario, accion, entidad, id, ip, fecha) -> auditoria.add(accion + " " + entidad);
+		RegistroAuditoria registro = (usuario, accion, entidad, id, ip, fecha, detalle) ->
+				auditoria.add(accion + " " + entidad);
 		Transacciones enTransaccion = Supplier::get;
 		condiciones = new CondicionesPaciente(guardadas, pacientes, registro, enTransaccion, reloj);
 		maria = pacientes.crear(new DatosPaciente("12345678-5", "María", "Rojas", null, null, null, null, null, null,

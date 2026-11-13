@@ -38,11 +38,12 @@ public class ConfiguracionCorreo {
 
 	/**
 	 * Plantillas con la dirección del dashboard, los textos de correos.yml y la firma de los enlaces con que
-	 * el contacto responde.
+	 * el contacto responde, y el plazo del vigilante del escalamiento ({minutos}).
 	 */
 	@Bean
-	PlantillasCorreo plantillasCorreo(PropiedadesCorreo propiedades, FirmaRespuesta firma) {
-		return new PlantillasCorreo(propiedades.urlDashboard(), propiedades.textos(), firma);
+	PlantillasCorreo plantillasCorreo(PropiedadesCorreo propiedades, FirmaRespuesta firma,
+			PropiedadesEscalamiento escalamiento) {
+		return new PlantillasCorreo(propiedades.urlDashboard(), propiedades.textos(), firma, escalamiento.plazo());
 	}
 
 	/** Esperas entre reintentos de un correo fallido. */

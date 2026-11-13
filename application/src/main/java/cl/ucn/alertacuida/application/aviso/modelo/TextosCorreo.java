@@ -14,11 +14,12 @@ import java.util.Map;
  * @param silencioDatos al equipo, cuando un reloj deja de sincronizar
  * @param alertaEquipo  al equipo, por una alerta
  * @param contacto      a un contacto del paciente
+ * @param vigilante     al equipo, cuando una alerta no avanza (vigilante del escalamiento)
  * @param gravedades    cómo se nombra cada gravedad ({gravedad})
  * @param tecnicas      cómo se nombra cada alerta técnica ({tecnica}), menos el silencio de datos
  */
 public record TextosCorreo(String pieEquipo, String pieContacto, SilencioDatos silencioDatos,
-		AlertaEquipo alertaEquipo, Contacto contacto, Map<Severidad, String> gravedades,
+		AlertaEquipo alertaEquipo, Contacto contacto, Vigilante vigilante, Map<Severidad, String> gravedades,
 		Map<TipoEvento, String> tecnicas) {
 
 	/**
@@ -49,6 +50,16 @@ public record TextosCorreo(String pieEquipo, String pieContacto, SilencioDatos s
 	 * @param grave         valor de {grave} en una alerta grave; en las demás queda vacío
 	 */
 	public record Contacto(String asunto, String cuerpo, String quienSinAlias, String grave) {
+	}
+
+	/**
+	 * Al equipo cuando el reloj deja de pedir avisos a mitad del escalamiento. {alerta} y {deQuien} se arman
+	 * igual que en {@link AlertaEquipo}.
+	 *
+	 * @param asunto admite {alerta}, {deQuien}, {folio} y {dashboard}
+	 * @param cuerpo admite {alerta}, {deQuien}, {folio}, {minutos} (el plazo sin noticias), {dashboard} y {pie}
+	 */
+	public record Vigilante(String asunto, String cuerpo) {
 	}
 
 }

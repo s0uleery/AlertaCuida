@@ -9,11 +9,14 @@ package cl.ucn.alertacuida.adapters.web;
  */
 public final class Permisos {
 
-	/** Ver el registro de auditoría. Solo el administrador lo tiene. */
+	/** Ver la auditoría, las cuentas del equipo y los permisos de los roles. Solo el administrador. */
 	public static final String ADMINISTRACION_VER = "hasAuthority('ADMINISTRACION:VER')";
 
 	/** Crear cuentas del personal y emitir sus enlaces de activación. Solo el administrador lo tiene. */
 	public static final String ADMINISTRACION_CREAR = "hasAuthority('ADMINISTRACION:CREAR')";
+
+	/** Cambiar el rol y el aviso técnico de una cuenta, y los permisos de un rol. Solo el administrador. */
+	public static final String ADMINISTRACION_EDITAR = "hasAuthority('ADMINISTRACION:EDITAR')";
 
 	/** Ver pacientes y el inventario de relojes. Coordinador y administrador. */
 	public static final String USUARIOS_VER = "hasAuthority('USUARIOS:VER')";

@@ -10,6 +10,7 @@ import cl.ucn.alertacuida.application.aviso.modelo.TextosCorreo;
 import cl.ucn.alertacuida.application.respuesta.puerto.FirmaRespuesta;
 import cl.ucn.alertacuida.domain.alerta.Severidad;
 import cl.ucn.alertacuida.domain.alerta.TipoEvento;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -53,6 +54,37 @@ class PlantillasCorreoTest {
 		assertThat(mensaje.asunto()).isEqualTo("Alerta: alerta grave #142 de Rosa");
 		assertThat(mensaje.texto()).isEqualTo("Hay una alerta grave #142 de Rosa.\n\nVer: " + DASHBOARD
 				+ "\n\nPie del equipo.");
+	}
+
+	/**
+	 * Vigilante del escalamiento (13-11-2026): al equipo, con su propio texto, la gravedad y el alias, los
+	 * minutos del plazo y el enlace al dashboard; sin nombrar qué se detectó.
+	 */
+	@Test
+	void elCorreoDelVigilanteUsaSuTextoConLosMinutos() {
+		CorreoPendiente correo = new CorreoPendiente(UUID.randomUUID(), "coordinadora@muni.cl", true, 142, "Rosa",
+				TipoEvento.CAIDA, Severidad.GRAVE, 0, true);
+
+		Mensaje mensaje = plantillas(textos()).redactar(correo);
+
+		assertThat(mensaje.asunto()).isEqualTo("Vigilante: alerta grave #142 de Rosa no avanza");
+		assertThat(mensaje.texto()).isEqualTo("La alerta grave #142 de Rosa no avanza hace 15 minutos.\n\nVer: "
+				+ DASHBOARD + "\n\nPie del equipo.");
+		assertThat(mensaje.importante()).isTrue();
+		assertThat(mensaje.texto()).doesNotContainIgnoringCase("caída");
+	}
+
+	/** El texto del vigilante no admite el enlace de respuesta: va al equipo, no a un contacto. */
+	@Test
+	void elVigilanteNoPuedeUsarElEnlaceDeRespuesta() {
+		TextosCorreo base = textos();
+		TextosCorreo malo = new TextosCorreo(base.pieEquipo(), base.pieContacto(), base.silencioDatos(),
+				base.alertaEquipo(), base.contacto(),
+				new TextosCorreo.Vigilante(base.vigilante().asunto(), base.vigilante().cuerpo() + "{responder}"),
+				base.gravedades(), base.tecnicas());
+
+		assertThatThrownBy(() -> plantillas(malo)).isInstanceOf(IllegalArgumentException.class)
+				.hasMessageContaining("vigilante.cuerpo");
 	}
 
 	/** R1: una alerta técnica usa su propio texto, con el nombre de lo que le pasa al reloj. */
@@ -122,7 +154,7 @@ class PlantillasCorreoTest {
 		TextosCorreo malo = new TextosCorreo(base.pieEquipo(), base.pieContacto(), base.silencioDatos(),
 				new TextosCorreo.AlertaEquipo(a.asunto(), a.cuerpo() + "{responder}", a.alertaSalud(),
 						a.alertaTecnica(), a.deQuienConAlias()),
-				base.contacto(), base.gravedades(), base.tecnicas());
+				base.contacto(), base.vigilante(), base.gravedades(), base.tecnicas());
 
 		assertThatThrownBy(() -> plantillas(malo))
 				.isInstanceOf(IllegalArgumentException.class)
@@ -198,7 +230,7 @@ class PlantillasCorreoTest {
 		Map<Severidad, String> gravedades = new HashMap<>(base.gravedades());
 		gravedades.remove(Severidad.MEDIA);
 		TextosCorreo malo = new TextosCorreo(base.pieEquipo(), base.pieContacto(), base.silencioDatos(),
-				base.alertaEquipo(), base.contacto(), gravedades, base.tecnicas());
+				base.alertaEquipo(), base.contacto(), base.vigilante(), gravedades, base.tecnicas());
 
 		assertThatThrownBy(() -> plantillas(malo))
 				.isInstanceOf(IllegalArgumentException.class)
@@ -212,7 +244,7 @@ class PlantillasCorreoTest {
 		Map<TipoEvento, String> tecnicas = new HashMap<>(base.tecnicas());
 		tecnicas.remove(TipoEvento.EXCESO_ALERTAS);
 		TextosCorreo malo = new TextosCorreo(base.pieEquipo(), base.pieContacto(), base.silencioDatos(),
-				base.alertaEquipo(), base.contacto(), base.gravedades(), tecnicas);
+				base.alertaEquipo(), base.contacto(), base.vigilante(), base.gravedades(), tecnicas);
 
 		assertThatThrownBy(() -> plantillas(malo))
 				.isInstanceOf(IllegalArgumentException.class)
@@ -232,14 +264,14 @@ class PlantillasCorreoTest {
 				return Optional.empty();
 			}
 		};
-		return new PlantillasCorreo(DASHBOARD, textos, firma);
+		return new PlantillasCorreo(DASHBOARD, textos, firma, Duration.ofMinutes(15));
 	}
 
 	/** @return los textos de prueba con otra plantilla para el contacto */
 	private static TextosCorreo conContacto(TextosCorreo.Contacto contacto) {
 		TextosCorreo base = textos();
 		return new TextosCorreo(base.pieEquipo(), base.pieContacto(), base.silencioDatos(), base.alertaEquipo(),
-				contacto, base.gravedades(), base.tecnicas());
+				contacto, base.vigilante(), base.gravedades(), base.tecnicas());
 	}
 
 	/** @return un correo pendiente a una cuenta del equipo por la alerta #142 */

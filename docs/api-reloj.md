@@ -112,5 +112,5 @@ Si nadie confirma, el reloj recorre la lista dos veces y termina con `POST /aler
 
 - Ya implementados: sincronización, alertas, cancelaciones y estado de una alerta (25-10-2026, tarea 1.4); configuración y token de Firebase (27-10-2026, tarea 1.7). Detalle en [backend.md](backend.md#api-del-reloj).
 - Implementado el 05-11-2026 (tarea 2.1): agravamiento, discrepancias y exceso de alertas.
-- Por implementar: 2.9 (webhook) y 2.10 (solicitud de aviso). Los avisos FCM y su acuse están programados con canal simulado; falta probarlos con Firebase y el reloj real.
+- Por implementar: 2.9 (webhook y envío real por WhatsApp). La solicitud de aviso existe desde el 13-11-2026; mientras WhatsApp no esté configurado, esos avisos salen por correo de respaldo. Los avisos FCM y su acuse están programados con canal simulado; falta probarlos con Firebase y el reloj real.
 - Definir con TI el subdominio público (0.8); en el contrato figura uno de ejemplo.

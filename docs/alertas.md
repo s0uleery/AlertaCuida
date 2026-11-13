@@ -137,7 +137,7 @@ Definido el 05-11-2026 y confirmado para las alertas técnicas el 08-11-2026. El
 - WhatsApp a la vez, en paralelo al escalamiento del reloj, a todas las cuentas activas con rol `COORDINADOR` que tengan teléfono y opt-in vigente, sin opción de apagarlo.
 - Solo en horario laboral y para todas las gravedades. Fuera de horario no se envía nada, ni siquiera al empezar la jornada: la alerta queda en el dashboard.
 - Si un WhatsApp falla, se envía un correo de respaldo.
-- Las demás cuentas reciben correo solo con `recibe_avisos`, que está apagado por defecto en las cuentas nuevas.
+- Las demás cuentas reciben correo solo con `recibe_avisos`, que está apagado por defecto en las cuentas nuevas. Lo cambia el administrador en Administración > Perfiles (interruptor "Avisos técnicos") o al crear la cuenta.
 - Se define por rol, nunca con una cantidad fija de coordinadores.
 
 ### Correo institucional
@@ -199,6 +199,7 @@ Los de `application.properties` requieren reiniciar el backend.
 | Sincronizaciones seguidas | 2 | Constante `VigilarRelojes.LOTES_SEGUIDOS` en el código |
 | Reintentos del correo | 1, 5 y 15 minutos | `alertacuida.correo.reintentos` |
 | Antigüedad máxima de lo que se avisa por correo | 1 hora | `alertacuida.correo.ventana` |
+| Sin noticias del reloj antes de que avise el vigilante del escalamiento | 15 minutos | `alertacuida.escalamiento.plazo` |
 | Qué alertas van por correo a `recibe_avisos` | Las técnicas | `TipoEvento.tecnicas()` |
 | Texto de los correos | Ver arriba | `app/src/main/resources/correos.yml` |
 | Horario hábil y feriados | Ver arriba | `app/src/main/resources/calendario.yml` |
@@ -265,6 +266,13 @@ Los de `application.properties` requieren reiniciar el backend.
 | 12-11-2026 | Vale solo la primera respuesta del contacto | | Confirmada |
 | 12-11-2026 | Con la alerta resuelta o cancelada no se registra; confirmada por otro o sin respuesta, sí | Un "voy" tardío le sirve al equipo | Confirmada |
 | 12-11-2026 | El token del enlace va firmado (HMAC), sin guardarlo en la base | No cambia el modelo de datos | Confirmada |
+| 13-11-2026 | `recibe_avisos` lo cambia solo quien tiene `ADMINISTRACION:EDITAR`, en cualquier cuenta (también la propia), desde la lista de perfiles | | Confirmada |
+| 13-11-2026 | El alta trae la casilla "Recibe avisos técnicos por correo", apagada por defecto | | Confirmada |
+| 13-11-2026 | Al pasar a `COORDINADOR` una cuenta sin teléfono, el dashboard pide el teléfono y el opt-in, y se envían con el cambio de rol | Recibe por WhatsApp los avisos de la oficina | Confirmada |
+| 13-11-2026 | En la lista de alertas, las de salud y las técnicas van en pestañas separadas (Salud / Reloj) | Se atienden distinto | Confirmada (pantalla 3.4.2, aún sin hacer) |
+| 13-11-2026 | Mientras WhatsApp no esté configurado (antes de la 2.9), un aviso por WhatsApp que pide el reloj se acepta y falla de inmediato, sin reintentos, para que salga el correo de respaldo | El escalamiento funciona desde ya por correo | Confirmada |
+| 13-11-2026 | Vigilante del escalamiento: alerta abierta 15 minutos sin noticias del reloj → correo a todos los coordinadores activos, solo en horario laboral, una sola vez por alerta | Respaldo si el reloj se apaga o pierde la señal a mitad del recorrido | Confirmada |
+| 13-11-2026 | Para medirlo, V12 agrega a `registro_intento` la hora de solicitud y el propósito (`AVISO` o `VIGILANTE`) | No había cómo saber cuándo pidió el reloj su último aviso | Confirmada |
 
 ## Qué falta
 

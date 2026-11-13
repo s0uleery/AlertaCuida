@@ -208,7 +208,7 @@ paths:
     post:
       tags: [Escalamiento]
       operationId: solicitarAviso
-      summary: "[Pendiente 2.10] Pide avisar a un contacto por WhatsApp o correo"
+      summary: "Pide avisar a un contacto por WhatsApp o correo"
       description: |
         El reloj elige el contacto (prioridad, horario, gravedad) y el servidor lo envía. Si el
         servidor no puede enviarlo, responde `RECHAZADO` con el motivo y el reloj pasa al siguiente

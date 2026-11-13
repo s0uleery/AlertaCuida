@@ -108,6 +108,11 @@ Enum respuesta_contacto {
   NO_PUEDO
 }
 
+Enum proposito_aviso {
+  AVISO [note: 'El que pidió el reloj, el de recibe_avisos o el respaldo de un WhatsApp']
+  VIGILANTE [note: 'La alerta no avanza: el reloj no pide avisos (solo a cuentas del equipo)']
+}
+
 Enum tipo_aviso_fcm {
   ALERTA_CONFIRMADA
   ALERTA_RESUELTA
@@ -588,6 +593,8 @@ Table REGISTRO_INTENTO {
   id_contacto_interno uuid [note: 'Aviso del servidor a una cuenta del equipo (contacto interno)']
   canal canal [not null]
   ronda int [note: '1 o 2. La informa el reloj. Vacía en los avisos al equipo']
+  proposito proposito_aviso [not null, default: 'AVISO', note: 'Para qué es el aviso; VIGILANTE solo a cuentas del equipo']
+  fecha_hora_solicitud timestamptz [not null, default: `now()`, note: 'Cuándo lo pidió el reloj o lo encoló el servidor; mide "sin noticias del reloj"']
   reintentos int [not null, default: 0, note: 'Reintentos de envío ya hechos']
   fecha_hora_proximo_envio timestamptz [note: 'Pendiente de envío desde esa hora (bandeja de salida); vacía si ya salió o falló']
   id_externo varchar [unique, note: 'ID del mensaje en Meta o en el correo; evita procesar dos veces un webhook']
@@ -601,7 +608,7 @@ Table REGISTRO_INTENTO {
   Indexes {
     (id_alerta, id_contacto_paciente, canal, ronda) [unique, note: 'Un aviso por contacto, canal y ronda, aunque el reloj genere otro event_id (ej. tras reiniciarse)']
     (id_contacto_paciente) [note: 'Lo revisa la clave diferida al borrar vínculos']
-    (id_alerta, id_contacto_interno, canal) [unique, note: 'Un aviso por cuenta, canal y alerta, aunque el servidor lo encole varias veces']
+    (id_alerta, id_contacto_interno, canal, proposito) [unique, note: 'Un aviso por cuenta, canal, alerta y propósito, aunque el servidor lo encole varias veces']
     fecha_hora_proximo_envio [note: 'Índice parcial (WHERE fecha_hora_proximo_envio IS NOT NULL): lo que la tarea programada envía']
   }
   Note: '''
@@ -615,6 +622,7 @@ Table REGISTRO_INTENTO {
   CHECK (reintentos >= 0).
   CHECK (respuesta IS NULL OR id_contacto_paciente IS NOT NULL).
   CHECK (fecha_hora_proximo_envio IS NULL OR (fecha_hora_envio IS NULL AND fecha_hora_fallo IS NULL)).
+  CHECK (proposito = 'AVISO' OR id_contacto_interno IS NOT NULL).
   Disparador intento_contacto_interno: id_contacto_interno debe ser un contacto interno.
   El estado de entrega no se guarda: es la fecha más avanzada (fallo > lectura > entrega > envío).
   CHECK (ronda IN (1, 2)).

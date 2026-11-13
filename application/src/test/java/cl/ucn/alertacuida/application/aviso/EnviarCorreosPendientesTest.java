@@ -65,7 +65,7 @@ class EnviarCorreosPendientesTest {
 				public Optional<UUID> verificar(String token) {
 					return Optional.empty();
 				}
-			});
+			}, Duration.ofMinutes(15));
 
 	private final EnviarCorreosPendientes enviar = new EnviarCorreosPendientes(bandeja, canal,
 			PLANTILLAS, POLITICA, Clock.fixed(AHORA, ZoneOffset.UTC));

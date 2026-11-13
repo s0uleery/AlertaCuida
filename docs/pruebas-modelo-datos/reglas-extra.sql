@@ -125,6 +125,9 @@ ALTER TABLE "REGISTRO_INTENTO" ADD CONSTRAINT intento_reintentos CHECK (reintent
 ALTER TABLE "REGISTRO_INTENTO" ADD CONSTRAINT intento_respuesta_externo CHECK (respuesta IS NULL OR id_contacto_paciente IS NOT NULL);
 ALTER TABLE "REGISTRO_INTENTO" ADD CONSTRAINT intento_pendiente CHECK (fecha_hora_proximo_envio IS NULL OR (fecha_hora_envio IS NULL AND fecha_hora_fallo IS NULL));
 
+-- Vigilante del escalamiento (migración V12)
+ALTER TABLE "REGISTRO_INTENTO" ADD CONSTRAINT intento_vigilante_interno CHECK (proposito = 'AVISO' OR id_contacto_interno IS NOT NULL);
+
 -- Disparadores: responden como un CHECK (23514)
 CREATE FUNCTION contacto_tipo_fijo() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
