@@ -1,6 +1,5 @@
 package cl.ucn.alertacuida.application.contacto.puerto;
 
-import cl.ucn.alertacuida.application.contacto.modelo.ContactoDelPaciente;
 import cl.ucn.alertacuida.application.contacto.modelo.DatosPersona;
 import cl.ucn.alertacuida.application.contacto.modelo.Persona;
 import cl.ucn.alertacuida.application.contacto.modelo.TipoContacto;
@@ -12,15 +11,13 @@ import java.util.UUID;
 
 /**
  * Personas de contacto y la lista de cada paciente (tablas contacto, contacto_paciente y
- * tipo_contacto). Nombre, WhatsApp y correo se cifran en el adaptador.
+ * tipo_contacto). Nombre, WhatsApp y correo se cifran en el adaptador. La lista de un paciente viene de
+ * {@link ListaDelPaciente}.
  */
-public interface Contactos {
+public interface Contactos extends ListaDelPaciente {
 
 	/** @return los tipos de contacto activos, en el orden del catálogo */
 	List<TipoContacto> tipos();
-
-	/** @return todos los contactos del paciente, activos y desactivados, sin orden definido */
-	List<ContactoDelPaciente> delPaciente(UUID idPaciente);
 
 	/** @return la persona con ese hash de WhatsApp */
 	Optional<Persona> personaPorWhatsapp(String whatsappHash);

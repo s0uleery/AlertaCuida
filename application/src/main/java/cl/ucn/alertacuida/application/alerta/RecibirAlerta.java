@@ -9,6 +9,7 @@ import cl.ucn.alertacuida.application.alerta.modelo.RespuestaAlerta;
 import cl.ucn.alertacuida.application.alerta.modelo.ResultadoAlerta;
 import cl.ucn.alertacuida.application.alerta.puerto.Alertas;
 import cl.ucn.alertacuida.application.asignacion.modelo.RelojAutenticado;
+import cl.ucn.alertacuida.application.calendario.ReglaEnrutamiento;
 import cl.ucn.alertacuida.application.comun.error.Conflicto;
 import cl.ucn.alertacuida.application.comun.error.NoEncontrado;
 import cl.ucn.alertacuida.application.comun.error.SolicitudRechazada;
@@ -38,20 +39,23 @@ public class RecibirAlerta {
 	private final Alertas alertas;
 	private final RevisionDiscrepancias revision;
 	private final LimiteAlertas limite;
+	private final ReglaEnrutamiento enrutamiento;
 	private final Transacciones transacciones;
 	private final Clock reloj;
 
 	/**
 	 * Recibe lo que usa; lo arma ConfiguracionApiReloj.
 	 *
-	 * @param revision compara cada alerta nueva con la configuración vigente
-	 * @param limite   cuántas alertas por ventana antes de avisar del exceso
+	 * @param revision     compara cada alerta nueva con la configuración vigente
+	 * @param limite       cuántas alertas por ventana antes de avisar del exceso
+	 * @param enrutamiento decide si la alerta técnica de exceso espera al día hábil
 	 */
 	public RecibirAlerta(Alertas alertas, RevisionDiscrepancias revision, LimiteAlertas limite,
-			Transacciones transacciones, Clock reloj) {
+			ReglaEnrutamiento enrutamiento, Transacciones transacciones, Clock reloj) {
 		this.alertas = alertas;
 		this.revision = revision;
 		this.limite = limite;
+		this.enrutamiento = enrutamiento;
 		this.transacciones = transacciones;
 		this.reloj = reloj;
 	}
@@ -132,6 +136,29 @@ public class RecibirAlerta {
 	}
 
 	/**
+	 * El reloj recorrió la lista dos veces sin confirmación. Repetirlo no cambia la hora ya registrada.
+	 *
+	 * @param quien   el reloj que lo informa, según su token
+	 * @param eventId el de la alerta
+	 * @param fecha   cuándo terminó la lista
+	 * @return el estado de la alerta
+	 * @throws NoEncontrado       si no hay una alerta con ese eventId de este reloj
+	 * @throws Conflicto          si la canceló el paciente
+	 * @throws SolicitudRechazada si falta la hora
+	 */
+	public EstadoAlerta informarSinRespuesta(RelojAutenticado quien, UUID eventId, Instant fecha) {
+		if (fecha == null) {
+			throw new SolicitudRechazada("Falta fechaHora");
+		}
+		AlertaGuardada alerta = deEsteReloj(quien, eventId);
+		if (alerta.cancelada()) {
+			throw new Conflicto("El paciente canceló esa alerta");
+		}
+		alertas.registrarSinRespuesta(alerta.idAlerta(), fecha);
+		return alertas.estado(alerta.idAlerta());
+	}
+
+	/**
 	 * @param quien   el reloj que pregunta, según su token
 	 * @param eventId el de la alerta
 	 * @return su estado actual
@@ -196,7 +223,7 @@ public class RecibirAlerta {
 		if (recientes >= limite.avisarDesde()) {
 			alertas.crearTecnicaSiNoHayAbierta(idAsignacion, TipoEvento.EXCESO_ALERTAS, SEVERIDAD_EXCESO,
 					"{\"alertas\": " + recientes + ", \"ventanaMinutos\": " + limite.ventana().toMinutes() + "}",
-					ahora);
+					enrutamiento.esperaDiaHabil(SEVERIDAD_EXCESO, ahora), ahora);
 		}
 	}
 

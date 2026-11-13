@@ -48,7 +48,7 @@ sequenceDiagram
     R->>R: Muestra "Alerta recibida por ..." y deja de avisar
 ```
 
-Si nadie confirma, el reloj recorre la lista dos veces y termina con `POST /alertas/A/sin-respuesta`. Además, el servidor avisa por correo a la oficina PRLAC, a todos los coordinadores a la vez y en paralelo a este recorrido, sin esperar a los contactos (2.10.5). El reloj no participa en ese aviso.
+Si nadie confirma, el reloj recorre la lista dos veces y termina con `POST /alertas/A/sin-respuesta`. Además, en horario laboral el servidor avisa por WhatsApp a la oficina PRLAC, a todos los coordinadores a la vez y en paralelo a este recorrido, sin esperar a los contactos, con correo de respaldo si un WhatsApp falla (2.10.5). El reloj no participa en ese aviso.
 
 ## Decisiones
 
@@ -98,7 +98,7 @@ Si nadie confirma, el reloj recorre la lista dos veces y termina con `POST /aler
 
 1. **Simulacro:** propuesta: el servidor crea la alerta de prueba y manda el aviso FCM `SIMULACRO` con su `eventIdAlerta`; el reloj muestra "PRUEBA" y escala como siempre con ese `eventId`, y el servidor usa la plantilla "PRUEBA". ¿Le sirve, o el servidor debe avisar solo, sin pasar por el reloj?
 2. ¿El reloj puede enviar alertas `BATERIA_BAJA` y `RELOJ_NO_PUESTO`, o esas las detecta solo el servidor con la sincronización (2.2.4)?
-3. ¿Cuánto tarda en llegar un aviso FCM por LTE en la prueba de factibilidad? Define el plazo para reintentarlo.
+3. ¿Cuánto tarda en llegar un aviso FCM por LTE en la prueba de factibilidad? Define el plazo para reintentarlo. Hoy, provisional: 1, 1 y 2 minutos desde el envío anterior, y un mismo `idAviso` puede llegar más de una vez.
 4. ¿El reloj puede guardar la cola y los temporizadores de forma que sobrevivan a un reinicio (Room)?
 5. ¿Los rangos válidos de las lecturas (FC de 20 a 250 y SpO2 de 50 a 100) calzan con lo que entrega el Samsung Health Sensor SDK?
 6. ¿Le basta la `version` como hash, o prefiere además un número correlativo para mostrar en pantalla?
@@ -106,10 +106,11 @@ Si nadie confirma, el reloj recorre la lista dos veces y termina con `POST /aler
 8. **Regla de tendencia (`reglas.tendencia`, 05-11-2026):** el reloj alerta cuando FC o SpO2 lleva ese tiempo fuera de su rango normal, sin llegar al límite grave; la regla de 2 lecturas consecutivas queda solo para los valores más allá del límite grave. Definido: la alerta usa la gravedad de `reglas.tendencia.severidad` (hoy `MEDIA`), sin fijarla en el código del reloj; si una lectura vuelve al rango normal, el tiempo parte de cero; con los umbrales de cada paciente, `normalMin` y `normalMax` son normales, y `graveBajo` y `graveAlto` son zona intermedia. Definido además (05-11-2026): una sola alerta mientras el valor siga en esa zona; puede volver a alertar solo después de que una lectura vuelva al rango normal (sujeto a validación del equipo clínico).
 9. **Zona segura (`zonaSegura`, 05-11-2026):** viene solo con `modulos.zonaSegura` activo (y entonces `gpsActivo` es `true`). El reloj compara su GPS con el círculo (`latitud`, `longitud`, `radioMetros`) y, si la persona sale, envía una alerta `ZONA_SEGURA` con `zonaSegura.severidad` (media por defecto; se elige por paciente). Por definir con quien desarrolla el reloj: cada cuánto revisa el GPS (afecta la batería, por eso la zona se había eliminado en la v7), cuántas posiciones fuera del círculo exige antes de alertar (el GPS puede saltar) y si vuelve a alertar después de que la persona regresa.
 10. **Botón de ayuda (`modulos.botonAyuda`, 05-11-2026):** el reloj muestra un botón para pedir ayuda. Al presionarlo envía una alerta `BOTON_AYUDA` siempre `LEVE`, con la ventana de 30 s para cancelar. Como toda leve, fuera del horario hábil espera al día hábil. Avisa primero a los contactos con `tipo` `VECINO`, por prioridad, y después al resto, por prioridad. Por definir: dónde va el botón en la pantalla y cómo evitar que se presione por error.
+11. **Inactividad como respaldo del servidor (08-11-2026):** hoy la sincronización no trae ningún dato de movimiento, así que el servidor no puede detectar una inactividad prolongada. ¿El reloj puede informar en cada lote un dato como los minutos sin movimiento? Si puede, faltaría definir el plazo con el equipo clínico.
 
 ## Pendiente
 
 - Ya implementados: sincronización, alertas, cancelaciones y estado de una alerta (25-10-2026, tarea 1.4); configuración y token de Firebase (27-10-2026, tarea 1.7). Detalle en [backend.md](backend.md#api-del-reloj).
 - Implementado el 05-11-2026 (tarea 2.1): agravamiento, discrepancias y exceso de alertas.
-- Por implementar: 2.3 (avisos FCM y acuse), 2.9 (webhook) y 2.10 (solicitud de aviso y fin del escalamiento).
+- Por implementar: 2.9 (webhook y envío real por WhatsApp). La solicitud de aviso existe desde el 13-11-2026; mientras WhatsApp no esté configurado, esos avisos salen por correo de respaldo. Los avisos FCM y su acuse están programados con canal simulado; falta probarlos con Firebase y el reloj real.
 - Definir con TI el subdominio público (0.8); en el contrato figura uno de ejemplo.

@@ -55,7 +55,7 @@ class RenovarSesionTest {
 			}
 		};
 		renovar = new RenovarSesion(tokens, cuentas, secretos, apertura, POLITICA,
-				(id, accion, entidad, idEntidad, ip, fecha) -> auditados.add(accion + " " + id + " " + ip),
+				(id, accion, entidad, idEntidad, ip, fecha, detalle) -> auditados.add(accion + " " + id + " " + ip),
 				sinTransaccion, reloj);
 		cerrar = new CerrarSesion(tokens, secretos);
 	}

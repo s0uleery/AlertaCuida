@@ -36,8 +36,20 @@ Los tipos de TypeScript de cada respuesta ya están en `frontend/src/features/*/
 | **Cuentas del equipo** | | |
 | `POST /api/personal` | `ADMINISTRACION:CREAR` | 201 `RespuestaEnlace` |
 | `POST /api/personal/{id}/enlace-activacion` | `ADMINISTRACION:CREAR` | 200 `RespuestaEnlace` |
+| `GET /api/personal` | `ADMINISTRACION:VER` | 200 `PerfilEquipo[]` |
+| `PUT /api/personal/{id}/rol` | `ADMINISTRACION:EDITAR` | 204 |
+| `PUT /api/personal/{id}/recibe-avisos` | `ADMINISTRACION:EDITAR` | 204 |
+| **Roles y permisos** | | |
+| `GET /api/roles` | `ADMINISTRACION:VER` | 200 `RolConPermisos[]` |
+| `PUT /api/roles/{codigo}/permisos` | `ADMINISTRACION:EDITAR` | 204 |
 | **Auditoría** | | |
 | `GET /api/auditoria?limite=500&incluirLecturas=false` | `ADMINISTRACION:VER` | 200 `RegistroAuditoria[]` |
+| **Alertas** | | |
+| `GET /api/alertas` | `ALERTAS:VER` | 200 `ResumenAlerta[]` |
+| `GET /api/alertas/{id}` | `ALERTAS:VER` | 200 `DetalleAlerta` |
+| `POST /api/alertas/{id}/asumir` | `ALERTAS:EDITAR` | 204 |
+| `POST /api/alertas/{id}/resolver` | `ALERTAS:EDITAR` | 204 |
+| `POST /api/alertas/{id}/seguimiento/cerrar` | `ALERTAS:EDITAR` | 204 |
 | **Pacientes** | | |
 | `GET /api/pacientes?incluirBajas=false` | `USUARIOS:VER` | 200 `ResumenPaciente[]` |
 | `GET /api/pacientes/{id}` | `USUARIOS:VER` | 200 `DetallePaciente` |
@@ -121,9 +133,9 @@ La persona llega desde el enlace de activación (`/activar?token=…`) y elige s
 ### `POST /api/personal`
 ```json
 { "run": "12.345.678-5", "nombre": "Camila Vera", "cargo": "Enfermera", "correo": "camila@ejemplo.cl", "rol": "COORDINADOR",
-  "telefono": "+56 9 1234 5678", "aceptaWhatsapp": true }
+  "telefono": "+56 9 1234 5678", "aceptaWhatsapp": true, "recibeAvisos": false }
 ```
-`rol`: `ADMINISTRADOR`, `COORDINADOR` o `PERSONAL`; 400 si no existe o está desactivado. `telefono` (celular con WhatsApp) es obligatorio para `COORDINADOR`, porque recibe los avisos de la oficina PRLAC; se guarda normalizado y cifrado. `aceptaWhatsapp: true` registra el opt-in con la fecha de hoy y exige el teléfono. Respuesta 201:
+`rol`: `ADMINISTRADOR`, `COORDINADOR` o `PERSONAL`; 400 si no existe o está desactivado. `telefono` (celular con WhatsApp) es obligatorio para `COORDINADOR`, porque recibe los avisos de la oficina PRLAC; se guarda normalizado y cifrado. `aceptaWhatsapp: true` registra el opt-in con la fecha de hoy y exige el teléfono. `recibeAvisos` (correo de las alertas técnicas) es opcional y vale `false` si no viene. Respuesta 201:
 ```json
 { "idUsuario": "…", "enlaceActivacion": "http://localhost:5173/activar?token=…", "expiraEn": "2026-10-28T14:00:00Z" }
 ```
@@ -131,6 +143,45 @@ La persona llega desde el enlace de activación (`/activar?token=…`) y elige s
 
 ### `POST /api/personal/{id}/enlace-activacion`
 Otro enlace para una cuenta que aún no se activa; el anterior deja de servir. Misma respuesta. 404 si la cuenta no existe o ya está activa.
+
+### `GET /api/personal`
+Todas las cuentas, por nombre. No trae el RUN ni el teléfono (van cifrados).
+```json
+[
+  { "id": "…", "nombre": "Camila Vera", "cargo": "Enfermera", "correo": "camila@ejemplo.cl", "rol": "COORDINADOR",
+    "estado": "ACTIVA", "ultimoAcceso": "2026-11-13T12:30:00Z", "recibeAvisos": true, "tieneTelefono": true }
+]
+```
+`estado`: `ACTIVA`, `PENDIENTE` (no ha usado su enlace) o `DESACTIVADA`. `ultimoAcceso` es `null` si nunca ha entrado. `tieneTelefono: false` indica que, para pasarla a `COORDINADOR`, hay que enviar el teléfono.
+
+### `PUT /api/personal/{id}/rol`
+```json
+{ "rol": "COORDINADOR", "telefono": "+56 9 1234 5678", "aceptaWhatsapp": true }
+```
+`telefono` y `aceptaWhatsapp` solo hacen falta al pasar a `COORDINADOR` una cuenta sin teléfono. 204 si resulta; el rol rige cuando la persona vuelve a iniciar sesión. 400 si el rol no existe o falta el teléfono; 404 si la cuenta no existe; 409 si es la cuenta propia o dejaría el sistema sin un administrador activo. Se audita con el rol anterior y el nuevo.
+
+### `PUT /api/personal/{id}/recibe-avisos`
+```json
+{ "recibeAvisos": true }
+```
+Correo de las alertas técnicas (reloj sin datos, batería baja, reloj no puesto, exceso de alertas), solo en horario hábil. Sirve también para la cuenta propia. 204; 400 si falta el campo; 404 si la cuenta no existe.
+
+## Roles y permisos
+
+### `GET /api/roles`
+```json
+[
+  { "codigo": "ADMINISTRADOR", "nombre": "Administrador", "esSistema": true, "permisos": ["ADMINISTRACION:CREAR", "…"] },
+  { "codigo": "PERSONAL", "nombre": "Personal", "esSistema": false, "permisos": ["ALERTAS:EDITAR", "ALERTAS:VER"] }
+]
+```
+Solo los roles activos, con el administrador primero.
+
+### `PUT /api/roles/{codigo}/permisos`
+```json
+{ "permisos": ["ALERTAS:VER", "ALERTAS:EDITAR", "REPORTES:VER"] }
+```
+Reemplaza todos los permisos del rol. Módulos: `ALERTAS`, `USUARIOS`, `REPORTES`, `ADMINISTRACION`; acciones: `VER`, `CREAR`, `EDITAR`, `ELIMINAR`, `EXPORTAR`. 204; rigen cuando cada persona vuelve a iniciar sesión. 400 si un permiso no existe; 404 si el rol no existe; 409 si es el administrador, cuyos permisos no se cambian.
 
 ## Pacientes
 
@@ -354,13 +405,52 @@ Lo ve todo el equipo: basta con tener sesión. Es de solo lectura; el horario y 
 - `horarioHabil` trae un tramo por día hábil (en el ejemplo se omiten martes a jueves). Los días que no aparecen no son hábiles. El `inicio` cuenta; a la hora de `fin` ya es fuera de horario.
 - `feriados` vienen ordenados por fecha: los nacionales del año en curso y el siguiente.
 
+## Alertas
+
+### `GET /api/alertas`
+Hasta 200 alertas no canceladas: primero las `SIN_RESPUESTA` abiertas y después las más recientes. Las canceladas por el paciente no aparecen, porque solo sirven para métricas. El front todavía usa datos de ejemplo.
+```json
+[{
+  "id": "…", "numero": 142,
+  "paciente": { "id": "…", "nombres": "María", "apellidos": "Soto Rojas", "edad": 82 },
+  "tipoEvento": "CAIDA", "severidad": "GRAVE",
+  "estadoContacto": "SIN_RESPUESTA", "estadoAtencion": "SIN_ASIGNAR",
+  "responsable": null, "recepcion": "2026-11-11T15:00:00Z", "prioridadMaxima": true
+}]
+```
+`severidad` es la actual: `GRAVE` si se agravó. `prioridadMaxima` es `true` si nadie de la lista confirmó y la alerta sigue abierta.
+
+### `GET /api/alertas/{id}`
+Los mismos campos de la lista, más `atencion` (`null` si sigue abierta; si no, `fechaHora`, `resolutor`, `clasificacion` y `observaciones`) y `lineaTiempo`, del paso más antiguo al más reciente:
+```json
+{ "fechaHora": "…", "tipo": "AVISO_ENVIADO", "contacto": "Hija Ana", "canal": "WHATSAPP", "ronda": 1, "detalle": null, "usuario": null }
+```
+- `tipo`: `ALERTA_RECIBIDA`, `ALERTA_AGRAVADA`, `ALERTA_CANCELADA`, `SALTO_CONTACTO`, `AVISO_ENVIADO`, `AVISO_ENTREGADO`, `AVISO_LEIDO`, `AVISO_FALLIDO`, `RESPUESTA_CONTACTO`, `SIN_RESPUESTA`, `CASO_ASUMIDO`, `SEGUIMIENTO`, `ALERTA_RESUELTA`, `SEGUIMIENTO_CERRADO`, `FCM_PENDIENTE`, `FCM_ENVIADO`, `FCM_RECIBIDO` o `FCM_NO_CONFIRMADO`.
+- `detalle`: el motivo del fallo, la respuesta del contacto, el tipo de aviso al reloj, la clasificación o la nota de seguimiento.
+- Las fechas son las registradas: lo que informa el reloj usa la hora del reloj, así que una cancelación aparece antes que la recepción.
+
+### `POST /api/alertas/{id}/asumir`
+Sin cuerpo. La persona queda a cargo. 409 si otra ya la tomó, si está cerrada o si el paciente la canceló.
+
+### `POST /api/alertas/{id}/resolver`
+```json
+{ "clasificacion": "POSITIVA", "observaciones": "Se llamó a la hija" }
+```
+- `observaciones` es obligatorio siempre.
+- `clasificacion` (`POSITIVA` o `FALSA_ALARMA`) es obligatoria en las alertas de salud y debe ir vacía en las técnicas.
+- La puede resolver cualquier cuenta con el permiso. Si nadie la había asumido, quien resuelve queda como responsable.
+- Una `POSITIVA` queda `EN_SEGUIMIENTO`.
+- 409 si ya está cerrada o si el paciente la canceló.
+
+### `POST /api/alertas/{id}/seguimiento/cerrar`
+Sin cuerpo. Termina el seguimiento de una `POSITIVA`. 409 si la alerta no tiene uno abierto.
+
 ## Todavía no existen
 
 El front no debe llamarlos aún. Si los necesita, puede usar datos de ejemplo con el mismo formato, como hace hoy la página de inicio.
 
 | Qué | Para | Cronograma |
 |---|---|---|
-| `/api/alertas` (lista, detalle con línea de tiempo, resolver) | Página de inicio y alertas activas. El formato que espera el front está en `features/alertas/tipos.ts` | 3.4 |
 | Panel de estado general (última sincronización, estado del reloj) | Página de inicio | 3.4.1 |
 | Tendencias de FC y SpO2, ubicaciones | Gráficos en la ficha | 3.5 |
 | Reportes diarios y semanales | Reportes | 3.6 |

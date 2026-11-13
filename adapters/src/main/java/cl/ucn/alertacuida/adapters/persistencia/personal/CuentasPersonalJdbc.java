@@ -69,8 +69,8 @@ public class CuentasPersonalJdbc implements CuentasPersonal {
 		try {
 			return jdbc.sql("""
 					INSERT INTO usuario (codigo_rol, rut, rut_hash, nombre_profesional, cargo, correo, telefono,
-						fecha_opt_in)
-					VALUES (:rol, :rut, :rutHash, :nombre, :cargo, :correo, :telefono, :optIn)
+						fecha_opt_in, recibe_avisos)
+					VALUES (:rol, :rut, :rutHash, :nombre, :cargo, :correo, :telefono, :optIn, :recibeAvisos)
 					RETURNING id_usuario""")
 					.param("rol", cuenta.codigoRol())
 					.param("rut", cifrado.cifrar(cuenta.run(), ColumnaCifrada.USUARIO_RUT))
@@ -80,6 +80,7 @@ public class CuentasPersonalJdbc implements CuentasPersonal {
 					.param("correo", cuenta.correo())
 					.param("telefono", cifrado.cifrar(cuenta.telefono(), ColumnaCifrada.USUARIO_TELEFONO))
 					.param("optIn", cuenta.fechaOptIn() == null ? null : Timestamp.from(cuenta.fechaOptIn()))
+					.param("recibeAvisos", cuenta.recibeAvisos())
 					.query(UUID.class)
 					.single();
 		} catch (DuplicateKeyException duplicada) {

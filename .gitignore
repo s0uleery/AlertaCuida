@@ -70,3 +70,7 @@ frontend/dist/
 CLAUDE.md
 CLAUDE.local.md
 .mcp.json
+
+### Llave de Firebase (cuenta de servicio): va fuera del repositorio, ver docs/backend.md ###
+*firebase-adminsdk*.json
+firebase*.json

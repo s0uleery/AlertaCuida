@@ -59,7 +59,8 @@ class VinculoRelojTest {
 		};
 		Transacciones enTransaccion = Supplier::get;
 		vinculo = new VinculoReloj(asignaciones, pacientes, relojes, secretos,
-				(usuario, accion, entidad, id, ip, fecha) -> { }, enTransaccion, Clock.fixed(AHORA, ZoneOffset.UTC));
+				(usuario, accion, entidad, id, ip, fecha, detalle) -> { }, enTransaccion,
+				Clock.fixed(AHORA, ZoneOffset.UTC));
 		maria = pacientes.crear(paciente(AYER), "h-1");
 		reloj1 = relojes.agregar("R-001", EstadoReloj.OPERATIVO);
 		reloj2 = relojes.agregar("R-002", EstadoReloj.OPERATIVO);

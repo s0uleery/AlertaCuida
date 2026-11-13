@@ -38,6 +38,7 @@ const MOTIVOS = {
   nulo: { texto: 'NOT NULL', patron: /violates not-null constraint/ },
   exclusion: { texto: 'superposición (EXCLUDE)', patron: /violates exclusion constraint/ },
   enum: { texto: 'valor fuera del enum', patron: /invalid input value for enum/ },
+  disparador: { texto: 'disparador (como un CHECK)', patron: /contacto interno|de interno a externo/ },
 };
 
 // Debe guardarse sin error
@@ -103,6 +104,7 @@ const id = (n) => '00000000-0000-0000-0000-' + String(n).padStart(12, '0');
 const ANA = id(1), LUIS = id(2), ADMIN = id(3), NUEVA = id(4);      // profesionales
 const MARIA = id(11), PEDRO = id(12), ROSA = id(13);                // pacientes
 const HIJA = id(21), SEG_CIUDADANA = id(22), VECINO = id(23), CUIDADORA = id(24); // personas
+const INTERNO_ANA = id(25); // contacto interno: la cuenta de Ana
 const M1 = id(31), M2 = id(32), P1 = id(33), P2 = id(34), P3 = id(35), R1 = id(36), R2 = id(37); // vínculos
 const W1 = id(41), W2 = id(42), W3 = id(43), W4 = id(44), W5 = id(45); // relojes
 const A_MARIA = id(51), A_PEDRO = id(52), A_ROSA_VIEJA = id(53), A_ROSA = id(54); // asignaciones
@@ -121,6 +123,10 @@ const alertaServidor = (idA, asig, tipo, extraCols = '', extraVals = '') =>
 const aviso = (alerta, vinculo, ronda = 1, extraCols = '', extraVals = '', canal = 'WHATSAPP') =>
   `INSERT INTO "REGISTRO_INTENTO"(id_intento, event_id, id_alerta, id_contacto_paciente, canal, ronda, fecha_hora_envio${extraCols})
    VALUES (gen_random_uuid(), gen_random_uuid(), '${alerta}', '${vinculo}', '${canal}', ${ronda}, now()${extraVals})`;
+// Correo del servidor a una cuenta del equipo (contacto interno), sin ronda
+const avisoInterno = (alerta, contacto, extraCols = '', extraVals = '') =>
+  `INSERT INTO "REGISTRO_INTENTO"(id_intento, event_id, id_alerta, id_contacto_interno, canal${extraCols})
+   VALUES (gen_random_uuid(), gen_random_uuid(), '${alerta}', '${contacto}', 'CORREO'${extraVals})`;
 const asumir = (alerta, usuario, hora, condicion = `"ATENCION_ALERTA".fecha_hora_toma IS NULL AND "ATENCION_ALERTA".fecha_hora_cierre IS NULL`) =>
   `INSERT INTO "ATENCION_ALERTA"(id_alerta, id_usuario_responsable, fecha_hora_toma) VALUES ('${alerta}', '${usuario}', '${hora}')
    ON CONFLICT (id_alerta) DO UPDATE SET id_usuario_responsable = EXCLUDED.id_usuario_responsable, fecha_hora_toma = EXCLUDED.fecha_hora_toma
@@ -160,8 +166,8 @@ await vale('Tablas sueltas (sin ninguna relación)', `SELECT count(*) n FROM inf
   AND NOT EXISTS (SELECT 1 FROM information_schema.constraint_column_usage u
                   JOIN information_schema.table_constraints c ON c.constraint_name = u.constraint_name AND c.constraint_type = 'FOREIGN KEY'
                   WHERE u.table_name = t.table_name)`, 0);
-await vale('Cantidad de relaciones (claves foráneas)', `SELECT count(*) n FROM information_schema.table_constraints WHERE constraint_type = 'FOREIGN KEY'`, 33);
-await vale('Cantidad de tipos (Enum)', `SELECT count(*) n FROM pg_type t JOIN pg_namespace s ON s.oid = t.typnamespace WHERE s.nspname = 'public' AND t.typtype = 'e'`, 21);
+await vale('Cantidad de relaciones (claves foráneas)', `SELECT count(*) n FROM information_schema.table_constraints WHERE constraint_type = 'FOREIGN KEY'`, 35);
+await vale('Cantidad de tipos (Enum)', `SELECT count(*) n FROM pg_type t JOIN pg_namespace s ON s.oid = t.typnamespace WHERE s.nspname = 'public' AND t.typtype = 'e'`, 22);
 await vale('Vistas de datos calculados', `SELECT count(*) n FROM information_schema.views WHERE table_schema = 'public'`, 1);
 await vale('Ninguna columna jsonb en la configuración clínica', `SELECT count(*) n FROM information_schema.columns
   WHERE table_name IN ('CONFIGURACION', 'UMBRAL') AND data_type = 'jsonb'`, 0);
@@ -595,6 +601,55 @@ await backend('Aviso por WhatsApp a una persona que solo tiene correo (el vecino
   'Nota de REGISTRO_INTENTO: "la persona tiene el canal pedido".');
 await backend('Aviso por WhatsApp a una persona que revocó el opt-in (la cuidadora de Pedro)', aviso(LEVE_PEDRO, P1),
   'Nota de REGISTRO_INTENTO: "en WhatsApp, opt-in vigente".');
+await acepta('Ana como contacto interno: solo el enlace a su cuenta, sin copiar sus datos',
+  `INSERT INTO "CONTACTO"(id_contacto, id_usuario) VALUES ('${INTERNO_ANA}', '${ANA}')`);
+await rechaza('Segundo contacto interno para la misma cuenta',
+  `INSERT INTO "CONTACTO"(id_contacto, id_usuario) VALUES (gen_random_uuid(), '${ANA}')`, 'unico');
+await rechaza('Contacto interno con nombre propio (se lee de la cuenta)',
+  `INSERT INTO "CONTACTO"(id_contacto, id_usuario, nombre) VALUES (gen_random_uuid(), '${LUIS}', 'Luis')`, 'check');
+await rechaza('Contacto interno con correo propio (se lee de la cuenta)',
+  `INSERT INTO "CONTACTO"(id_contacto, id_usuario, correo, correo_hash) VALUES (gen_random_uuid(), '${LUIS}', 'x', 'c-interno')`, 'check');
+await rechaza('Contacto externo sin nombre',
+  `INSERT INTO "CONTACTO"(id_contacto, correo, correo_hash) VALUES (gen_random_uuid(), 'x', 'c-sin-nombre')`, 'check');
+await rechaza('Contacto interno de una cuenta que no existe',
+  `INSERT INTO "CONTACTO"(id_contacto, id_usuario) VALUES (gen_random_uuid(), '${id(99)}')`, 'foranea');
+await rechaza('El contacto interno en la lista de un paciente (el reloj no recorre al equipo)',
+  `INSERT INTO "CONTACTO_PACIENTE"(id_contacto_paciente, id_paciente, id_contacto, codigo_tipo_contacto, orden_prioridad)
+   VALUES (gen_random_uuid(), '${ROSA}', '${INTERNO_ANA}', 'OTRO', 9)`, 'disparador');
+await rechaza('Cambiar un vínculo de la lista para que apunte al contacto interno',
+  `UPDATE "CONTACTO_PACIENTE" SET id_contacto = '${INTERNO_ANA}' WHERE id_contacto_paciente = '${R2}'`, 'disparador');
+await rechaza('Convertir en interno a una persona de la lista',
+  `UPDATE "CONTACTO" SET id_usuario = '${LUIS}', nombre = NULL, whatsapp = NULL, whatsapp_hash = NULL, correo = NULL,
+   correo_hash = NULL, fecha_opt_in = NULL, fecha_revocacion_opt_in = NULL WHERE id_contacto = '${VECINO}'`, 'disparador');
+await acepta('Correo del servidor a Ana por un silencio de datos, pendiente de envío',
+  avisoInterno(SILENCIO_2, INTERNO_ANA, ', fecha_hora_proximo_envio', ', now()'));
+await estado('Un aviso al equipo no cambia el estado de contacto (no es el recorrido del reloj)', SILENCIO_2, 'RECIBIDA', 'SIN_ASIGNAR');
+await rechaza('Segundo correo a la misma cuenta por la misma alerta', avisoInterno(SILENCIO_2, INTERNO_ANA), 'unico');
+await vale('El aviso guarda cuándo se pidió (por defecto, ahora)',
+  `SELECT count(*) n FROM "REGISTRO_INTENTO" WHERE id_alerta = '${SILENCIO_2}' AND fecha_hora_solicitud IS NOT NULL`, 1);
+await acepta('Correo del vigilante del escalamiento a la misma cuenta por la misma alerta (otro propósito)',
+  avisoInterno(SILENCIO_2, INTERNO_ANA, ', proposito', `, 'VIGILANTE'`));
+await rechaza('Segundo correo del vigilante a la misma cuenta por la misma alerta (una vez por alerta)',
+  avisoInterno(SILENCIO_2, INTERNO_ANA, ', proposito', `, 'VIGILANTE'`), 'unico');
+await rechaza('Aviso del vigilante a un contacto del paciente (solo va al equipo)',
+  aviso(MEDIA_ROSA, R2, 2, ', proposito', `, 'VIGILANTE'`, 'CORREO'), 'check');
+await rechaza('Propósito que no existe', avisoInterno(MEDIA_ROSA, INTERNO_ANA, ', proposito', `, 'OTRO'`), 'enum');
+await rechaza('Aviso interno dirigido a una persona de la lista de un paciente', avisoInterno(MEDIA_ROSA, SEG_CIUDADANA), 'disparador');
+await rechaza('Aviso interno con ronda (las rondas son del recorrido del reloj)', avisoInterno(MEDIA_ROSA, INTERNO_ANA, ', ronda', ', 1'), 'check');
+await rechaza('Aviso a un vínculo sin ronda',
+  `INSERT INTO "REGISTRO_INTENTO"(id_intento, event_id, id_alerta, id_contacto_paciente, canal)
+   VALUES (gen_random_uuid(), gen_random_uuid(), '${MEDIA_ROSA}', '${R2}', 'CORREO')`, 'check');
+await rechaza('Aviso a un vínculo y a un contacto interno a la vez',
+  aviso(MEDIA_ROSA, R2, 2, ', id_contacto_interno', `, '${INTERNO_ANA}'`, 'CORREO'), 'check');
+await rechaza('Aviso sin destino',
+  `INSERT INTO "REGISTRO_INTENTO"(id_intento, event_id, id_alerta, canal) VALUES (gen_random_uuid(), gen_random_uuid(), '${MEDIA_ROSA}', 'CORREO')`, 'check');
+await rechaza('Respuesta "Voy en camino" de una cuenta del equipo (solo confirma un contacto del paciente)',
+  avisoInterno(MEDIA_ROSA, INTERNO_ANA, ', respuesta, fecha_hora_respuesta', `, 'VOY_EN_CAMINO', now()`), 'check');
+await rechaza('Reintentos negativos', avisoInterno(MEDIA_ROSA, INTERNO_ANA, ', reintentos', ', -1'), 'check');
+await rechaza('Pendiente de envío pero ya enviado',
+  aviso(MEDIA_ROSA, R2, 2, ', fecha_hora_proximo_envio', ', now()', 'CORREO'), 'check');
+await rechaza('Pendiente de envío pero ya marcado como fallido',
+  avisoInterno(MEDIA_ROSA, INTERNO_ANA, ', fecha_hora_proximo_envio, fecha_hora_fallo', ', now(), now()'), 'check');
 
 // =====================================================================
 nuevoGrupo('17. Datos calculados (reportes, hallazgos, panel)');
@@ -649,8 +704,9 @@ await vale('Pedro y Rosa conservan sus datos (5 vínculos + 8 alertas)', `SELECT
   + (SELECT count(*) FROM "ALERTA" a JOIN "ASIGNACION_RELOJ" r USING (id_asignacion) WHERE r.id_paciente IN ('${PEDRO}', '${ROSA}')) n`, 13);
 await vale('La auditoría sobre María sobrevive al borrado', `SELECT count(*) n FROM "REGISTRO_AUDITORIA" WHERE id_entidad LIKE '${MARIA}%'`, 2);
 await vale('Seguridad Ciudadana se conserva (sigue siendo contacto de Pedro y Rosa)', `SELECT count(*) n FROM "CONTACTO" WHERE id_contacto = '${SEG_CIUDADANA}'`, 1);
-await acepta('Limpieza: el backend borra las personas que quedaron sin pacientes', `DELETE FROM "CONTACTO" k WHERE NOT EXISTS (SELECT 1 FROM "CONTACTO_PACIENTE" cp WHERE cp.id_contacto = k.id_contacto)`);
-await vale('Se borró solo la hija de María', `SELECT count(*) || ' / ' || count(*) FILTER (WHERE id_contacto = '${HIJA}') n FROM "CONTACTO"`, '3 / 0');
+await acepta('Limpieza: el backend borra las personas que quedaron sin pacientes (no los contactos internos)', `DELETE FROM "CONTACTO" k WHERE k.id_usuario IS NULL AND NOT EXISTS (SELECT 1 FROM "CONTACTO_PACIENTE" cp WHERE cp.id_contacto = k.id_contacto)`);
+await vale('Se borró solo la hija de María', `SELECT count(*) || ' / ' || count(*) FILTER (WHERE id_contacto = '${HIJA}') n FROM "CONTACTO" WHERE id_usuario IS NULL`, '3 / 0');
+await vale('El contacto interno de Ana se conserva', `SELECT count(*) n FROM "CONTACTO" WHERE id_contacto = '${INTERNO_ANA}'`, 1);
 await vale('Se conservan profesionales, relojes y documentos de otros pacientes', `SELECT (SELECT count(*) FROM "USUARIO") || ' / ' || (SELECT count(*) FROM "SMARTWATCH") n`, '4 / 5');
 
 // ---------- Informe ----------

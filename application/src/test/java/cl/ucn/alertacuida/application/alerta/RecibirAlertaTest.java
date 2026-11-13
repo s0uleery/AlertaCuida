@@ -10,6 +10,7 @@ import cl.ucn.alertacuida.application.alerta.modelo.LimiteAlertas;
 import cl.ucn.alertacuida.application.alerta.modelo.ResultadoAlerta;
 import cl.ucn.alertacuida.application.asignacion.AutenticarReloj;
 import cl.ucn.alertacuida.application.asignacion.modelo.RelojAutenticado;
+import cl.ucn.alertacuida.application.calendario.ReglaEnrutamiento;
 import cl.ucn.alertacuida.application.clinica.PerfilClinicoPaciente;
 import cl.ucn.alertacuida.application.clinica.modelo.ValoresBase;
 import cl.ucn.alertacuida.application.comun.error.Conflicto;
@@ -26,6 +27,9 @@ import cl.ucn.alertacuida.domain.alerta.CodigoDiscrepancia;
 import cl.ucn.alertacuida.domain.alerta.EstadoContacto;
 import cl.ucn.alertacuida.domain.alerta.Severidad;
 import cl.ucn.alertacuida.domain.alerta.TipoEvento;
+import cl.ucn.alertacuida.domain.calendario.CalendarioHabil;
+import cl.ucn.alertacuida.domain.calendario.DiaSemana;
+import cl.ucn.alertacuida.domain.calendario.TramoHabil;
 import cl.ucn.alertacuida.domain.clinica.Umbral;
 import cl.ucn.alertacuida.domain.telemetria.TipoLectura;
 import java.math.BigDecimal;
@@ -33,8 +37,10 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
@@ -199,6 +205,27 @@ class RecibirAlertaTest {
 		assertThat(alertas.tecnicas).containsExactly("EXCESO_ALERTAS|" + relojDeMaria.idAsignacion());
 	}
 
+	/** Es leve: un domingo, fuera del horario hábil, queda pendiente para el día hábil. */
+	@Test
+	void elExcesoFueraDeHorarioEsperaAlDiaHabil() {
+		for (int i = 0; i < 10; i++) {
+			recibir.recibir(relojDeMaria, alerta(UUID.randomUUID(), Severidad.MEDIA, false));
+		}
+
+		assertThat(alertas.esperas.get("EXCESO_ALERTAS|" + relojDeMaria.idAsignacion())).isTrue();
+	}
+
+	/** En horario hábil no queda pendiente. */
+	@Test
+	void elExcesoEnHorarioNoEspera() {
+		RecibirAlerta conDomingoHabil = conCalendario(new LimiteAlertas(10, Duration.ofHours(1)), DiaSemana.DOMINGO);
+		for (int i = 0; i < 10; i++) {
+			conDomingoHabil.recibir(relojDeMaria, alerta(UUID.randomUUID(), Severidad.MEDIA, false));
+		}
+
+		assertThat(alertas.esperas.get("EXCESO_ALERTAS|" + relojDeMaria.idAsignacion())).isFalse();
+	}
+
 	/** Las cancelaciones no cuentan para el exceso: el paciente pudo cancelar muchas falsas alarmas. */
 	@Test
 	void lasCancelacionesNoCuentanParaElExceso() {
@@ -251,12 +278,19 @@ class RecibirAlertaTest {
 	 *         {@value #VIGENTE}
 	 */
 	private RecibirAlerta conLimite(LimiteAlertas limite) {
+		return conCalendario(limite, DiaSemana.LUNES);
+	}
+
+	/** @return el caso de uso con ese límite, y con ese único día hábil, de 08:30 a 17:30 */
+	private RecibirAlerta conCalendario(LimiteAlertas limite, DiaSemana diaHabil) {
+		ReglaEnrutamiento enrutamiento = new ReglaEnrutamiento(CalendarioHabil.de(
+				Map.of(diaHabil, new TramoHabil(LocalTime.of(8, 30), LocalTime.of(17, 30))), List.of()));
 		PerfilClinicoPaciente perfiles = new PerfilClinicoPaciente(new PerfilesClinicosEnMemoria(), pacientes,
-				new ValoresBase(FC_BASE, SPO2_BASE, 5), (usuario, accion, entidad, id, ip, fecha) -> { },
+				new ValoresBase(FC_BASE, SPO2_BASE, 5), (usuario, accion, entidad, id, ip, fecha, detalle) -> { },
 				Supplier::get, reloj);
 		Transacciones enTransaccion = Supplier::get;
 		RevisionDiscrepancias revision = new RevisionDiscrepancias(idPaciente -> VIGENTE, perfiles, Severidad.MEDIA);
-		return new RecibirAlerta(alertas, revision, limite, enTransaccion, reloj);
+		return new RecibirAlerta(alertas, revision, limite, enrutamiento, enTransaccion, reloj);
 	}
 
 	/** @return una caída enviada al terminar la ventana de 30 segundos, evaluada con la versión vigente */

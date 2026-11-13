@@ -50,7 +50,7 @@ Respecto de la v5 (plan inicial): el reloj vuelve a escalar, pero por WhatsApp a
 
 - La plataforma incluye: backend, base de datos, dashboard para el PRLAC, **envío y registro de los avisos que pide el reloj**, canal de WhatsApp, canal de correo, avisos al reloj por FCM, auditoría de alertas y vigilancia del silencio de datos.
 - El reloj y la plataforma son dos sistemas aparte. Cada reloj tiene un ID único, vinculado a un ID de usuario.
-- División del trabajo: el reloj decide el "qué", el "quién" y el "cuándo". Evalúa sus lecturas con los parámetros del paciente, detecta la emergencia, elige el contacto según prioridad y horario, espera la confirmación y pasa al siguiente. El servidor hace el "cómo": envía el WhatsApp o el correo que pide el reloj, recibe la respuesta del contacto, se la avisa al reloj y lo registra todo. Además, el servidor genera las alertas técnicas (silencio de datos, batería, reloj no puesto) y avisa por correo a los profesionales.
+- División del trabajo: el reloj decide el "qué", el "quién" y el "cuándo". Evalúa sus lecturas con los parámetros del paciente, detecta la emergencia, elige el contacto según prioridad y horario, espera la confirmación y pasa al siguiente. El servidor hace el "cómo": envía el WhatsApp o el correo que pide el reloj, recibe la respuesta del contacto, se la avisa al reloj y lo registra todo. Además, el servidor genera las alertas técnicas (silencio de datos, batería, reloj no puesto) y avisa por WhatsApp a los coordinadores, con correo de respaldo.
 - Tipos de evento: caída con inmovilidad posterior, FC o SpO2 más allá del límite grave en 2 lecturas consecutivas, tendencia (FC o SpO2 fuera del rango normal sin llegar al límite grave durante un tiempo configurable; una sola alerta hasta que el valor vuelva a lo normal), FC y SpO2 anormales a la vez, **salida de la zona segura** (gravedad elegida por paciente, media por defecto) y **botón de ayuda** (siempre leve; avisa primero a los vecinos y después al resto de los contactos).
 - Ventana de cancelación: el reloj vibra 30 segundos antes de enviar la alerta; el paciente puede cancelarla.
 - Escalamiento en el reloj: el reloj pide al servidor avisar al contacto de prioridad 1 (plantilla de WhatsApp con botones). Si no hay confirmación en el plazo configurado, consulta el estado de la alerta y pasa al de prioridad 2. Al terminar la lista, la repite una vez e informa `SIN_RESPUESTA`. El servidor avisa al reloj por FCM cuando un contacto confirma. Las alertas medias y graves quedan destacadas en el dashboard.
@@ -141,14 +141,15 @@ Depende de: 0.4. Listo cuando: con una orden se simulan relojes que sincronizan,
 
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
-| [ ] | 0.5.1 | Decidir cómo se hará el simulador (script) y su estructura | 1 |
+| [x] | 0.5.1 | Decidir cómo se hará el simulador (script) y su estructura | 1 |
 | [ ] | 0.5.2 | Generar sincronizaciones cada 2 h con lecturas acumuladas y su hora original | 3 |
 | [ ] | 0.5.3 | Generar alertas (caída con inmovilidad, FC o SpO2 más allá del límite grave en 2 lecturas consecutivas, tendencia por tiempo fuera del rango normal, FC y SpO2 simultáneas) | 2 |
 | [ ] | 0.5.4 | Simular la cancelación por el paciente y los reintentos de envío tras perder la señal | 2 |
 | [ ] | 0.5.5 | Simular silencios, batería al 15 %, `event_id` repetido y hora desfasada | 2 |
-| [ ] | 0.5.6 | Recibir los avisos por FCM (o simularlos) y registrar su llegada | 2 |
+| [x] | 0.5.6 | Recibir los avisos por FCM (o simularlos) y registrar su llegada | 2 |
 | [ ] | 0.5.7 | Simular el escalamiento del reloj: pedir el aviso a cada contacto según prioridad y horario, esperar, consultar el estado, pasar al siguiente y detenerse al recibir la confirmación | 3 |
 | [ ] | 0.5.8 | Parámetros por línea de comandos y documentación de uso | 2 |
+Notas (11-11-2026): hay una versión mínima en `simulador-reloj/` (script de Node sin dependencias, ver su README). Solo recibe los avisos del servidor por el canal `SIMULADOR` del backend, los acusa y descarga la configuración; puede no acusar o rechazar el token para provocar fallas. El resto (0.5.2 a 0.5.5, 0.5.7 y 0.5.8) se agrega en el mismo script.
 
 ### 0.6 Entorno local con Docker (8 h)
 Preparar el entorno local con Docker para levantar la base de datos y el backend con una sola orden.
@@ -350,55 +351,75 @@ Notas (05-11-2026):
 - **"Visible":** las alertas se pueden consultar por la API; la pantalla que muestra las alertas y sus discrepancias es la 3.4.
 - **`recibe_avisos`:** desde V10 viene apagado por defecto en las cuentas nuevas.
 
-### 2.2 Reglas de ausencia en el servidor (24 h)
+### 2.2 Reglas de ausencia en el servidor (24 h). Hecha, salvo la 2.2.3.
 Tareas programadas que revisan si algún reloj dejó de sincronizar (silencio de datos), si hay inactividad prolongada o problemas de batería o de uso. Con LTE, el silencio delata falta de señal, un reloj apagado o un plan de datos vencido.
 
 Depende de: 1.4. Listo cuando: el sistema detecta por sí solo que un reloj dejó de sincronizar, sin alertas repetidas.
 
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
-| [ ] | 2.2.1 | Tarea programada (vigilante) que revisa la última sincronización de cada reloj | 4 |
-| [ ] | 2.2.2 | Regla de silencio de datos (4 horas sin sincronizar) | 4 |
-| [ ] | 2.2.3 | Regla de inactividad prolongada como respaldo del servidor | 4 |
-| [ ] | 2.2.4 | Reloj no puesto y batería baja informados en la sincronización: alertar si el estado persiste | 6 |
-| [ ] | 2.2.5 | Evitar alertas repetidas mientras una siga abierta | 3 |
-| [ ] | 2.2.6 | Pruebas | 3 |
+| [x] | 2.2.1 | Tarea programada (vigilante) que revisa la última sincronización de cada reloj | 4 |
+| [x] | 2.2.2 | Regla de silencio de datos (4 horas sin sincronizar) | 4 |
+| [ ] | 2.2.3 | Regla de inactividad prolongada como respaldo del servidor. Pospuesta | 4 |
+| [x] | 2.2.4 | Reloj no puesto y batería baja informados en la sincronización: alertar si el estado persiste | 6 |
+| [x] | 2.2.5 | Evitar alertas repetidas mientras una siga abierta | 3 |
+| [x] | 2.2.6 | Pruebas | 3 |
 
-### 2.3 Avisos al reloj por FCM (12 h). Cambia en v7.
+Notas (08-11-2026):
+- **Inactividad (2.2.3):** pospuesta. La sincronización no trae ningún dato de movimiento, y el servidor no puede crear alertas `INACTIVIDAD`. Depende de que el reloj pueda enviar ese dato (pregunta 11 de [api-reloj.md](api-reloj.md)). Mientras tanto, la inactividad la detecta solo el reloj.
+- **Silencio de datos:** 4 horas sin sincronizar, gravedad media. Un reloj que nunca sincronizó se mide desde que se vinculó.
+- **Batería baja:** 2 sincronizaciones seguidas bajo 20 %, gravedad leve.
+- **Reloj no puesto:** 2 sincronizaciones seguidas del mismo día, entre las 08:00 y las 22:00 de Chile, gravedad leve. De noche es normal sacárselo para cargarlo.
+- **Cierre:** las tres se cierran solas al volver a la normalidad, sin profesional. Mientras una siga abierta no se crea otra.
+
+### 2.3 Avisos al reloj por FCM (12 h). Cambia en v7. Hecha.
 Avisar al reloj que un contacto confirmó su alerta o que un profesional la resolvió (en ambos casos el reloj detiene su escalamiento), o que hay configuración nueva (por ejemplo, un contacto cambió).
 
 Depende de: 2.1, 1.7. Listo cuando: el reloj (o el simulador) recibe los avisos y la plataforma registra si llegaron.
 
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
-| [ ] | 2.3.1 | Crear el proyecto de Firebase (gratuito) y configurar el SDK de administración en el backend, con la llave como secreto | 3 |
-| [ ] | 2.3.2 | Enviar avisos de alta prioridad (alerta confirmada, alerta resuelta, configuración nueva), solo con identificadores | 3 |
-| [ ] | 2.3.3 | Registrar la recepción informada por el reloj y reintentar si no llega en un plazo | 3 |
-| [ ] | 2.3.4 | Pruebas con el simulador | 3 |
+| [x] | 2.3.1 | Crear el proyecto de Firebase (gratuito) y configurar el SDK de administración en el backend, con la llave como secreto | 3 |
+| [x] | 2.3.2 | Enviar avisos de alta prioridad (alerta confirmada, alerta resuelta, configuración nueva), solo con identificadores | 3 |
+| [x] | 2.3.3 | Registrar la recepción informada por el reloj y reintentar si no llega en un plazo | 3 |
+| [x] | 2.3.4 | Pruebas con el simulador | 3 |
 
-### 2.4 Correo institucional (12 h). Cambia.
-Avisos por correo desde la cuenta institucional: aviso a la oficina PRLAC, silencio de datos y respaldo cuando WhatsApp falla, sin datos clínicos en el mensaje.
+Notas (11-11-2026):
+- **Firebase (2.3.1, 11-11-2026):** proyecto creado y llave probada contra Firebase real con `CanalAvisoRelojFirebaseTest` (corre solo si existe `FCM_CREDENCIALES`): autentica y rechaza un token inventado. La entrega a un dispositivo real se probará con la app del reloj.
+- **Simulador (2.3.4, 11-11-2026):** un script no puede recibir mensajes de Firebase, así que con `FCM_CANAL=SIMULADOR` el backend entrega los avisos al simulador de reloj por HTTP local. Probado de punta a punta: configuración nueva, alerta resuelta con acuse, sin acuse (4 envíos y `FCM_NO_CONFIRMADO`) y token rechazado (el aviso espera y sale con el token nuevo).
+- **Reintentos:** sin acuse, a 1, 1 y 2 minutos del envío anterior; provisional hasta medir FCM por LTE. Agotados, queda como no confirmado en la línea de tiempo, sin aviso extra.
+- **Sin token:** el aviso espera, sin gastar reintentos, a que el reloj registre su token.
+- **Configuración nueva:** avisa solo cuando cambia la lista de contactos, como pide la 3.3.4; los umbrales llegan en la siguiente sincronización (3.3.5).
 
-Depende de: 2.2. Listo cuando: un silencio de datos y una alerta grave generan correos desde la cuenta institucional, y en local se prueba sin enviar correos reales.
+### 2.4 Correo institucional (12 h). Cambia. Hecha.
+Avisos por correo desde la cuenta institucional: respaldo cuando falla un WhatsApp (también el de las alertas técnicas a los coordinadores) y aviso a las cuentas con `recibe_avisos`, sin datos clínicos en el mensaje.
+
+Depende de: 2.2. Listo cuando: un WhatsApp fallido de un silencio de datos o de una alerta grave genera su correo de respaldo desde la cuenta institucional, y en local se prueba sin enviar correos reales.
 
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
-| [ ] | 2.4.1 | Interfaz `NotificationChannel` y canal simulado que solo registra el mensaje (local) | 2 |
-| [ ] | 2.4.2 | Canal de correo con Spring Mail y la cuenta SMTP institucional (credenciales como secreto) | 3 |
-| [ ] | 2.4.3 | Plantillas mínimas: silencio de datos, alerta grave y respaldo de WhatsApp (alias del paciente, sin datos clínicos) | 3 |
-| [ ] | 2.4.4 | Manejo de errores, reintentos y pruebas con un servidor de correo de prueba | 4 |
+| [x] | 2.4.1 | Interfaz `NotificationChannel` y canal simulado que solo registra el mensaje (local) | 2 |
+| [x] | 2.4.2 | Canal de correo con Spring Mail y la cuenta SMTP institucional (credenciales como secreto) | 3 |
+| [x] | 2.4.3 | Plantillas mínimas: silencio de datos, alerta grave y respaldo de WhatsApp (alias del paciente, sin datos clínicos) | 3 |
+| [x] | 2.4.4 | Manejo de errores, reintentos y pruebas con un servidor de correo de prueba | 4 |
 
-### 2.5 Registro y estado de cada alerta (12 h). Cambia.
+### 2.5 Registro y estado de cada alerta (12 h). Cambia. Hecha.
 Línea de tiempo completa de cada alerta (mensajes, entregas, respuestas, saltos de contacto) y su resolución por un profesional. Es la trazabilidad oficial del sistema.
 
 Depende de: 2.1. Listo cuando: cada alerta muestra la línea de tiempo completa y quién la resolvió.
 
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
-| [ ] | 2.5.1 | Guardar cada paso: recepción, cada solicitud de aviso del reloj, cada WhatsApp o correo con sus estados de entrega, respuestas, salto de contacto, sin respuesta | 3 |
-| [ ] | 2.5.2 | Resolución de la alerta por un profesional (observaciones, usuario y clasificación; una positiva abre su seguimiento), que envía el aviso FCM para que el reloj detenga el escalamiento | 3 |
-| [ ] | 2.5.3 | Marcar como prioridad máxima las alertas `SIN_RESPUESTA` de toda la lista de contactos | 3 |
-| [ ] | 2.5.4 | Pruebas | 3 |
+| [x] | 2.5.1 | Guardar cada paso: recepción, cada solicitud de aviso del reloj, cada WhatsApp o correo con sus estados de entrega, respuestas, salto de contacto, sin respuesta | 3 |
+| [x] | 2.5.2 | Resolución de la alerta por un profesional (observaciones, usuario y clasificación; una positiva abre su seguimiento), que envía el aviso FCM para que el reloj detenga el escalamiento | 3 |
+| [x] | 2.5.3 | Marcar como prioridad máxima las alertas `SIN_RESPUESTA` de toda la lista de contactos | 3 |
+| [x] | 2.5.4 | Pruebas | 3 |
+
+Notas (11-11-2026):
+- **Línea de tiempo (2.5.1):** no se guarda aparte, como define el modelo: se arma con las fechas ya registradas. Los pasos de envío se llenarán cuando existan la 2.3 y la 2.9.
+- **Aviso FCM al resolver (2.5.2):** queda registrado como pendiente; lo enviará la 2.3.
+- **Resolver:** cualquier cuenta con `ALERTAS:EDITAR`. Si nadie la había asumido, queda como responsable. Las observaciones son obligatorias en todas las alertas.
+- **Agregado a esta tarea:** asumir un caso, cerrar el seguimiento, la lista de alertas en la API y el fin de la lista del reloj (la parte `SIN_RESPUESTA` de la 2.10.6; falta el vigilante). Las pantallas siguen en la 3.4.
 
 ### 2.6 Pruebas de escenarios con los simuladores (22 h). Cambia.
 Probar automáticamente cada evento del Anexo B y cada camino del escalamiento, con el simulador de reloj y el de contactos, incluidas las fallas.
@@ -459,13 +480,15 @@ Depende de: 1.9, 2.1, 2.3, 2.9. Listo cuando: con el simulador de reloj, una ale
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
 | [ ] | 2.10.1 | Máquina de estados de la alerta en el servidor según lo que informa el reloj (recibida, avisando al contacto n, confirmada, sin respuesta, resuelta, pendiente de día hábil, cancelada) | 4 |
-| [ ] | 2.10.2 | Endpoint de solicitud de aviso: el reloj pide avisar a un contacto; el servidor verifica que sea del paciente y tenga opt-in, y envía por WhatsApp o correo. Una solicitud repetida no envía dos veces | 5 |
+| [x] | 2.10.2 | Endpoint de solicitud de aviso: el reloj pide avisar a un contacto; el servidor verifica que sea del paciente y tenga opt-in, y envía por WhatsApp o correo. Una solicitud repetida no envía dos veces | 5 |
 | [ ] | 2.10.3 | Endpoint de estado de la alerta, que el reloj consulta antes de pasar al siguiente contacto (respaldo si FCM se atrasa) | 2 |
 | [ ] | 2.10.4 | Al recibir la confirmación por webhook: marcar la alerta como confirmada y avisar al reloj por FCM | 2 |
 | [ ] | 2.10.5 | WhatsApp simultáneo a todos los coordinadores con opt-in, en paralelo al escalamiento del reloj, solo en horario laboral y para todas las gravedades; correo de respaldo si el WhatsApp falla. Medias y graves destacadas en el dashboard | 3 |
-| [ ] | 2.10.6 | Registrar el fin de la lista informado por el reloj (`SIN_RESPUESTA`), y vigilante: alerta abierta sin noticias del reloj en un plazo → correo a los profesionales | 3 |
+| [x] | 2.10.6 | Registrar el fin de la lista informado por el reloj (`SIN_RESPUESTA`), y vigilante: alerta abierta sin noticias del reloj en un plazo → correo a los profesionales | 3 |
 | [ ] | 2.10.7 | Pruebas, incluidos un reloj sin señal y un reinicio del servidor a mitad de un escalamiento | 4 |
 | [x] | 2.10.8 | Teléfono con WhatsApp (obligatorio para coordinadores, cifrado) y opt-in en las cuentas del equipo (V9) | 2 |
+
+Nota (13-11-2026): 2.10.2 y 2.10.6 hechas (el vigilante del escalamiento avisa por correo a los coordinadores; migración V12). Mientras WhatsApp no esté configurado, los avisos por WhatsApp caen al correo de respaldo; la 2.9 solo agrega el canal real.
 
 Notas (05-11-2026): la 2.10.5 depende del canal de WhatsApp (2.9). Falta poder editar el teléfono y el opt-in de una cuenta ya creada (hoy solo se piden al crearla) y que el webhook de Meta registre la baja del opt-in de un coordinador.
  
@@ -885,7 +908,7 @@ Estados de la alerta en el servidor: `RECIBIDA`, `AVISANDO_CONTACTO`, `CONFIRMAD
 - Cobertura LTE: en zonas sin señal (dentro o fuera de casa) la alerta queda en la cola del reloj hasta recuperar la señal. Verificar la señal en cada casa al instalar (5.6.1).
 - Reloj sin señal, apagado o con el plan de datos vencido: el sistema queda ciego. Redes de seguridad: el silencio de datos de 4 horas y el aviso de plan por vencer en el inventario (3.8).
 - El servidor municipal es la ruta crítica: aunque el reloj escala, cada WhatsApp lo envía el servidor. Si cae él, internet de la municipalidad o la API de Meta, no salen avisos. Mitigar con UPS, monitoreo externo y protocolo de soporte con TI.
-- Escalamiento en el reloj: si el reloj se apaga o pierde la señal a mitad de un escalamiento, nadie sigue avisando. El servidor vigila las alertas abiertas sin noticias del reloj y avisa a los profesionales (2.10.6).
+- Escalamiento en el reloj: si el reloj se apaga o pierde la señal a mitad de un escalamiento, nadie sigue avisando. El servidor vigila las alertas abiertas sin noticias del reloj y avisa a los coordinadores (2.10.6), pero solo en horario laboral: de noche el riesgo sigue y la alerta solo queda en el dashboard.
 - Batería: el LTE consume más que el Wi-Fi. Medirlo en la prueba de factibilidad antes de comprometer la sincronización cada 2 horas.
 - Costo: cada reloj necesita un plan de datos mensual, un costo fijo que antes no existía.
 - Nadie llama automáticamente al SAMU. Depende de que un contacto responda y llame al 131.
@@ -908,7 +931,7 @@ Estados de la alerta en el servidor: `RECIBIDA`, `AVISANDO_CONTACTO`, `CONFIRMAD
 - [ ] Contacto en TI municipal y fecha de la reunión (tarea 0.8).
 - [ ] Qué cuenta de correo institucional se usará y quién la administra (subtarea 2.4.2).
 - [ ] Plazo de espera por contacto antes de pasar al siguiente con WhatsApp (a acordar con el PRLAC y el equipo clínico).
-- [ ] Plazo sin noticias del reloj, durante un escalamiento, antes de avisar a los profesionales (2.10.6).
+- [x] Plazo sin noticias del reloj, durante un escalamiento, antes de avisar a los profesionales (2.10.6): 15 minutos, a los coordinadores, solo en horario laboral (decidido el 13-11-2026).
 - [ ] Cuántos pacientes tendrá el piloto (para estimar la instalación en terreno).
 - [ ] Modelo exacto del reloj con LTE, operador y plan de datos (costo mensual por reloj).
 - [x] Estructura Maven multi-módulo: confirmada (domain, application, adapters, app; subtarea 0.3.3).
