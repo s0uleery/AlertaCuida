@@ -23,8 +23,9 @@ alertacuida:
   correo:
     textos:
       # Cierre de los correos ({pie}). Sin marcadores.
-      pie-equipo: "Este correo no incluye datos clínicos. Lo envía AlertaCuida automáticamente: no lo responda."
-      pie-contacto: "Este correo no incluye datos de salud. Lo envía AlertaCuida, de la oficina PRLAC, automáticamente: no lo responda."
+      pie-equipo: "Mensaje automático de AlertaCuida. No incluye datos clínicos. No responda este correo."
+      pie-contacto: "Mensaje automático de AlertaCuida, sistema de teleasistencia del Programa Red Local de Apoyos y Cuidados de la Municipalidad de Coquimbo. La información de esta alerta es reservada: le pedimos no compartirla. No responda este correo."
+      pie-carabineros: "Mensaje automático de AlertaCuida. La información de esta alerta es reservada y de uso exclusivo para su atención. No responda este correo."
 
       # Al equipo, cuando un reloj deja de enviar datos.
       #   {reloj}     "el reloj de Mary" o "un reloj" (ver abajo)
@@ -34,7 +35,7 @@ alertacuida:
       silencio-datos:
         asunto: "AlertaCuida: {reloj} dejó de sincronizar ({folio})"
         cuerpo: |
-          {Reloj} dejó de enviar datos al servidor (alerta {folio}). Puede estar apagado, sin batería o sin señal.
+          {Reloj} dejó de enviar datos al servidor (alerta {folio}). Puede estar apagado, sin batería o sin señal. Mientras no se recupere, AlertaCuida no puede generar alertas de esa persona.
 
           Revise la alerta en el dashboard: {dashboard}
 
@@ -54,7 +55,7 @@ alertacuida:
         cuerpo: |
           Hay una {alerta}{deQuien} que requiere atención.
 
-          Revísela en el dashboard: {dashboard}
+          Revise su estado actualizado en el dashboard: {dashboard}
 
           {pie}
         # Valor de {alerta} en una alerta de salud: admite {gravedad} (ver gravedades) y {folio}.
@@ -64,7 +65,7 @@ alertacuida:
         # Valor de {deQuien} si el paciente tiene alias; admite {alias}. Ojo con el espacio inicial.
         de-quien-con-alias: " de {alias}"
 
-      # A un contacto del paciente (respaldo de su WhatsApp).
+      # A un contacto del paciente, solo cuando no se pudo entregar su WhatsApp (respaldo).
       #   {quien} el alias del paciente, o quien-sin-alias
       #   {folio} folio de la alerta, ej. #142
       #   {grave} el texto "grave" si la alerta es grave; vacío en las demás (solo en el cuerpo)
@@ -72,22 +73,45 @@ alertacuida:
       #   {responder} enlace a la página donde elige "Confirmo que voy" o "No puedo asistir" (obligatorio en
       #               el cuerpo). Abrirlo no responde por la persona: responde al presionar un botón.
       contacto:
-        asunto: "AlertaCuida: {quien} necesita ayuda (alerta {folio})"
+        asunto: "AlertaCuida: se solicita verificar cómo está {quien} (alerta {folio})"
         cuerpo: |
-          Recibimos una alerta de {quien} (alerta {folio}).
+          AlertaCuida registró una alerta de {quien} (alerta {folio}). Usted recibe este correo porque figura como contacto de apoyo y no fue posible entregarle el aviso por WhatsApp.
 
           Por favor, comuníquese con {quien} o vaya a verle lo antes posible.
 
           {grave}
 
-          Cuéntenos si puede ir en este enlace:
+          En el siguiente enlace encontrará el detalle de la alerta y podrá indicar si puede atenderla:
           {responder}
 
           {pie}
         # Valor de {quien} si el paciente no tiene alias. Sin marcadores.
-        quien-sin-alias: "la persona a su cuidado"
+        quien-sin-alias: "la persona que usted apoya"
         # Valor de {grave} en una alerta grave. Sin marcadores.
-        grave: "Es una alerta grave: si no logra comunicarse, llame al SAMU (131)."
+        grave: "Es una alerta grave: si no logra comunicarse con la persona, dirígase al domicilio de inmediato, y al llegar llame al SAMU (131)."
+
+      # A Carabineros (Encargado de turno), por una alerta grave, solo cuando no se pudo entregar su WhatsApp.
+      # Si más adelante se le envía siempre (junto con el WhatsApp), hay que cambiar la última frase del cuerpo.
+      # Los datos del paciente y del domicilio (nombre, dirección, ubicación, acceso) no van en el correo: se ven en
+      # la página del enlace {responder}. No lleva la instrucción del 131: Carabineros actúa con su protocolo y
+      # SAMU interviene a través de ellos.
+      #   {folio}     folio de la alerta, ej. #142
+      #   {responder} enlace a la página con el detalle de la alerta, donde elige "Atenderemos" o "No disponible"
+      #               (obligatorio en el cuerpo)
+      #   {pie}       pie-carabineros (solo en el cuerpo)
+      carabineros:
+        asunto: "AlertaCuida: alerta grave {folio}, solicitud de concurrencia"
+        cuerpo: |
+          Señor(a) Encargado(a) de turno:
+
+          AlertaCuida, sistema de teleasistencia del Programa Red Local de Apoyos y Cuidados, registró una alerta grave (alerta {folio}) de una persona mayor con dependencia y solicita la concurrencia de Carabineros a su domicilio.
+
+          En el siguiente enlace encontrará los datos de la persona y del domicilio, y podrá indicar si una unidad acudirá:
+          {responder}
+
+          Le enviamos este aviso por correo porque no fue posible entregárselo por WhatsApp.
+
+          {pie}
 
       # Al equipo (los coordinadores), cuando una alerta no avanza: el reloj dejó de pedir avisos a mitad del
       # recorrido de contactos (vigilante del escalamiento). Una vez por alerta, en horario laboral.
@@ -100,7 +124,7 @@ alertacuida:
       vigilante:
         asunto: "AlertaCuida: la {alerta}{deQuien} no avanza"
         cuerpo: |
-          La {alerta}{deQuien} sigue abierta y el reloj no ha avisado a nadie en los últimos {minutos} minutos. Puede haberse quedado sin batería o sin señal.
+          La {alerta}{deQuien} sigue abierta y no se ha avisado a ningún contacto en los últimos {minutos} minutos. El reloj puede haberse quedado sin batería o sin señal, por lo que la persona podría no estar recibiendo ayuda.
 
           Comuníquese con la persona o sus contactos y revise la alerta en el dashboard: {dashboard}
 
