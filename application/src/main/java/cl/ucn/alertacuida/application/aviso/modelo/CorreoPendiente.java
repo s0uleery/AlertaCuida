@@ -15,15 +15,15 @@ import java.util.UUID;
  * @param tipo         qué se detectó
  * @param severidad    gravedad actual (grave si una caída se agravó)
  * @param reintentos   cuántos reintentos ya se hicieron
- * @param vigilante    si es el aviso del vigilante del escalamiento (la alerta no avanza); solo al equipo
+ * @param proposito    para qué es: un aviso, el del vigilante o el de agravamiento (estos dos, solo al equipo)
  */
 public record CorreoPendiente(UUID idIntento, String destinatario, boolean alEquipo, long numero, String alias,
-		TipoEvento tipo, Severidad severidad, int reintentos, boolean vigilante) {
+		TipoEvento tipo, Severidad severidad, int reintentos, Proposito proposito) {
 
-	/** Un correo que no es del vigilante: un aviso al equipo o a un contacto. */
+	/** Un aviso común, al equipo o a un contacto. */
 	public CorreoPendiente(UUID idIntento, String destinatario, boolean alEquipo, long numero, String alias,
 			TipoEvento tipo, Severidad severidad, int reintentos) {
-		this(idIntento, destinatario, alEquipo, numero, alias, tipo, severidad, reintentos, false);
+		this(idIntento, destinatario, alEquipo, numero, alias, tipo, severidad, reintentos, Proposito.AVISO);
 	}
 
 }

@@ -359,6 +359,17 @@ La respuesta trae siempre el estado de la alerta, que pasa a `AVISANDO_CONTACTO`
 
 El texto es `vigilante` en `correos.yml`, con `{minutos}` (el plazo). Decisiones del 13-11-2026 en [alertas.md](alertas.md).
 
+**Aviso a la oficina PRLAC (`AvisarOficina`, 2.10.5).** Cada alerta real se avisa a la vez a todos los coordinadores, en paralelo al escalamiento del reloj. Cada `alertacuida.whatsapp.intervalo` (15 s), `TareasProgramadas.avisarALaOficina` pide a `AvisosOficinaJdbc` lo que falta encolar y deja cada aviso en `registro_intento` como contacto interno del coordinador (en su propia transacción; si uno falla, sigue con los demás):
+
+- **A quién:** cuentas activas con rol `COORDINADOR`, sin una cantidad fija. Por **WhatsApp** si tienen teléfono y opt-in vigente (`fecha_opt_in` sin `fecha_revocacion_opt_in`); si no, por **correo** en su lugar.
+- **Qué alertas:** de salud y técnicas, de cualquier gravedad. No simulacros ni alertas canceladas o resueltas.
+- **Cuándo:** solo si la alerta se recibió en horario hábil y dentro de la ventana del correo (`alertacuida.correo.ventana`, 1 h). Fuera de horario no se envía nada, ni al empezar la jornada.
+- **Agravamiento:** si la caída pasa a grave (`alerta.fecha_hora_agravamiento`) después de que se encoló el primer aviso de ese coordinador, y el agravamiento ocurrió en horario hábil, se encola otro con `proposito = 'AGRAVAMIENTO'` (V13). Si el primer aviso se encoló después del agravamiento, ya decía grave y no se repite.
+- **Sin repetir:** la clave única de los avisos al equipo (alerta, contacto interno, canal y propósito) impide duplicados. Un coordinador sin opt-in que además tiene `recibe_avisos` recibe un solo correo por alerta técnica.
+- **Respaldo:** un WhatsApp fallido genera el correo al mismo coordinador con el mismo propósito (`CorreosJdbc.encolarRespaldos`). Mientras no exista la 2.9, todos los WhatsApp fallan al tiro y salen por correo.
+
+`WhatsappJdbc` lee el número de la cuenta (`usuario.telefono`, cifrado) cuando el aviso va a un contacto interno, y `WhatsappPendiente` lleva `alEquipo` y `proposito` para que la 2.9 elija la plantilla. El correo de agravamiento usa el texto `agravamiento` de `correos.yml`; el primer aviso usa `alerta-equipo`. Pruebas: `AvisarOficinaTest` (horario y ventana) y `RequisitosAvisoOficinaTest` (con la base). Decisiones en [alertas.md](alertas.md#aviso-a-la-oficina-prlac).
+
 ## Correo institucional
 
 Avisos por correo desde la cuenta institucional, sin datos clínicos. Una tarea programada (`TareasProgramadas.avisarPorCorreo`, cada `alertacuida.correo.intervalo`) hace dos pasos; ni `RecibirAlerta` ni el vigilante saben del correo, así que guardar una alerta nunca espera ni falla por él.

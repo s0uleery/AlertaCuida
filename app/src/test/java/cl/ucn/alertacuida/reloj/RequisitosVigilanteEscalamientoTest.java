@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import cl.ucn.alertacuida.adapters.seguridad.cifrado.CifradoCampos;
 import cl.ucn.alertacuida.adapters.seguridad.cifrado.ColumnaCifrada;
 import cl.ucn.alertacuida.application.aviso.modelo.CorreoPendiente;
+import cl.ucn.alertacuida.application.aviso.modelo.Proposito;
 import cl.ucn.alertacuida.application.aviso.puerto.BandejaSalida;
 import cl.ucn.alertacuida.application.comun.puerto.Transacciones;
 import cl.ucn.alertacuida.application.escalamiento.VigilarEscalamiento;
@@ -110,8 +111,8 @@ class RequisitosVigilanteEscalamientoTest {
 		vigilar();
 
 		assertThat(correosDelVigilante(alerta)).isEqualTo(2);
-		List<CorreoPendiente> pendientes = bandeja.pendientes(AHORA).stream().filter(CorreoPendiente::vigilante)
-				.toList();
+		List<CorreoPendiente> pendientes = bandeja.pendientes(AHORA).stream()
+				.filter(c -> c.proposito() == Proposito.VIGILANTE).toList();
 		assertThat(pendientes).allSatisfy(c -> assertThat(c.alEquipo()).isTrue());
 		assertThat(pendientes).extracting(CorreoPendiente::destinatario)
 				.contains("coord1@muni.cl", "coord2@muni.cl")

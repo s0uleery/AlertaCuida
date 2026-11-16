@@ -15,12 +15,13 @@ import java.util.Map;
  * @param alertaEquipo  al equipo, por una alerta
  * @param contacto      a un contacto del paciente
  * @param vigilante     al equipo, cuando una alerta no avanza (vigilante del escalamiento)
+ * @param agravamiento  a los coordinadores, cuando una alerta pasa a grave después de su aviso
  * @param gravedades    cómo se nombra cada gravedad ({gravedad})
  * @param tecnicas      cómo se nombra cada alerta técnica ({tecnica}), menos el silencio de datos
  */
 public record TextosCorreo(String pieEquipo, String pieContacto, SilencioDatos silencioDatos,
-		AlertaEquipo alertaEquipo, Contacto contacto, Vigilante vigilante, Map<Severidad, String> gravedades,
-		Map<TipoEvento, String> tecnicas) {
+		AlertaEquipo alertaEquipo, Contacto contacto, Vigilante vigilante, Agravamiento agravamiento,
+		Map<Severidad, String> gravedades, Map<TipoEvento, String> tecnicas) {
 
 	/**
 	 * @param asunto        admite {reloj}, {folio} y {dashboard}
@@ -60,6 +61,16 @@ public record TextosCorreo(String pieEquipo, String pieContacto, SilencioDatos s
 	 * @param cuerpo admite {alerta}, {deQuien}, {folio}, {minutos} (el plazo sin noticias), {dashboard} y {pie}
 	 */
 	public record Vigilante(String asunto, String cuerpo) {
+	}
+
+	/**
+	 * A los coordinadores cuando una alerta pasa a grave después de su primer aviso. {deQuien} se arma igual
+	 * que en {@link AlertaEquipo}. No nombra qué se detectó: solo que ahora es grave.
+	 *
+	 * @param asunto admite {deQuien}, {folio} y {dashboard}
+	 * @param cuerpo admite {deQuien}, {folio}, {dashboard} y {pie}
+	 */
+	public record Agravamiento(String asunto, String cuerpo) {
 	}
 
 }

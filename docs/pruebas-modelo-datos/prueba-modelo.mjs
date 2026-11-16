@@ -633,6 +633,10 @@ await rechaza('Segundo correo del vigilante a la misma cuenta por la misma alert
   avisoInterno(SILENCIO_2, INTERNO_ANA, ', proposito', `, 'VIGILANTE'`), 'unico');
 await rechaza('Aviso del vigilante a un contacto del paciente (solo va al equipo)',
   aviso(MEDIA_ROSA, R2, 2, ', proposito', `, 'VIGILANTE'`, 'CORREO'), 'check');
+await acepta('Aviso de agravamiento a la misma cuenta por la misma alerta (otro propósito)',
+  avisoInterno(SILENCIO_2, INTERNO_ANA, ', proposito', `, 'AGRAVAMIENTO'`));
+await rechaza('Aviso de agravamiento a un contacto del paciente (solo va al equipo)',
+  aviso(MEDIA_ROSA, R2, 2, ', proposito', `, 'AGRAVAMIENTO'`, 'CORREO'), 'check');
 await rechaza('Propósito que no existe', avisoInterno(MEDIA_ROSA, INTERNO_ANA, ', proposito', `, 'OTRO'`), 'enum');
 await rechaza('Aviso interno dirigido a una persona de la lista de un paciente', avisoInterno(MEDIA_ROSA, SEG_CIUDADANA), 'disparador');
 await rechaza('Aviso interno con ronda (las rondas son del recorrido del reloj)', avisoInterno(MEDIA_ROSA, INTERNO_ANA, ', ronda', ', 1'), 'check');

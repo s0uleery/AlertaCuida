@@ -9,8 +9,10 @@ import cl.ucn.alertacuida.application.aviso.puerto.CanalWhatsapp;
 import cl.ucn.alertacuida.application.aviso.puerto.RegistroEnvios;
 import cl.ucn.alertacuida.application.comun.puerto.Transacciones;
 import cl.ucn.alertacuida.application.contacto.puerto.ListaDelPaciente;
+import cl.ucn.alertacuida.application.escalamiento.AvisarOficina;
 import cl.ucn.alertacuida.application.escalamiento.SolicitarAviso;
 import cl.ucn.alertacuida.application.escalamiento.VigilarEscalamiento;
+import cl.ucn.alertacuida.application.escalamiento.puerto.AvisosOficina;
 import cl.ucn.alertacuida.application.escalamiento.puerto.EscalamientosTrabados;
 import cl.ucn.alertacuida.application.escalamiento.puerto.IntentosAviso;
 import cl.ucn.alertacuida.domain.calendario.CalendarioHabil;
@@ -20,8 +22,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Escalamiento dirigido por el reloj: la solicitud de aviso, el envío de los WhatsApp que pide y el vigilante
- * que avisa a los coordinadores si el reloj deja de pedir avisos.
+ * Escalamiento dirigido por el reloj: la solicitud de aviso, el envío de los WhatsApp, el aviso de cada alerta
+ * a los coordinadores (oficina PRLAC) y el vigilante que les avisa si el reloj deja de pedir avisos.
  */
 @Configuration
 @EnableConfigurationProperties({PropiedadesWhatsapp.class, PropiedadesEscalamiento.class})
@@ -34,6 +36,13 @@ public class ConfiguracionEscalamiento {
 			Clock reloj) {
 		return new VigilarEscalamiento(trabados, calendario, escalamiento.plazo(), correo.ventana(), transacciones,
 				reloj);
+	}
+
+	/** Aviso de cada alerta a los coordinadores, con la ventana del correo. */
+	@Bean
+	AvisarOficina avisarOficina(AvisosOficina avisos, CalendarioHabil calendario, PropiedadesCorreo correo,
+			Transacciones transacciones, Clock reloj) {
+		return new AvisarOficina(avisos, calendario, correo.ventana(), transacciones, reloj);
 	}
 
 	/** El reloj pide avisar a un contacto. */

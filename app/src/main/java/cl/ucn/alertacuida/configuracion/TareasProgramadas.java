@@ -4,6 +4,7 @@ import cl.ucn.alertacuida.application.aviso.EncolarCorreos;
 import cl.ucn.alertacuida.application.aviso.EnviarCorreosPendientes;
 import cl.ucn.alertacuida.application.aviso.EnviarWhatsappPendientes;
 import cl.ucn.alertacuida.application.avisoreloj.EnviarAvisosReloj;
+import cl.ucn.alertacuida.application.escalamiento.AvisarOficina;
 import cl.ucn.alertacuida.application.escalamiento.VigilarEscalamiento;
 import cl.ucn.alertacuida.application.sesion.LimpiarTokensVencidos;
 import cl.ucn.alertacuida.application.vigilancia.VigilarRelojes;
@@ -23,6 +24,7 @@ public class TareasProgramadas {
 	private final EnviarAvisosReloj enviarAvisosReloj;
 	private final EnviarWhatsappPendientes enviarWhatsapp;
 	private final VigilarEscalamiento vigilarEscalamiento;
+	private final AvisarOficina avisarOficina;
 
 	/**
 	 * @param limpiarTokens       borra los tokens de renovación vencidos
@@ -30,13 +32,14 @@ public class TareasProgramadas {
 	 * @param encolarCorreos      deja en la bandeja de salida los correos que corresponden
 	 * @param enviarCorreos       envía los correos pendientes, con reintentos
 	 * @param enviarAvisosReloj   envía los avisos pendientes al reloj, con reintentos
-	 * @param enviarWhatsapp      envía los WhatsApp pendientes que pidió el reloj, con reintentos
+	 * @param enviarWhatsapp      envía los WhatsApp pendientes (del reloj y de la oficina), con reintentos
 	 * @param vigilarEscalamiento avisa a los coordinadores de las alertas cuyo reloj dejó de pedir avisos
+	 * @param avisarOficina       deja en la bandeja de salida los avisos de cada alerta a los coordinadores
 	 */
 	public TareasProgramadas(LimpiarTokensVencidos limpiarTokens, VigilarRelojes vigilarRelojes,
 			EncolarCorreos encolarCorreos, EnviarCorreosPendientes enviarCorreos,
 			EnviarAvisosReloj enviarAvisosReloj, EnviarWhatsappPendientes enviarWhatsapp,
-			VigilarEscalamiento vigilarEscalamiento) {
+			VigilarEscalamiento vigilarEscalamiento, AvisarOficina avisarOficina) {
 		this.limpiarTokens = limpiarTokens;
 		this.vigilarRelojes = vigilarRelojes;
 		this.encolarCorreos = encolarCorreos;
@@ -44,6 +47,7 @@ public class TareasProgramadas {
 		this.enviarAvisosReloj = enviarAvisosReloj;
 		this.enviarWhatsapp = enviarWhatsapp;
 		this.vigilarEscalamiento = vigilarEscalamiento;
+		this.avisarOficina = avisarOficina;
 	}
 
 	/** Revisa las alertas trabadas cada cierto tiempo; la primera vez, un intervalo después de arrancar. */
@@ -51,6 +55,16 @@ public class TareasProgramadas {
 			initialDelayString = "${alertacuida.escalamiento.intervalo}")
 	void vigilarEscalamiento() {
 		vigilarEscalamiento.vigilar();
+	}
+
+	/**
+	 * Encola los avisos a la oficina con el mismo intervalo que el envío de WhatsApp, para que salgan casi a la
+	 * vez que llega la alerta; la primera vez, un intervalo después de arrancar.
+	 */
+	@Scheduled(fixedDelayString = "${alertacuida.whatsapp.intervalo}",
+			initialDelayString = "${alertacuida.whatsapp.intervalo}")
+	void avisarALaOficina() {
+		avisarOficina.avisar();
 	}
 
 	/** Envía los WhatsApp pendientes cada cierto tiempo; la primera vez, un intervalo después de arrancar. */

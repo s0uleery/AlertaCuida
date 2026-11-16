@@ -4,10 +4,10 @@ Informe generado automáticamente por [`pruebas-modelo-datos/prueba-modelo.mjs`]
 
 | | |
 |---|---|
-| Fecha | 13 de noviembre de 2026 a las 2:56 a. m. |
+| Fecha | 13 de noviembre de 2026 a las 4:17 p. m. |
 | Modelo | [`modelo-datos.dbml`](modelo-datos.dbml) + [`reglas-extra.sql`](pruebas-modelo-datos/reglas-extra.sql) |
 | Base de datos | PostgreSQL embebido (PGlite 0.2.17), conversión con @dbml/core 3.14.1, Node v26.11.1 |
-| **Resultado** | **335 casos: 321 ✅ · 0 ❌ · 0 ⚠️ · 14 ℹ️** |
+| **Resultado** | **337 casos: 323 ✅ · 0 ❌ · 0 ⚠️ · 14 ℹ️** |
 
 ## Cómo repetir las pruebas
 
@@ -45,7 +45,7 @@ Cada ejecución crea la base desde cero en memoria, con datos inventados (pacien
 | 13. Cancelación por el paciente y simulacro | 7 | 5 | 0 | 0 | 2 |
 | 14. Alertas técnicas del servidor | 18 | 17 | 0 | 0 | 1 |
 | 15. Reintentos y mensajes duplicados (idempotencia) | 7 | 7 | 0 | 0 | 0 |
-| 16. Reglas de los avisos a contactos | 35 | 32 | 0 | 0 | 3 |
+| 16. Reglas de los avisos a contactos | 37 | 34 | 0 | 0 | 3 |
 | 17. Datos calculados (reportes, hallazgos, panel) | 9 | 9 | 0 | 0 | 0 |
 | 18. Auditoría de cambios | 4 | 4 | 0 | 0 | 0 |
 | 19. Borrado al terminar el piloto (4.4.5) | 12 | 12 | 0 | 0 | 0 |
@@ -436,53 +436,55 @@ Cada ejecución crea la base desde cero en memoria, con datos inventados (pacien
 | 298 | Correo del vigilante del escalamiento a la misma cuenta por la misma alerta (otro propósito) | Se acepta | Aceptado | ✅ |
 | 299 | Segundo correo del vigilante a la misma cuenta por la misma alerta (una vez por alerta) | Se rechaza (clave única) | Rechazado (clave única) | ✅ |
 | 300 | Aviso del vigilante a un contacto del paciente (solo va al equipo) | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 301 | Propósito que no existe | Se rechaza (valor fuera del enum) | Rechazado (valor fuera del enum) | ✅ |
-| 302 | Aviso interno dirigido a una persona de la lista de un paciente | Se rechaza (disparador (como un CHECK)) | Rechazado (disparador (como un CHECK)) | ✅ |
-| 303 | Aviso interno con ronda (las rondas son del recorrido del reloj) | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 304 | Aviso a un vínculo sin ronda | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 305 | Aviso a un vínculo y a un contacto interno a la vez | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 306 | Aviso sin destino | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 307 | Respuesta "Voy en camino" de una cuenta del equipo (solo confirma un contacto del paciente) | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 308 | Reintentos negativos | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 309 | Pendiente de envío pero ya enviado | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
-| 310 | Pendiente de envío pero ya marcado como fallido | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 301 | Aviso de agravamiento a la misma cuenta por la misma alerta (otro propósito) | Se acepta | Aceptado | ✅ |
+| 302 | Aviso de agravamiento a un contacto del paciente (solo va al equipo) | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 303 | Propósito que no existe | Se rechaza (valor fuera del enum) | Rechazado (valor fuera del enum) | ✅ |
+| 304 | Aviso interno dirigido a una persona de la lista de un paciente | Se rechaza (disparador (como un CHECK)) | Rechazado (disparador (como un CHECK)) | ✅ |
+| 305 | Aviso interno con ronda (las rondas son del recorrido del reloj) | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 306 | Aviso a un vínculo sin ronda | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 307 | Aviso a un vínculo y a un contacto interno a la vez | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 308 | Aviso sin destino | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 309 | Respuesta "Voy en camino" de una cuenta del equipo (solo confirma un contacto del paciente) | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 310 | Reintentos negativos | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 311 | Pendiente de envío pero ya enviado | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
+| 312 | Pendiente de envío pero ya marcado como fallido | Se rechaza (CHECK) | Rechazado (CHECK) | ✅ |
 
 ### 17. Datos calculados (reportes, hallazgos, panel)
 
 | # | Caso | Esperado | Obtenido | |
 |---|---|---|---|---|
-| 311 | Reporte diario de María (hora de Chile): FC promedio / mínima / máxima | = 80 / 70 / 90 | = 80 / 70 / 90 | ✅ |
-| 312 | Uso del reloj de María (minutos puesto en el día) | = 110 | = 110 | ✅ |
-| 313 | Hallazgo de la red de seguridad: SpO2 bajo 90 sin alerta cercana del reloj | = 1 | = 1 | ✅ |
-| 314 | Métrica de validación: SpO2 descartados por los relojes | = 5 | = 5 | ✅ |
-| 315 | Métricas: alertas reales (sin simulacros ni canceladas) | = 7 | = 7 | ✅ |
-| 316 | Panel: alertas reales abiertas | = 4 | = 4 | ✅ |
-| 317 | Panel: alertas sin respuesta (prioridad máxima) | = 1 | = 1 | ✅ |
-| 318 | Panel: casos en seguimiento | = 0 | = 0 | ✅ |
-| 319 | Inventario: relojes vigentes con batería bajo 20 % en su último lote | = 1 | = 1 | ✅ |
+| 313 | Reporte diario de María (hora de Chile): FC promedio / mínima / máxima | = 80 / 70 / 90 | = 80 / 70 / 90 | ✅ |
+| 314 | Uso del reloj de María (minutos puesto en el día) | = 110 | = 110 | ✅ |
+| 315 | Hallazgo de la red de seguridad: SpO2 bajo 90 sin alerta cercana del reloj | = 1 | = 1 | ✅ |
+| 316 | Métrica de validación: SpO2 descartados por los relojes | = 5 | = 5 | ✅ |
+| 317 | Métricas: alertas reales (sin simulacros ni canceladas) | = 7 | = 7 | ✅ |
+| 318 | Panel: alertas reales abiertas | = 4 | = 4 | ✅ |
+| 319 | Panel: alertas sin respuesta (prioridad máxima) | = 1 | = 1 | ✅ |
+| 320 | Panel: casos en seguimiento | = 0 | = 0 | ✅ |
+| 321 | Inventario: relojes vigentes con batería bajo 20 % en su último lote | = 1 | = 1 | ✅ |
 
 ### 18. Auditoría de cambios
 
 | # | Caso | Esperado | Obtenido | |
 |---|---|---|---|---|
-| 320 | Ana modifica a María y cambia su configuración; queda en la auditoría | Se acepta | Aceptado | ✅ |
-| 321 | Auditar la desactivación de un contacto, la ficha, una condición y un permiso, cada uno con su propio id | Se acepta | Aceptado | ✅ |
-| 322 | Historial de un objeto con clave compuesta (configuración de María del 10-10) | = 1 | = 1 | ✅ |
-| 323 | Borrar a una profesional con historial (se desactiva, no se borra) | Se rechaza (clave foránea) | Rechazado (clave foránea) | ✅ |
+| 322 | Ana modifica a María y cambia su configuración; queda en la auditoría | Se acepta | Aceptado | ✅ |
+| 323 | Auditar la desactivación de un contacto, la ficha, una condición y un permiso, cada uno con su propio id | Se acepta | Aceptado | ✅ |
+| 324 | Historial de un objeto con clave compuesta (configuración de María del 10-10) | = 1 | = 1 | ✅ |
+| 325 | Borrar a una profesional con historial (se desactiva, no se borra) | Se rechaza (clave foránea) | Rechazado (clave foránea) | ✅ |
 
 ### 19. Borrado al terminar el piloto (4.4.5)
 
 | # | Caso | Esperado | Obtenido | |
 |---|---|---|---|---|
-| 324 | Borrar un reloj asignado | Se rechaza (clave foránea) | Rechazado (clave foránea) | ✅ |
-| 325 | Borrar un vínculo que tiene avisos enviados | Se rechaza (clave foránea) | Rechazado (clave foránea) | ✅ |
-| 326 | Borrar una persona que es contacto de pacientes | Se rechaza (clave foránea) | Rechazado (clave foránea) | ✅ |
-| 327 | Borrar a María con todos sus datos | Se acepta | Aceptado | ✅ |
-| 328 | No queda ningún dato de María | = 0 | = 0 | ✅ |
-| 329 | Pedro y Rosa conservan sus datos (5 vínculos + 8 alertas) | = 13 | = 13 | ✅ |
-| 330 | La auditoría sobre María sobrevive al borrado | = 2 | = 2 | ✅ |
-| 331 | Seguridad Ciudadana se conserva (sigue siendo contacto de Pedro y Rosa) | = 1 | = 1 | ✅ |
-| 332 | Limpieza: el backend borra las personas que quedaron sin pacientes (no los contactos internos) | Se acepta | Aceptado | ✅ |
-| 333 | Se borró solo la hija de María | = 3 / 0 | = 3 / 0 | ✅ |
-| 334 | El contacto interno de Ana se conserva | = 1 | = 1 | ✅ |
-| 335 | Se conservan profesionales, relojes y documentos de otros pacientes | = 4 / 5 | = 4 / 5 | ✅ |
+| 326 | Borrar un reloj asignado | Se rechaza (clave foránea) | Rechazado (clave foránea) | ✅ |
+| 327 | Borrar un vínculo que tiene avisos enviados | Se rechaza (clave foránea) | Rechazado (clave foránea) | ✅ |
+| 328 | Borrar una persona que es contacto de pacientes | Se rechaza (clave foránea) | Rechazado (clave foránea) | ✅ |
+| 329 | Borrar a María con todos sus datos | Se acepta | Aceptado | ✅ |
+| 330 | No queda ningún dato de María | = 0 | = 0 | ✅ |
+| 331 | Pedro y Rosa conservan sus datos (5 vínculos + 8 alertas) | = 13 | = 13 | ✅ |
+| 332 | La auditoría sobre María sobrevive al borrado | = 2 | = 2 | ✅ |
+| 333 | Seguridad Ciudadana se conserva (sigue siendo contacto de Pedro y Rosa) | = 1 | = 1 | ✅ |
+| 334 | Limpieza: el backend borra las personas que quedaron sin pacientes (no los contactos internos) | Se acepta | Aceptado | ✅ |
+| 335 | Se borró solo la hija de María | = 3 / 0 | = 3 / 0 | ✅ |
+| 336 | El contacto interno de Ana se conserva | = 1 | = 1 | ✅ |
+| 337 | Se conservan profesionales, relojes y documentos de otros pacientes | = 4 / 5 | = 4 / 5 | ✅ |

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import cl.ucn.alertacuida.application.aviso.PlantillasCorreo;
 import cl.ucn.alertacuida.application.aviso.modelo.CorreoPendiente;
 import cl.ucn.alertacuida.application.aviso.modelo.Mensaje;
+import cl.ucn.alertacuida.application.aviso.modelo.Proposito;
 import cl.ucn.alertacuida.application.aviso.modelo.TextosCorreo;
 import cl.ucn.alertacuida.application.respuesta.puerto.FirmaRespuesta;
 import cl.ucn.alertacuida.domain.alerta.Severidad;
@@ -90,10 +91,24 @@ class TextosCorreoRealesTest {
 	@Test
 	void vigilanteDiceQueLaAlertaNoAvanza() {
 		Mensaje mensaje = plantillas.redactar(new CorreoPendiente(UUID.randomUUID(), "coord@muni.cl", true, 142,
-				"Rosa", TipoEvento.CAIDA, Severidad.GRAVE, 0, true));
+				"Rosa", TipoEvento.CAIDA, Severidad.GRAVE, 0, Proposito.VIGILANTE));
 
 		assertThat(mensaje.asunto()).contains("no avanza", "grave", "#142", "Rosa").doesNotContain("alerta alerta");
 		assertThat(mensaje.texto()).contains("15 minutos", "#142", "Rosa", DASHBOARD)
+				.doesNotContain("{", "}", "caída");
+	}
+
+	/**
+	 * Agravamiento: el texto real dice que la alerta pasó a grave, con folio, alias y el enlace al dashboard,
+	 * sin nombrar lo detectado ni dejar marcadores.
+	 */
+	@Test
+	void agravamientoDiceQuePasoAGrave() {
+		Mensaje mensaje = plantillas.redactar(new CorreoPendiente(UUID.randomUUID(), "coord@muni.cl", true, 142,
+				"Rosa", TipoEvento.CAIDA, Severidad.GRAVE, 0, Proposito.AGRAVAMIENTO));
+
+		assertThat(mensaje.asunto()).contains("pasó a grave", "#142", "Rosa");
+		assertThat(mensaje.texto()).contains("pasó a grave", "#142", "Rosa", DASHBOARD)
 				.doesNotContain("{", "}", "caída");
 	}
 

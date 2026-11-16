@@ -22,6 +22,7 @@ import java.util.regex.Pattern;
  * <li>Silencio de datos, al equipo.</li>
  * <li>Alerta, al equipo: las graves y el respaldo de un WhatsApp a la oficina.</li>
  * <li>Alerta que no avanza, al equipo (vigilante del escalamiento): el reloj dejó de pedir avisos.</li>
+ * <li>Alerta que pasó a grave después de su aviso, a los coordinadores.</li>
  * <li>Aviso a un contacto del paciente (respaldo de su WhatsApp): en las graves, le indica llamar al 131.
  * Lleva un solo enlace a la página /responder del dashboard, donde elige "Confirmo que voy" o "No puedo
  * asistir", con el token firmado del aviso después de "#"; sin ese marcador en su cuerpo, el backend no
@@ -68,10 +69,20 @@ public class PlantillasCorreo {
 		if (!correo.alEquipo()) {
 			return aContacto(correo);
 		}
-		if (correo.vigilante()) {
-			return alertaQueNoAvanza(correo);
-		}
-		return correo.tipo() == TipoEvento.SILENCIO_DATOS ? silencioDeDatos(correo) : alertaAlEquipo(correo);
+		return switch (correo.proposito()) {
+			case VIGILANTE -> alertaQueNoAvanza(correo);
+			case AGRAVAMIENTO -> alertaAgravada(correo);
+			case AVISO -> correo.tipo() == TipoEvento.SILENCIO_DATOS ? silencioDeDatos(correo)
+					: alertaAlEquipo(correo);
+		};
+	}
+
+	/** La alerta pasó a grave después de su primer aviso a los coordinadores. */
+	private Mensaje alertaAgravada(CorreoPendiente correo) {
+		TextosCorreo.Agravamiento t = textos.agravamiento();
+		Map<String, String> valores = Map.of("deQuien", deQuien(correo), "folio", folio(correo),
+				"dashboard", urlDashboard, "pie", textos.pieEquipo());
+		return mensaje(correo, t.asunto(), t.cuerpo(), valores);
 	}
 
 	/** Vigilante del escalamiento: el reloj dejó de pedir avisos a mitad del recorrido de contactos. */
@@ -197,6 +208,9 @@ public class PlantillasCorreo {
 		revisar("vigilante.asunto", vigilante.asunto(), Set.of("alerta", "deQuien", "folio", "dashboard"));
 		revisar("vigilante.cuerpo", vigilante.cuerpo(),
 				Set.of("alerta", "deQuien", "folio", "minutos", "dashboard", "pie"));
+		TextosCorreo.Agravamiento agravamiento = requerido("agravamiento", textos.agravamiento());
+		revisar("agravamiento.asunto", agravamiento.asunto(), Set.of("deQuien", "folio", "dashboard"));
+		revisar("agravamiento.cuerpo", agravamiento.cuerpo(), Set.of("deQuien", "folio", "dashboard", "pie"));
 		for (Severidad severidad : Severidad.values()) {
 			if (textos.gravedades() == null || vacio(textos.gravedades().get(severidad))) {
 				throw new IllegalArgumentException("correos.yml: falta el nombre de la gravedad " + severidad

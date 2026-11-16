@@ -109,8 +109,9 @@ Enum respuesta_contacto {
 }
 
 Enum proposito_aviso {
-  AVISO [note: 'El que pidió el reloj, el de recibe_avisos o el respaldo de un WhatsApp']
+  AVISO [note: 'El que pidió el reloj, el de la oficina, el de recibe_avisos o el respaldo de un WhatsApp']
   VIGILANTE [note: 'La alerta no avanza: el reloj no pide avisos (solo a cuentas del equipo)']
+  AGRAVAMIENTO [note: 'La alerta pasó a grave después de su aviso a los coordinadores (solo a cuentas del equipo)']
 }
 
 Enum tipo_aviso_fcm {
@@ -593,7 +594,7 @@ Table REGISTRO_INTENTO {
   id_contacto_interno uuid [note: 'Aviso del servidor a una cuenta del equipo (contacto interno)']
   canal canal [not null]
   ronda int [note: '1 o 2. La informa el reloj. Vacía en los avisos al equipo']
-  proposito proposito_aviso [not null, default: 'AVISO', note: 'Para qué es el aviso; VIGILANTE solo a cuentas del equipo']
+  proposito proposito_aviso [not null, default: 'AVISO', note: 'Para qué es el aviso; VIGILANTE y AGRAVAMIENTO solo a cuentas del equipo']
   fecha_hora_solicitud timestamptz [not null, default: `now()`, note: 'Cuándo lo pidió el reloj o lo encoló el servidor; mide "sin noticias del reloj"']
   reintentos int [not null, default: 0, note: 'Reintentos de envío ya hechos']
   fecha_hora_proximo_envio timestamptz [note: 'Pendiente de envío desde esa hora (bandeja de salida); vacía si ya salió o falló']

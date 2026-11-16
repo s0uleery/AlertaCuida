@@ -132,9 +132,12 @@ El vigilante (`VigilarRelojes`) revisa cada 5 minutos todos los vínculos vigent
 
 ## Aviso a la oficina PRLAC
 
-Definido el 05-11-2026 y confirmado para las alertas técnicas el 08-11-2026. El envío aún no está programado (depende del canal de WhatsApp).
+Definido el 05-11-2026, confirmado para las alertas técnicas el 08-11-2026 y programado el 13-11-2026 (2.10.5). Mientras no esté el canal de WhatsApp (2.9), los avisos salen por el correo de respaldo. Detalle técnico en [backend.md](backend.md#escalamiento-dirigido-por-el-reloj).
 
 - WhatsApp a la vez, en paralelo al escalamiento del reloj, a todas las cuentas activas con rol `COORDINADOR` que tengan teléfono y opt-in vigente, sin opción de apagarlo.
+- Un coordinador activo sin opt-in vigente (nunca lo dio o lo revocó) recibe un correo en su lugar.
+- No se avisa de simulacros ni de alertas canceladas o resueltas.
+- Si la alerta pasa a grave después del aviso, se avisa de nuevo, solo si el agravamiento ocurrió en horario laboral. El correo dice "pasó a grave" sin nombrar qué se detectó (texto `agravamiento` en `correos.yml`). Si ya era grave cuando salió el primer aviso, no se repite.
 - Solo en horario laboral y para todas las gravedades. Fuera de horario no se envía nada, ni siquiera al empezar la jornada: la alerta queda en el dashboard.
 - Si un WhatsApp falla, se envía un correo de respaldo.
 - Las demás cuentas reciben correo solo con `recibe_avisos`, que está apagado por defecto en las cuentas nuevas. Lo cambia el administrador en Administración > Perfiles (interruptor "Avisos técnicos") o al crear la cuenta.
@@ -273,6 +276,10 @@ Los de `application.properties` requieren reiniciar el backend.
 | 13-11-2026 | Mientras WhatsApp no esté configurado (antes de la 2.9), un aviso por WhatsApp que pide el reloj se acepta y falla de inmediato, sin reintentos, para que salga el correo de respaldo | El escalamiento funciona desde ya por correo | Confirmada |
 | 13-11-2026 | Vigilante del escalamiento: alerta abierta 15 minutos sin noticias del reloj → correo a todos los coordinadores activos, solo en horario laboral, una sola vez por alerta | Respaldo si el reloj se apaga o pierde la señal a mitad del recorrido | Confirmada |
 | 13-11-2026 | Para medirlo, V12 agrega a `registro_intento` la hora de solicitud y el propósito (`AVISO` o `VIGILANTE`) | No había cómo saber cuándo pidió el reloj su último aviso | Confirmada |
+| 13-11-2026 | Aviso a la oficina: no se avisa de simulacros | Igual que el correo de `recibe_avisos` | Confirmada |
+| 13-11-2026 | Aviso a la oficina: un coordinador sin opt-in vigente recibe correo en su lugar | Que a la oficina le llegue siempre | Confirmada |
+| 13-11-2026 | Aviso a la oficina: si la alerta pasa a grave después del aviso, se avisa de nuevo (propósito `AGRAVAMIENTO`, V13), con texto propio "pasó a grave" | | Confirmada |
+| 13-11-2026 | "Medias y graves destacadas en el dashboard" (2.10.5) se hace con la lista de alertas (3.4.2) | | Confirmada |
 
 ## Qué falta
 
@@ -281,7 +288,8 @@ Los de `application.properties` requieren reiniciar el backend.
 - Mostrar en el dashboard los correos fallidos (hoy quedan en `registro_intento`).
 - Crear el proyecto de Firebase y probar los avisos con Firebase y el simulador de reloj (2.3).
 - Red de seguridad sobre las lecturas (2.7) y simulacro (2.8).
-- Canal de WhatsApp (2.9) y escalamiento del lado del servidor (2.10), que incluye el aviso a la oficina.
+- Canal de WhatsApp (2.9) y lo que falta del escalamiento del lado del servidor (2.10).
+- Destacar las alertas medias y graves en la lista de alertas (3.4.2).
 - Pantalla de alertas y discrepancias (3.4). Hoy las alertas solo se consultan y atienden por la API.
 - Registrar notas y derivaciones de un caso: la línea de tiempo ya las muestra, pero aún no hay endpoint para crearlas.
 - Editar el teléfono y el opt-in de una cuenta ya creada, y registrar la baja del opt-in de un coordinador por webhook.

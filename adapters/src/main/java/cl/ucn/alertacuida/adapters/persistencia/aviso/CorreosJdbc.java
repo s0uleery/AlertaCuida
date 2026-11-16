@@ -4,6 +4,7 @@ import cl.ucn.alertacuida.adapters.seguridad.cifrado.CifradoCampos;
 import cl.ucn.alertacuida.adapters.seguridad.cifrado.ColumnaCifrada;
 import cl.ucn.alertacuida.application.aviso.modelo.AvisoPorEncolar;
 import cl.ucn.alertacuida.application.aviso.modelo.CorreoPendiente;
+import cl.ucn.alertacuida.application.aviso.modelo.Proposito;
 import cl.ucn.alertacuida.application.aviso.puerto.BandejaSalida;
 import cl.ucn.alertacuida.application.aviso.puerto.ColaCorreos;
 import cl.ucn.alertacuida.domain.alerta.Severidad;
@@ -85,14 +86,17 @@ public class CorreosJdbc implements ColaCorreos, BandejaSalida {
 				.update();
 	}
 
-	/** El respaldo va al mismo destino y con la misma ronda; la clave única evita repetirlo. */
+	/**
+	 * El respaldo va al mismo destino, con la misma ronda y el mismo propósito; la clave única evita repetirlo
+	 * (y que un coordinador con recibe_avisos reciba dos correos de la misma alerta).
+	 */
 	@Override
 	public int encolarRespaldos(Instant desde, Instant ahora) {
 		return jdbc.sql("""
 				INSERT INTO registro_intento (event_id, id_alerta, id_contacto_paciente, id_contacto_interno, canal,
-					ronda, fecha_hora_solicitud, fecha_hora_proximo_envio)
+					ronda, proposito, fecha_hora_solicitud, fecha_hora_proximo_envio)
 				SELECT gen_random_uuid(), w.id_alerta, w.id_contacto_paciente, w.id_contacto_interno, 'CORREO', w.ronda,
-					:ahora, :ahora
+					w.proposito, :ahora, :ahora
 				FROM registro_intento w
 				JOIN alerta a ON a.id_alerta = w.id_alerta
 				LEFT JOIN atencion_alerta t ON t.id_alerta = w.id_alerta
@@ -112,7 +116,7 @@ public class CorreosJdbc implements ColaCorreos, BandejaSalida {
 		return jdbc.sql("""
 				SELECT i.id_intento, i.reintentos, a.numero, p.alias, a.tipo_evento, e.severidad_actual,
 					i.id_contacto_interno IS NOT NULL AS al_equipo, u.correo AS correo_cuenta,
-					c.correo AS correo_contacto, i.proposito = 'VIGILANTE' AS vigilante
+					c.correo AS correo_contacto, i.proposito
 				FROM registro_intento i
 				JOIN alerta a ON a.id_alerta = i.id_alerta
 				JOIN alerta_estado e ON e.id_alerta = i.id_alerta
@@ -175,7 +179,7 @@ public class CorreosJdbc implements ColaCorreos, BandejaSalida {
 		return new CorreoPendiente(fila.getObject("id_intento", UUID.class), destinatario, alEquipo,
 				fila.getLong("numero"), fila.getString("alias"), TipoEvento.valueOf(fila.getString("tipo_evento")),
 				Severidad.valueOf(fila.getString("severidad_actual")), fila.getInt("reintentos"),
-				fila.getBoolean("vigilante"));
+				Proposito.valueOf(fila.getString("proposito")));
 	}
 
 }

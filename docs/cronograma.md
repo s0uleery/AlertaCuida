@@ -483,12 +483,13 @@ Depende de: 1.9, 2.1, 2.3, 2.9. Listo cuando: con el simulador de reloj, una ale
 | [x] | 2.10.2 | Endpoint de solicitud de aviso: el reloj pide avisar a un contacto; el servidor verifica que sea del paciente y tenga opt-in, y envía por WhatsApp o correo. Una solicitud repetida no envía dos veces | 5 |
 | [ ] | 2.10.3 | Endpoint de estado de la alerta, que el reloj consulta antes de pasar al siguiente contacto (respaldo si FCM se atrasa) | 2 |
 | [ ] | 2.10.4 | Al recibir la confirmación por webhook: marcar la alerta como confirmada y avisar al reloj por FCM | 2 |
-| [ ] | 2.10.5 | WhatsApp simultáneo a todos los coordinadores con opt-in, en paralelo al escalamiento del reloj, solo en horario laboral y para todas las gravedades; correo de respaldo si el WhatsApp falla. Medias y graves destacadas en el dashboard | 3 |
+| [x] | 2.10.5 | WhatsApp simultáneo a todos los coordinadores con opt-in, en paralelo al escalamiento del reloj, solo en horario laboral y para todas las gravedades; correo de respaldo si el WhatsApp falla. Medias y graves destacadas en el dashboard | 3 |
 | [x] | 2.10.6 | Registrar el fin de la lista informado por el reloj (`SIN_RESPUESTA`), y vigilante: alerta abierta sin noticias del reloj en un plazo → correo a los profesionales | 3 |
 | [ ] | 2.10.7 | Pruebas, incluidos un reloj sin señal y un reinicio del servidor a mitad de un escalamiento | 4 |
 | [x] | 2.10.8 | Teléfono con WhatsApp (obligatorio para coordinadores, cifrado) y opt-in en las cuentas del equipo (V9) | 2 |
 
 Nota (13-11-2026): 2.10.2 y 2.10.6 hechas (el vigilante del escalamiento avisa por correo a los coordinadores; migración V12). Mientras WhatsApp no esté configurado, los avisos por WhatsApp caen al correo de respaldo; la 2.9 solo agrega el canal real.
+Nota (13-11-2026, tarde): 2.10.5 hecha. Cada alerta real se avisa a todos los coordinadores activos (WhatsApp con opt-in; correo si no lo tienen), solo en horario laboral; si pasa a grave después, se avisa de nuevo (migración V13). Los simulacros no se avisan. Lo de destacar medias y graves en el dashboard pasa a la lista de alertas (3.4.2).
 
 Notas (05-11-2026): la 2.10.5 depende del canal de WhatsApp (2.9). Falta poder editar el teléfono y el opt-in de una cuenta ya creada (hoy solo se piden al crearla) y que el webhook de Meta registre la baja del opt-in de un coordinador.
  
@@ -545,7 +546,7 @@ Depende de: 2.5, 2.10. Listo cuando: el personal ve de un vistazo qué pacientes
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
 | [ ] | 3.4.1 | Panel de estado general (pacientes, última sincronización, configuración pendiente, estado del reloj, tipo de conexión) | 6 |
-| [ ] | 3.4.2 | Lista de alertas activas con gravedad, antigüedad y contacto en curso (el último que pidió el reloj) | 6 |
+| [ ] | 3.4.2 | Lista de alertas activas con gravedad, antigüedad y contacto en curso (el último que pidió el reloj); medias y graves destacadas (viene de la 2.10.5) | 6 |
 | [ ] | 3.4.3 | Detalle de la alerta: línea de tiempo (solicitudes del reloj, WhatsApp, correos, avisos FCM) y evidencia de lecturas | 6 |
 | [ ] | 3.4.4 | Botón "Resolver alerta" con observaciones y clasificación: avisa al reloj para que detenga el escalamiento | 3 |
 | [ ] | 3.4.5 | Actualización automática por consulta periódica | 2 |

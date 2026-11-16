@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import cl.ucn.alertacuida.application.aviso.modelo.CorreoPendiente;
 import cl.ucn.alertacuida.application.aviso.modelo.Mensaje;
+import cl.ucn.alertacuida.application.aviso.modelo.Proposito;
 import cl.ucn.alertacuida.application.aviso.modelo.TextosCorreo;
 import cl.ucn.alertacuida.application.respuesta.puerto.FirmaRespuesta;
 import cl.ucn.alertacuida.domain.alerta.Severidad;
@@ -63,7 +64,7 @@ class PlantillasCorreoTest {
 	@Test
 	void elCorreoDelVigilanteUsaSuTextoConLosMinutos() {
 		CorreoPendiente correo = new CorreoPendiente(UUID.randomUUID(), "coordinadora@muni.cl", true, 142, "Rosa",
-				TipoEvento.CAIDA, Severidad.GRAVE, 0, true);
+				TipoEvento.CAIDA, Severidad.GRAVE, 0, Proposito.VIGILANTE);
 
 		Mensaje mensaje = plantillas(textos()).redactar(correo);
 
@@ -74,6 +75,37 @@ class PlantillasCorreoTest {
 		assertThat(mensaje.texto()).doesNotContainIgnoringCase("caída");
 	}
 
+	/**
+	 * Agravamiento (13-11-2026): al equipo, con su propio texto, el folio y el alias y el enlace al dashboard;
+	 * importante porque ya es grave, y sin nombrar qué se detectó.
+	 */
+	@Test
+	void elCorreoDeAgravamientoUsaSuTexto() {
+		CorreoPendiente correo = new CorreoPendiente(UUID.randomUUID(), "coordinadora@muni.cl", true, 142, "Rosa",
+				TipoEvento.CAIDA, Severidad.GRAVE, 0, Proposito.AGRAVAMIENTO);
+
+		Mensaje mensaje = plantillas(textos()).redactar(correo);
+
+		assertThat(mensaje.asunto()).isEqualTo("Agravada: alerta #142 de Rosa pasó a grave");
+		assertThat(mensaje.texto()).isEqualTo("La alerta #142 de Rosa pasó a grave.\n\nVer: " + DASHBOARD
+				+ "\n\nPie del equipo.");
+		assertThat(mensaje.importante()).isTrue();
+	}
+
+	/** El texto de agravamiento no admite {minutos}, que solo existe en el del vigilante. */
+	@Test
+	void elAgravamientoNoAdmiteLosMinutos() {
+		TextosCorreo base = textos();
+		TextosCorreo malo = new TextosCorreo(base.pieEquipo(), base.pieContacto(), base.silencioDatos(),
+				base.alertaEquipo(), base.contacto(), base.vigilante(),
+				new TextosCorreo.Agravamiento(base.agravamiento().asunto(),
+						base.agravamiento().cuerpo() + "{minutos}"),
+				base.gravedades(), base.tecnicas());
+
+		assertThatThrownBy(() -> plantillas(malo)).isInstanceOf(IllegalArgumentException.class)
+				.hasMessageContaining("agravamiento.cuerpo").hasMessageContaining("{minutos}");
+	}
+
 	/** El texto del vigilante no admite el enlace de respuesta: va al equipo, no a un contacto. */
 	@Test
 	void elVigilanteNoPuedeUsarElEnlaceDeRespuesta() {
@@ -81,7 +113,7 @@ class PlantillasCorreoTest {
 		TextosCorreo malo = new TextosCorreo(base.pieEquipo(), base.pieContacto(), base.silencioDatos(),
 				base.alertaEquipo(), base.contacto(),
 				new TextosCorreo.Vigilante(base.vigilante().asunto(), base.vigilante().cuerpo() + "{responder}"),
-				base.gravedades(), base.tecnicas());
+				base.agravamiento(), base.gravedades(), base.tecnicas());
 
 		assertThatThrownBy(() -> plantillas(malo)).isInstanceOf(IllegalArgumentException.class)
 				.hasMessageContaining("vigilante.cuerpo");
@@ -154,7 +186,7 @@ class PlantillasCorreoTest {
 		TextosCorreo malo = new TextosCorreo(base.pieEquipo(), base.pieContacto(), base.silencioDatos(),
 				new TextosCorreo.AlertaEquipo(a.asunto(), a.cuerpo() + "{responder}", a.alertaSalud(),
 						a.alertaTecnica(), a.deQuienConAlias()),
-				base.contacto(), base.vigilante(), base.gravedades(), base.tecnicas());
+				base.contacto(), base.vigilante(), base.agravamiento(), base.gravedades(), base.tecnicas());
 
 		assertThatThrownBy(() -> plantillas(malo))
 				.isInstanceOf(IllegalArgumentException.class)
@@ -230,7 +262,8 @@ class PlantillasCorreoTest {
 		Map<Severidad, String> gravedades = new HashMap<>(base.gravedades());
 		gravedades.remove(Severidad.MEDIA);
 		TextosCorreo malo = new TextosCorreo(base.pieEquipo(), base.pieContacto(), base.silencioDatos(),
-				base.alertaEquipo(), base.contacto(), base.vigilante(), gravedades, base.tecnicas());
+				base.alertaEquipo(), base.contacto(), base.vigilante(), base.agravamiento(), gravedades,
+				base.tecnicas());
 
 		assertThatThrownBy(() -> plantillas(malo))
 				.isInstanceOf(IllegalArgumentException.class)
@@ -244,7 +277,8 @@ class PlantillasCorreoTest {
 		Map<TipoEvento, String> tecnicas = new HashMap<>(base.tecnicas());
 		tecnicas.remove(TipoEvento.EXCESO_ALERTAS);
 		TextosCorreo malo = new TextosCorreo(base.pieEquipo(), base.pieContacto(), base.silencioDatos(),
-				base.alertaEquipo(), base.contacto(), base.vigilante(), base.gravedades(), tecnicas);
+				base.alertaEquipo(), base.contacto(), base.vigilante(), base.agravamiento(), base.gravedades(),
+				tecnicas);
 
 		assertThatThrownBy(() -> plantillas(malo))
 				.isInstanceOf(IllegalArgumentException.class)
@@ -271,7 +305,7 @@ class PlantillasCorreoTest {
 	private static TextosCorreo conContacto(TextosCorreo.Contacto contacto) {
 		TextosCorreo base = textos();
 		return new TextosCorreo(base.pieEquipo(), base.pieContacto(), base.silencioDatos(), base.alertaEquipo(),
-				contacto, base.vigilante(), base.gravedades(), base.tecnicas());
+				contacto, base.vigilante(), base.agravamiento(), base.gravedades(), base.tecnicas());
 	}
 
 	/** @return un correo pendiente a una cuenta del equipo por la alerta #142 */

@@ -106,6 +106,21 @@ alertacuida:
 
           {pie}
 
+      # A los coordinadores, cuando una alerta pasa a grave después de su primer aviso (si el WhatsApp falla o
+      # el coordinador no tiene opt-in). Una vez por alerta, en horario laboral. No nombrar qué se detectó.
+      #   {deQuien}   " de Mary", o vacío si el paciente no tiene alias
+      #   {folio}     folio de la alerta, ej. #142
+      #   {dashboard} dirección del dashboard
+      #   {pie}       pie-equipo (solo en el cuerpo)
+      agravamiento:
+        asunto: "AlertaCuida: la alerta {folio}{deQuien} pasó a grave"
+        cuerpo: |
+          La alerta {folio}{deQuien} pasó a grave y sigue abierta.
+
+          Revísela en el dashboard: {dashboard}
+
+          {pie}
+
       # Cómo se nombra cada gravedad ({gravedad}). Deben estar las tres.
       gravedades:
         LEVE: "leve"
