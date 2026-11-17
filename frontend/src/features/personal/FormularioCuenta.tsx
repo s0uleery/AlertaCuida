@@ -15,6 +15,7 @@ const VACIA: SolicitudCuenta = {
   rol: 'PERSONAL',
   telefono: '',
   aceptaWhatsapp: false,
+  recibeAvisos: false,
 };
 
 /** Rol que recibe por WhatsApp los avisos de la oficina PRLAC: necesita teléfono. */
@@ -173,6 +174,22 @@ export function FormularioCuenta({ alCrear }: { alCrear: (enlace: RespuestaEnlac
         <span>
           La persona aceptó recibir avisos por WhatsApp
           <span className="block text-xs text-slate-500">Sin esta aceptación, Meta no permite enviarle mensajes.</span>
+        </span>
+      </label>
+
+      <label className="flex items-start gap-2 text-sm sm:col-span-2">
+        <input
+          type="checkbox"
+          checked={datos.recibeAvisos}
+          onChange={(e) => cambiar('recibeAvisos', e.target.checked)}
+          className="mt-1"
+        />
+        <span>
+          Recibe avisos técnicos por correo
+          <span className="block text-xs text-slate-500">
+            Cuando un reloj deja de enviar datos, tiene la batería baja, no se lo ponen o envía demasiadas alertas. Solo
+            en horario laboral. Se puede cambiar después en la lista de perfiles.
+          </span>
         </span>
       </label>
 

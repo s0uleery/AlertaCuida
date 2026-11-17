@@ -19,6 +19,18 @@ export interface SolicitudCuenta {
   telefono: string;
   /** La persona aceptó recibir esos avisos por WhatsApp (opt-in que exige Meta) */
   aceptaWhatsapp: boolean;
+  /** Recibe por correo los avisos de las alertas técnicas (batería, reloj sin datos…); apagado por defecto */
+  recibeAvisos: boolean;
+}
+
+/**
+ * Cuerpo de PUT /api/personal/{id}/rol. El teléfono solo se envía al pasar a COORDINADOR a una cuenta
+ * que no lo tiene (tieneTelefono = false).
+ */
+export interface SolicitudCambioRol {
+  rol: Rol;
+  telefono?: string;
+  aceptaWhatsapp?: boolean;
 }
 
 /** Respuesta del alta y de un enlace nuevo. */
@@ -43,6 +55,10 @@ export interface PerfilEquipo {
   estado: EstadoCuenta;
   /** Último LOGIN en la auditoría, fecha ISO en UTC; null si nunca ha entrado */
   ultimoAcceso: string | null;
+  /** Recibe por correo los avisos de las alertas técnicas */
+  recibeAvisos: boolean;
+  /** Tiene celular con WhatsApp; si no, hay que pedirlo al pasarla a COORDINADOR */
+  tieneTelefono: boolean;
 }
 
 /** Fila de GET /api/roles: un rol con los permisos que tiene hoy. */

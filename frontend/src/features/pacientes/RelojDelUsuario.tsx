@@ -1,10 +1,17 @@
 import { useState } from 'react';
 import { ErrorApi } from '../../api/cliente';
 import { useConfirmar } from '../../comun/Confirmacion';
-import { CLASE_BOTON_PRINCIPAL, CLASE_BOTON_SECUNDARIO, CLASE_CAMPO, CLASE_ERROR, CLASE_ETIQUETA } from '../../comun/estilos';
+import {
+  CLASE_BOTON_PRINCIPAL,
+  CLASE_BOTON_SECUNDARIO,
+  CLASE_CAMPO,
+  CLASE_ERROR,
+  CLASE_ETIQUETA,
+} from '../../comun/estilos';
 import { formatearFechaHora } from '../../comun/fechas';
 import { useDatos } from '../../comun/useDatos';
 import { relojesApi } from '../relojes/relojesApi';
+import { SemaforoReloj } from '../relojes/SemaforoReloj';
 import { NOMBRE_ESTADO, type EstadoReloj } from '../relojes/tipos';
 import { useSesion } from '../sesion/SesionContext';
 import { ConfiguracionDelReloj } from './ConfiguracionDelReloj';
@@ -65,6 +72,7 @@ export function RelojDelUsuario({ detalle, alCambiar }: Props) {
             Usa el reloj <strong className="font-mono">{vigente.identificadorReloj}</strong> desde el{' '}
             {formatearFechaHora(vigente.inicio)}.
           </p>
+          <EstadoDelReloj idDispositivo={vigente.idDispositivo} />
           <ConfiguracionDelReloj idPaciente={paciente.id} idAsignacion={vigente.idAsignacion} />
         </>
       ) : (
@@ -200,6 +208,17 @@ function ElegirReloj({ reemplazo, trabajando, alCancelar, alElegir }: PropsElegi
           Cancelar
         </button>
       </div>
+    </div>
+  );
+}
+
+/** Semáforo del reloj que usa el usuario, con su última sincronización y por qué no está verde. */
+function EstadoDelReloj({ idDispositivo }: { idDispositivo: string }) {
+  const { datos, error } = useDatos(relojesApi.estado, idDispositivo);
+  if (error) return null;
+  return (
+    <div className="rounded-md border border-slate-200 px-3 py-2">
+      <SemaforoReloj estado={datos?.find((estado) => estado.idDispositivo === idDispositivo)} detalle />
     </div>
   );
 }

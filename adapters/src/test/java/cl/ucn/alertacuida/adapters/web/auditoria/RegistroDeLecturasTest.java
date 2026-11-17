@@ -56,7 +56,7 @@ class RegistroDeLecturasTest {
 	void registraElIdentificadorDeLaRuta() throws Exception {
 		List<String> filas = new ArrayList<>();
 
-		mvcCon((id, accion, entidad, idEntidad, ip, fecha) -> filas.add(
+		mvcCon((id, accion, entidad, idEntidad, ip, fecha, detalle) -> filas.add(
 				String.join(" ", id.toString(), accion, entidad, idEntidad, ip)))
 				.perform(get("/objetos/abc")).andExpect(status().isOk());
 
@@ -68,7 +68,7 @@ class RegistroDeLecturasTest {
 	void unaListaSeRegistraComoLista() throws Exception {
 		List<String> filas = new ArrayList<>();
 
-		mvcCon((id, accion, entidad, idEntidad, ip, fecha) -> filas.add(idEntidad))
+		mvcCon((id, accion, entidad, idEntidad, ip, fecha, detalle) -> filas.add(idEntidad))
 				.perform(get("/objetos")).andExpect(status().isOk());
 
 		assertThat(filas).containsExactly(RegistrarLectura.LISTA);
@@ -79,7 +79,7 @@ class RegistroDeLecturasTest {
 	void sinLaAnotacionNoSeRegistra() throws Exception {
 		List<String> filas = new ArrayList<>();
 
-		mvcCon((id, accion, entidad, idEntidad, ip, fecha) -> filas.add(entidad))
+		mvcCon((id, accion, entidad, idEntidad, ip, fecha, detalle) -> filas.add(entidad))
 				.perform(get("/sin-auditar")).andExpect(status().isOk());
 
 		assertThat(filas).isEmpty();
@@ -88,7 +88,7 @@ class RegistroDeLecturasTest {
 	/** Si el registro falla, la petición falla y los datos no salen. */
 	@Test
 	void siElRegistroFallaLosDatosNoSalen() throws Exception {
-		String cuerpo = mvcCon((id, accion, entidad, idEntidad, ip, fecha) -> {
+		String cuerpo = mvcCon((id, accion, entidad, idEntidad, ip, fecha, detalle) -> {
 			throw new IllegalStateException("sin base de datos");
 		}).perform(get("/objetos/abc")).andExpect(status().isInternalServerError())
 				.andReturn().getResponse().getContentAsString();

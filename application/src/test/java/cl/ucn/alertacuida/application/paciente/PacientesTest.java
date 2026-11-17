@@ -44,7 +44,8 @@ class PacientesTest {
 	@BeforeEach
 	void preparar() {
 		Clock reloj = Clock.fixed(AHORA, ZoneOffset.UTC);
-		RegistroAuditoria registro = (usuario, accion, entidad, id, ip, fecha) -> auditoria.add(accion + " " + entidad);
+		RegistroAuditoria registro = (usuario, accion, entidad, id, ip, fecha, detalle) ->
+				auditoria.add(accion + " " + entidad);
 		Transacciones enTransaccion = Supplier::get;
 		// El "hash" del RUN es "h-" + RUN normalizado
 		registrar = new RegistrarPaciente(pacientes, run -> "h-" + run.valor(), registro, enTransaccion, reloj);

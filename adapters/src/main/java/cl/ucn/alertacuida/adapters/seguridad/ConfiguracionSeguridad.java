@@ -90,6 +90,9 @@ public class ConfiguracionSeguridad {
 						.requestMatchers(HttpMethod.POST, "/api/auth/renovar", "/api/auth/salir").permitAll()
 						// Quien activa su cuenta aún no tiene contraseña: lo autoriza el token del enlace
 						.requestMatchers(HttpMethod.POST, "/api/auth/activar").permitAll()
+						// El contacto del paciente no tiene cuenta: lo autoriza el token firmado de su correo
+						.requestMatchers(HttpMethod.POST, "/api/respuestas-contacto",
+								"/api/respuestas-contacto/consulta").permitAll()
 						.requestMatchers("/actuator/health", "/error").permitAll()
 						.anyRequest().authenticated())
 				.oauth2ResourceServer(servidor -> servidor.jwt(jwt -> jwt.jwtAuthenticationConverter(permisos())));

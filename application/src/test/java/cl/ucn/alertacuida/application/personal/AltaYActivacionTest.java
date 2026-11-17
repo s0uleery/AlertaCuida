@@ -53,7 +53,7 @@ class AltaYActivacionTest {
 		// El "hash" del RUN es "h-" + RUN normalizado; el de la contraseña, "hash:" + contraseña
 		SecretosUnSoloUso secretos = new SecretosContados();
 		EmisorEnlacesActivacion enlaces = new EmisorEnlacesActivacion(tokens, secretos, Duration.ofHours(48));
-		RegistroAuditoria registro = (usuario, accion, entidad, id, ip, fecha) ->
+		RegistroAuditoria registro = (usuario, accion, entidad, id, ip, fecha, detalle) ->
 				auditoria.add(accion + " " + entidad + " por " + usuario);
 		// Un método genérico no admite lambda, pero sí referencia a método
 		Transacciones enTransaccion = Supplier::get;
@@ -81,11 +81,11 @@ class AltaYActivacionTest {
 	@Test
 	void elCoordinadorNecesitaTelefonoYSuOptInSeGuarda() {
 		assertThatThrownBy(() -> crear.crear(new DatosCuenta("12.345.678-5", "Rosa", null, "rosa@muni.cl",
-				"COORDINADOR", " ", false), ADMIN, "ip"))
+				"COORDINADOR", " ", false, false), ADMIN, "ip"))
 				.isInstanceOf(SolicitudRechazada.class).hasMessageContaining("WhatsApp");
 
 		EnlaceActivacion enlace = crear.crear(new DatosCuenta("12.345.678-5", "Rosa", null, "rosa@muni.cl",
-				"COORDINADOR", "9 1234 5678", true), ADMIN, "ip");
+				"COORDINADOR", "9 1234 5678", true, false), ADMIN, "ip");
 
 		NuevaCuenta guardada = cuentas.guardadas.get(enlace.idUsuario()).cuenta();
 		assertThat(guardada.telefono()).isEqualTo("+56912345678");
@@ -96,13 +96,14 @@ class AltaYActivacionTest {
 	@Test
 	void elOptInExigeUnTelefonoValido() {
 		EnlaceActivacion enlace = crear.crear(new DatosCuenta("12.345.678-5", "Ana", null, "ana@muni.cl", "PERSONAL",
-				"+56 9 1234 5678", false), ADMIN, "ip");
+				"+56 9 1234 5678", false, false), ADMIN, "ip");
 		assertThat(cuentas.guardadas.get(enlace.idUsuario()).cuenta().fechaOptIn()).isNull();
 
 		assertThatThrownBy(() -> crear.crear(new DatosCuenta("11.111.111-1", "Luis", null, "luis@muni.cl", "PERSONAL",
-				null, true), ADMIN, "ip")).isInstanceOf(SolicitudRechazada.class).hasMessageContaining("teléfono");
+				null, true, false), ADMIN, "ip")).isInstanceOf(SolicitudRechazada.class)
+				.hasMessageContaining("teléfono");
 		assertThatThrownBy(() -> crear.crear(new DatosCuenta("11.111.111-1", "Luis", null, "luis@muni.cl", "PERSONAL",
-				"123", false), ADMIN, "ip")).isInstanceOf(SolicitudRechazada.class);
+				"123", false, false), ADMIN, "ip")).isInstanceOf(SolicitudRechazada.class);
 	}
 
 	/** Se rechazan el RUN inválido, el rol inexistente y el RUN o correo repetidos. */
@@ -113,7 +114,7 @@ class AltaYActivacionTest {
 		assertThatThrownBy(() -> crear.crear(datos("12.345.678-0", "otra@muni.cl"), ADMIN, "ip"))
 				.isInstanceOf(SolicitudRechazada.class);
 		assertThatThrownBy(() -> crear.crear(new DatosCuenta("11.111.111-1", "Luis", null, "luis@muni.cl", "JEFE",
-				null, false),
+				null, false, false),
 				ADMIN, "ip")).isInstanceOf(SolicitudRechazada.class).hasMessageContaining("rol");
 		assertThatThrownBy(() -> crear.crear(datos("12345678-5", "otra@muni.cl"), ADMIN, "ip"))
 				.isInstanceOf(CuentaDuplicada.class).hasMessageContaining("RUN");
@@ -188,7 +189,7 @@ class AltaYActivacionTest {
 
 	/** @return datos de una persona con rol PERSONAL, con ese RUN y correo */
 	private static DatosCuenta datos(String run, String correo) {
-		return new DatosCuenta(run, " Ana Pérez ", "Enfermera", correo, "PERSONAL", null, false);
+		return new DatosCuenta(run, " Ana Pérez ", "Enfermera", correo, "PERSONAL", null, false, false);
 	}
 
 	/** Una cuenta guardada en el doble en memoria, con su hash de contraseña (null = pendiente). */

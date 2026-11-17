@@ -19,7 +19,14 @@ type Renovador = () => Promise<boolean>;
 type AlSalir = () => void;
 
 /** Rutas públicas: no llevan token, porque uno vencido haría que Spring Security rechazara la petición. */
-const RUTAS_PUBLICAS = new Set(['/auth/login', '/auth/renovar', '/auth/salir', '/auth/activar']);
+const RUTAS_PUBLICAS = new Set([
+  '/auth/login',
+  '/auth/renovar',
+  '/auth/salir',
+  '/auth/activar',
+  '/respuestas-contacto',
+  '/respuestas-contacto/consulta',
+]);
 
 let tokenActual: ProveedorToken = () => null;
 let renovarToken: Renovador = async () => false;
