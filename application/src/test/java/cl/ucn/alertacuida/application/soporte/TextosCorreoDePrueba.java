@@ -26,7 +26,10 @@ public final class TextosCorreoDePrueba {
 				new TextosCorreo.Vigilante("Vigilante: {alerta}{deQuien} no avanza",
 						"La {alerta}{deQuien} no avanza hace {minutos} minutos.\n\nVer: {dashboard}\n\n{pie}\n"),
 				new TextosCorreo.Agravamiento("Agravada: alerta {folio}{deQuien} pasó a grave",
-						"La alerta {folio}{deQuien} pasó a grave.\n\nVer: {dashboard}\n\n{pie}\n"),
+						"La alerta {folio}{deQuien} pasó a grave.\n\nConfirmar: {responder}\n\nVer: {dashboard}"
+								+ "\n\n{pie}\n"),
+				new TextosCorreo.AvisoOficina("Oficina: {alerta}{deQuien}",
+						"Hay una {alerta}{deQuien}.\n\nConfirmar: {responder}\n\nVer: {dashboard}\n\n{pie}\n"),
 				Map.of(Severidad.LEVE, "leve", Severidad.MEDIA, "media", Severidad.GRAVE, "grave"),
 				Map.of(TipoEvento.BATERIA_BAJA, "batería baja", TipoEvento.RELOJ_NO_PUESTO, "reloj no puesto",
 						TipoEvento.EXCESO_ALERTAS, "exceso de alertas"));

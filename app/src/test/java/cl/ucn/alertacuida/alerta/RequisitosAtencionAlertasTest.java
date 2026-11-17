@@ -68,6 +68,9 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * cambiar la hora; 404 si no es de ese reloj; 409 si está cancelada.</li>
  * <li>R9 La lista usa el formato del front; las SIN_RESPUESTA abiertas van primero con prioridad
  * máxima, aunque otra sea más grave o más nueva; después, las más recientes.</li>
+ * <li>R11 Cada fila dice si es de salud o técnica (pestañas Salud y Reloj, decisión del 13-11-2026) y si es
+ * un simulacro, que se muestra con su etiqueta (decisión del 16-11-2026).</li>
+ * <li>R12 Cada fila trae el contacto en curso: el último de la lista del paciente al que el reloj pidió avisar.</li>
  * <li>R10 Ver exige ALERTAS:VER y actuar, ALERTAS:EDITAR. Lecturas y cambios quedan auditados.</li>
  * </ul>
  */
@@ -629,6 +632,43 @@ class RequisitosAtencionAlertasTest {
 		lista(tokenCoordinadora).andExpect(jsonPath("$[0].tipoEvento").value("SILENCIO_DATOS"))
 				.andExpect(jsonPath("$[0].paciente.edad").value(nullValue()))
 				.andExpect(jsonPath("$[0].responsable").value(nullValue()));
+	}
+
+	// ---------- R11 y R12: pestañas, simulacros y contacto en curso ----------
+
+	/** R11: la categoría separa las de salud de las técnicas, y los simulacros vienen marcados. */
+	@Test
+	void laListaDiceLaCategoriaYSiEsSimulacro() throws Exception {
+		UUID salud = alertaDelReloj("CAIDA", "GRAVE", ahora.minus(3, ChronoUnit.MINUTES));
+		UUID tecnica = alertaTecnica("BATERIA_BAJA");
+		UUID simulacro = alertaDelReloj("FC", "MEDIA", ahora.minus(2, ChronoUnit.MINUTES));
+		jdbc.sql("UPDATE alerta SET es_simulacro = true WHERE id_alerta = :a").param("a", simulacro).update();
+
+		lista(tokenCoordinadora).andExpect(status().isOk())
+				.andExpect(jsonPath("$[?(@.id == '" + salud + "')].categoria").value(contains("SALUD")))
+				.andExpect(jsonPath("$[?(@.id == '" + salud + "')].simulacro").value(contains(false)))
+				.andExpect(jsonPath("$[?(@.id == '" + tecnica + "')].categoria").value(contains("TECNICA")))
+				.andExpect(jsonPath("$[?(@.id == '" + tecnica + "')].simulacro").value(contains(false)))
+				.andExpect(jsonPath("$[?(@.id == '" + simulacro + "')].categoria").value(contains("SALUD")))
+				.andExpect(jsonPath("$[?(@.id == '" + simulacro + "')].simulacro").value(contains(true)));
+	}
+
+	/**
+	 * R12: el contacto en curso es el último de la lista del paciente al que el reloj pidió avisar; sin avisos
+	 * es null.
+	 */
+	@Test
+	void laListaMuestraElContactoEnCurso() throws Exception {
+		Instant t0 = ahora.minus(20, ChronoUnit.MINUTES);
+		UUID conAvisos = alertaDelReloj("CAIDA", "GRAVE", t0);
+		UUID sinAvisos = alertaDelReloj("FC", "MEDIA", ahora.minus(1, ChronoUnit.MINUTES));
+		intento(conAvisos, contactoDelPaciente("Hija", "hija@correo.cl", 1), "CORREO", 1, t0, 1);
+		intento(conAvisos, contactoDelPaciente("Vecino", "vecino@correo.cl", 2), "CORREO", 1, t0, 6);
+
+		lista(tokenCoordinadora)
+				.andExpect(jsonPath("$[?(@.id == '" + conAvisos + "')].contactoEnCurso").value(contains("Vecino")))
+				.andExpect(jsonPath("$[?(@.id == '" + sinAvisos + "')].contactoEnCurso")
+						.value(contains(nullValue())));
 	}
 
 	// ---------- R10: permisos y auditoría ----------

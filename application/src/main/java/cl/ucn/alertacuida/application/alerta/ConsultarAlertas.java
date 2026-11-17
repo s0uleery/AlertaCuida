@@ -9,6 +9,7 @@ import cl.ucn.alertacuida.application.alerta.modelo.ResumenAlerta;
 import cl.ucn.alertacuida.application.alerta.puerto.ConsultaAlertas;
 import cl.ucn.alertacuida.application.aviso.modelo.PoliticaReintentos;
 import cl.ucn.alertacuida.application.comun.error.NoEncontrado;
+import cl.ucn.alertacuida.domain.alerta.CategoriaAlerta;
 import cl.ucn.alertacuida.domain.alerta.EstadoContacto;
 import cl.ucn.alertacuida.domain.comun.ZonaHoraria;
 import java.time.Clock;
@@ -61,7 +62,8 @@ public class ConsultarAlertas {
 		PacienteDeAlerta paciente = new PacienteDeAlerta(fila.idPaciente(), fila.nombres(), fila.apellidos(), edad);
 		return new ResumenAlerta(fila.id(), fila.numero(), paciente, fila.tipoEvento(), fila.severidad(),
 				fila.estadoContacto(), fila.estadoAtencion(), fila.responsable(), fila.recepcion(),
-				fila.estadoContacto() == EstadoContacto.SIN_RESPUESTA);
+				fila.estadoContacto() == EstadoContacto.SIN_RESPUESTA, CategoriaAlerta.de(fila.tipoEvento()),
+				fila.simulacro(), fila.contactoEnCurso());
 	}
 
 	/** @return cómo se cerró la alerta; null si sigue abierta */

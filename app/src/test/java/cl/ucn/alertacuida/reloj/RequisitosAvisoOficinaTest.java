@@ -40,20 +40,23 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * Aviso a la oficina PRLAC contra la base real, con el calendario de calendario.yml y un lunes hábil a
- * mediodía. Decisiones del 05-11, 08-11 y 13-11-2026 (docs/alertas.md). Sin Docker se omite.
+ * mediodía. Decisiones del 05-11, 08-11, 13-11 y 16-11-2026 (docs/alertas.md). Sin Docker se omite.
  * <ul>
- * <li>R1 Alerta real en horario laboral: WhatsApp a cada cuenta activa COORDINADOR con teléfono y opt-in
- * vigente. No a cuentas inactivas ni de otros roles.</li>
- * <li>R2 Un coordinador activo sin opt-in vigente (nunca lo dio o lo revocó) recibe un correo en su lugar.</li>
- * <li>R3 Vale para todas las gravedades y también para las alertas técnicas.</li>
+ * <li>R1 Alerta de salud real en horario laboral: correo a cada cuenta activa COORDINADOR y, a la vez,
+ * WhatsApp si tiene teléfono y opt-in vigente (decisión del 16-11-2026). No a cuentas inactivas ni de otros
+ * roles.</li>
+ * <li>R2 Un coordinador activo sin opt-in vigente (nunca lo dio o lo revocó) recibe solo el correo.</li>
+ * <li>R3 Vale para todas las gravedades. Las alertas técnicas no van a la oficina: solo por correo a las
+ * cuentas con recibe_avisos (decisión del 16-11-2026).</li>
  * <li>R4 Una sola vez por alerta y coordinador.</li>
  * <li>R5 No se avisa de simulacros, alertas canceladas o resueltas, ni de alertas recibidas fuera del horario
  * laboral.</li>
  * <li>R6 Si la alerta pasa a grave después del aviso, y eso ocurre en horario laboral, se avisa de nuevo por el
- * mismo canal; el correo dice que pasó a grave, sin nombrar qué se detectó.</li>
+ * mismo modo (correo y WhatsApp); el correo dice que pasó a grave, sin nombrar qué se detectó.</li>
+ * <li>R6b Si llegó fuera del horario laboral (sin primer aviso) y se agrava en horario laboral, se avisa en ese
+ * momento con el texto de agravamiento (decisión del 16-11-2026).</li>
  * <li>R7 Si ya era grave cuando salió el primer aviso, no se repite.</li>
- * <li>R8 Si el WhatsApp falla, sale un correo de respaldo con el mismo propósito; un coordinador con
- * recibe_avisos no recibe dos correos por la misma alerta técnica.</li>
+ * <li>R8 Si el WhatsApp falla, el coordinador no recibe un segundo correo: ya tiene el suyo.</li>
  * <li>R9 La bandeja de WhatsApp entrega el número de la cuenta ya descifrado.</li>
  * </ul>
  */
@@ -119,28 +122,28 @@ class RequisitosAvisoOficinaTest {
 		cuenta("PERSONAL", "ana", true, true, false);
 	}
 
-	/** R1 y R2: WhatsApp al coordinador con opt-in y correo a los que no lo tienen vigente; nada a los demás. */
+	/** R1 y R2: correo a cada coordinador y además WhatsApp al que tiene opt-in; nada a los demás. */
 	@Test
-	void avisaACadaCoordinadorPorSuCanal() {
+	void avisaPorCorreoYWhatsappACadaCoordinador() {
 		UUID alerta = alerta("CAIDA", "MEDIA", false, AHORA.minus(Duration.ofMinutes(5)));
 
 		avisar(AHORA);
 
 		assertThat(avisos(alerta, "WHATSAPP", "AVISO")).containsExactly("whatsapp");
-		assertThat(avisos(alerta, "CORREO", "AVISO")).containsExactlyInAnyOrder("sin-optin", "revocado");
+		assertThat(avisos(alerta, "CORREO", "AVISO")).containsExactlyInAnyOrder("whatsapp", "sin-optin", "revocado");
 	}
 
-	/** R3: una leve y una técnica también se avisan. */
+	/** R3: una leve también se avisa; una técnica no va a la oficina. */
 	@Test
-	void avisaTodasLasGravedadesYLasTecnicas() {
+	void avisaTodasLasGravedadesPeroNoLasTecnicas() {
 		UUID leve = alerta("FC", "LEVE", false, AHORA.minus(Duration.ofMinutes(5)));
 		UUID tecnica = alertaTecnica(AHORA.minus(Duration.ofMinutes(5)));
 
 		avisar(AHORA);
 
 		assertThat(avisos(leve, "WHATSAPP", "AVISO")).containsExactly("whatsapp");
-		assertThat(avisos(tecnica, "WHATSAPP", "AVISO")).containsExactly("whatsapp");
-		assertThat(avisos(tecnica, "CORREO", "AVISO")).containsExactlyInAnyOrder("sin-optin", "revocado");
+		assertThat(avisos(tecnica, "WHATSAPP", "AVISO")).isEmpty();
+		assertThat(avisos(tecnica, "CORREO", "AVISO")).isEmpty();
 	}
 
 	/** R4: otra pasada no repite los avisos. */
@@ -152,7 +155,7 @@ class RequisitosAvisoOficinaTest {
 		avisar(AHORA);
 
 		assertThat(avisos(alerta, "WHATSAPP", "AVISO")).hasSize(1);
-		assertThat(avisos(alerta, "CORREO", "AVISO")).hasSize(2);
+		assertThat(avisos(alerta, "CORREO", "AVISO")).hasSize(3);
 	}
 
 	/** R5: simulacros, canceladas, resueltas y recibidas antes de la jornada no se avisan. */
@@ -188,7 +191,8 @@ class RequisitosAvisoOficinaTest {
 		avisar(AHORA.plusSeconds(15));
 
 		assertThat(avisos(alerta, "WHATSAPP", "AGRAVAMIENTO")).containsExactly("whatsapp");
-		assertThat(avisos(alerta, "CORREO", "AGRAVAMIENTO")).containsExactlyInAnyOrder("sin-optin", "revocado");
+		assertThat(avisos(alerta, "CORREO", "AGRAVAMIENTO")).containsExactlyInAnyOrder("whatsapp", "sin-optin",
+				"revocado");
 		CorreoPendiente correo = bandejaCorreos.pendientes(AHORA).stream()
 				.filter(c -> c.proposito() == Proposito.AGRAVAMIENTO).findFirst().orElseThrow();
 		Mensaje mensaje = plantillas.redactar(correo);
@@ -211,6 +215,27 @@ class RequisitosAvisoOficinaTest {
 		assertThat(avisos(alerta, "WHATSAPP", "AGRAVAMIENTO")).isEmpty();
 	}
 
+	/**
+	 * R6b: una caída recibida antes de la jornada no se avisa, pero si se agrava ya en horario laboral se avisa en
+	 * ese momento, con el texto de agravamiento, a todos los coordinadores por su canal.
+	 */
+	@Test
+	void siLlegoFueraDeHorarioYSeAgravaEnHorarioSeAvisa() {
+		Instant temprano = LocalDate.of(2026, 11, 9).atTime(8, 0).atZone(ZonaHoraria.CHILE).toInstant();
+		UUID alerta = alerta("CAIDA", "MEDIA", false, temprano);
+		avisar(temprano.plus(Duration.ofMinutes(5)));
+		agravar(alerta, temprano.plus(Duration.ofMinutes(40)));
+
+		avisar(temprano.plus(Duration.ofMinutes(45)));
+		avisar(temprano.plus(Duration.ofMinutes(46)));
+
+		assertThat(avisos(alerta, "WHATSAPP", "AVISO")).isEmpty();
+		assertThat(avisos(alerta, "CORREO", "AVISO")).isEmpty();
+		assertThat(avisos(alerta, "WHATSAPP", "AGRAVAMIENTO")).containsExactly("whatsapp");
+		assertThat(avisos(alerta, "CORREO", "AGRAVAMIENTO")).containsExactlyInAnyOrder("whatsapp", "sin-optin",
+				"revocado");
+	}
+
 	/** R7: si se agravó antes del primer aviso, ese aviso ya dice grave y no se repite. */
 	@Test
 	void siYaEraGraveAlAvisarNoSeRepite() {
@@ -226,11 +251,11 @@ class RequisitosAvisoOficinaTest {
 	}
 
 	/**
-	 * R8: sin canal de WhatsApp, el envío falla y sale el correo de respaldo con el mismo propósito; con
-	 * recibe_avisos, el coordinador recibe un solo correo por la alerta técnica.
+	 * R8 y R3: sin canal de WhatsApp el envío falla, pero el coordinador no recibe un segundo correo: ya tiene
+	 * el suyo, con el mismo propósito. La técnica solo le llega por correo a quien tiene recibe_avisos.
 	 */
 	@Test
-	void siElWhatsappFallaSaleElCorreoDeRespaldo() {
+	void siElWhatsappFallaNoSeRepiteElCorreo() {
 		jdbc.sql("UPDATE usuario SET recibe_avisos = true WHERE rut_hash = 'hash-oficina-whatsapp'").update();
 		UUID tecnica = alertaTecnica(AHORA.minus(Duration.ofMinutes(5)));
 		UUID caida = alerta("CAIDA", "MEDIA", false, AHORA.minus(Duration.ofMinutes(30)));
@@ -243,10 +268,11 @@ class RequisitosAvisoOficinaTest {
 				new PoliticaReintentos(List.of()), Clock.fixed(AHORA, ZoneOffset.UTC)).enviar();
 		encolarCorreos();
 
-		assertThat(avisos(tecnica, "CORREO", "AVISO")).containsExactlyInAnyOrder("whatsapp", "sin-optin",
+		assertThat(avisos(tecnica, "WHATSAPP", "AVISO")).isEmpty();
+		assertThat(avisos(tecnica, "CORREO", "AVISO")).containsExactly("whatsapp");
+		assertThat(avisos(caida, "CORREO", "AVISO")).containsExactlyInAnyOrder("whatsapp", "sin-optin", "revocado");
+		assertThat(avisos(caida, "CORREO", "AGRAVAMIENTO")).containsExactlyInAnyOrder("whatsapp", "sin-optin",
 				"revocado");
-		assertThat(avisos(caida, "CORREO", "AVISO")).contains("whatsapp");
-		assertThat(avisos(caida, "CORREO", "AGRAVAMIENTO")).contains("whatsapp");
 	}
 
 	/** R9: el WhatsApp a la cuenta sale con su número descifrado y marcado como aviso al equipo. */

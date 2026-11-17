@@ -12,15 +12,17 @@ import java.util.Map;
  * @param pieEquipo     cierre de los correos al equipo ({pie} en sus cuerpos)
  * @param pieContacto   cierre de los correos al contacto ({pie} en su cuerpo)
  * @param silencioDatos al equipo, cuando un reloj deja de sincronizar
- * @param alertaEquipo  al equipo, por una alerta
+ * @param alertaEquipo  a las cuentas con recibe_avisos, por una alerta técnica
  * @param contacto      a un contacto del paciente
  * @param vigilante     al equipo, cuando una alerta no avanza (vigilante del escalamiento)
- * @param agravamiento  a los coordinadores, cuando una alerta pasa a grave después de su aviso
+ * @param agravamiento  a los coordinadores, cuando una alerta de salud pasa a grave
+ * @param avisoOficina  a cada coordinador, por una alerta de salud
  * @param gravedades    cómo se nombra cada gravedad ({gravedad})
  * @param tecnicas      cómo se nombra cada alerta técnica ({tecnica}), menos el silencio de datos
  */
 public record TextosCorreo(String pieEquipo, String pieContacto, SilencioDatos silencioDatos,
 		AlertaEquipo alertaEquipo, Contacto contacto, Vigilante vigilante, Agravamiento agravamiento,
+		AvisoOficina avisoOficina,
 		Map<Severidad, String> gravedades, Map<TipoEvento, String> tecnicas) {
 
 	/**
@@ -64,13 +66,25 @@ public record TextosCorreo(String pieEquipo, String pieContacto, SilencioDatos s
 	}
 
 	/**
-	 * A los coordinadores cuando una alerta pasa a grave después de su primer aviso. {deQuien} se arma igual
-	 * que en {@link AlertaEquipo}. No nombra qué se detectó: solo que ahora es grave.
+	 * A los coordinadores cuando una alerta de salud pasa a grave. {deQuien} se arma igual que en
+	 * {@link AlertaEquipo}. No nombra qué se detectó: solo que ahora es grave.
 	 *
 	 * @param asunto admite {deQuien}, {folio} y {dashboard}
-	 * @param cuerpo admite {deQuien}, {folio}, {dashboard} y {pie}
+	 * @param cuerpo admite {deQuien}, {folio}, {dashboard} y {pie}; exige {responder}, el enlace para que el
+	 *               coordinador confirme que va
 	 */
 	public record Agravamiento(String asunto, String cuerpo) {
+	}
+
+	/**
+	 * A cada coordinador por una alerta de salud, a la vez que su WhatsApp. {alerta} y {deQuien} se arman igual
+	 * que en {@link AlertaEquipo}.
+	 *
+	 * @param asunto admite {alerta}, {deQuien}, {folio} y {dashboard}
+	 * @param cuerpo admite {alerta}, {deQuien}, {folio}, {dashboard} y {pie}; exige {responder}, el enlace para
+	 *               que el coordinador confirme que va (confirma la alerta y detiene al reloj)
+	 */
+	public record AvisoOficina(String asunto, String cuerpo) {
 	}
 
 }

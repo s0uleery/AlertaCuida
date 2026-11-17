@@ -32,13 +32,17 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class ConsultaAlertasJdbc implements ConsultaAlertas {
 
-	/** Columnas de una alerta, con el nombre de quien la tiene a cargo. */
+	/** Columnas de una alerta, con el nombre de quien la tiene a cargo y el del contacto en curso. */
 	private static final String COLUMNAS = """
 			a.id_alerta, a.numero, p.id_paciente, p.nombres, p.apellidos, p.fecha_nacimiento, a.tipo_evento,
 			e.severidad_actual, e.estado_contacto, e.estado_atencion, r.nombre_profesional AS responsable,
-			a.fecha_hora_recepcion""";
+			a.fecha_hora_recepcion, a.es_simulacro, en_curso.nombre AS contacto_en_curso""";
 
-	/** Una alerta con su estado calculado, su paciente y su atención, si la tiene. */
+	/**
+	 * Una alerta con su estado calculado, su paciente, su atención, si la tiene, y el contacto en curso: el
+	 * último de la lista del paciente al que el reloj pidió avisar (los avisos al equipo no son de la lista).
+	 * Los avisos anteriores a la hora de solicitud (V12) se ordenan por su envío.
+	 */
 	private static final String ORIGEN = """
 			FROM alerta a
 			JOIN alerta_estado e USING (id_alerta)
@@ -46,6 +50,13 @@ public class ConsultaAlertasJdbc implements ConsultaAlertas {
 			JOIN paciente p USING (id_paciente)
 			LEFT JOIN atencion_alerta t USING (id_alerta)
 			LEFT JOIN usuario r ON r.id_usuario = t.id_usuario_responsable
+			LEFT JOIN LATERAL (
+				SELECT c.nombre FROM registro_intento i
+				JOIN contacto_paciente cp ON cp.id_contacto_paciente = i.id_contacto_paciente
+				JOIN contacto c ON c.id_contacto = cp.id_contacto
+				WHERE i.id_alerta = a.id_alerta
+				ORDER BY COALESCE(i.fecha_hora_solicitud, i.fecha_hora_envio) DESC NULLS LAST, i.ronda DESC
+				LIMIT 1) en_curso ON true
 			""";
 
 	private final JdbcClient jdbc;
@@ -166,7 +177,8 @@ public class ConsultaAlertasJdbc implements ConsultaAlertas {
 				Severidad.valueOf(fila.getString("severidad_actual")),
 				EstadoContacto.valueOf(fila.getString("estado_contacto")),
 				EstadoAtencion.valueOf(fila.getString("estado_atencion")), fila.getString("responsable"),
-				instante(fila, "fecha_hora_recepcion"));
+				instante(fila, "fecha_hora_recepcion"), fila.getBoolean("es_simulacro"),
+				cifrado.descifrar(fila.getString("contacto_en_curso"), ColumnaCifrada.CONTACTO_NOMBRE));
 	}
 
 	/** @return la fecha de esa columna, o null */

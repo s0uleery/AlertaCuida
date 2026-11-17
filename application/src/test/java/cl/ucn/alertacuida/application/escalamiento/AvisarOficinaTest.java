@@ -25,10 +25,11 @@ import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
 
 /**
- * Aviso a la oficina PRLAC, sin base de datos. Decisiones del 05-11, 08-11 y 13-11-2026 (docs/alertas.md):
+ * Aviso a la oficina PRLAC, sin base de datos. Decisiones del 05-11, 08-11, 13-11 y 16-11-2026 (docs/alertas.md):
  * cada alerta se avisa a los coordinadores solo si ocurrió en horario laboral (fuera de él no se envía nada,
  * ni al empezar la jornada); si se agrava a grave después del aviso, se avisa de nuevo, solo si el
- * agravamiento ocurrió en horario laboral. A quién y por qué canal lo decide la base (puerto
+ * agravamiento ocurrió en horario laboral, y también si la alerta llegó fuera de horario y se agrava en él (sin
+ * repetir si el aviso sale en la misma pasada). A quién y por qué canal lo decide la base (puerto
  * {@link AvisosOficina}); aquí se prueban el horario, la ventana y que una falla no detenga a los demás.
  */
 class AvisarOficinaTest {
@@ -87,6 +88,31 @@ class AvisarOficinaTest {
 		assertThat(avisos.encolados).containsExactly(otro);
 	}
 
+	/**
+	 * Si la alerta se agravó antes de que saliera su primer aviso, ese aviso ya dice grave: en la misma pasada no
+	 * se encola también el agravamiento de esa alerta para esa cuenta.
+	 */
+	@Test
+	void siElAvisoSaleEnLaMismaPasadaNoSeEncolaElAgravamiento() {
+		AvisoOficina aviso = avisos.agregar(Proposito.AVISO, chile(11, 50));
+		avisos.agravamientoDe(aviso, chile(11, 55));
+
+		avisar(chile(12, 0));
+
+		assertThat(avisos.encolados).containsExactly(aviso);
+	}
+
+	/** Si el aviso de la misma alerta no sale (llegó fuera de horario), el agravamiento en horario sí se encola. */
+	@Test
+	void siElAvisoNoSaleSeEncolaElAgravamiento() {
+		AvisoOficina antesDeLaJornada = avisos.agregar(Proposito.AVISO, chile(8, 0));
+		AvisoOficina agravamiento = avisos.agravamientoDe(antesDeLaJornada, chile(8, 40));
+
+		avisar(chile(8, 45));
+
+		assertThat(avisos.encolados).containsExactly(agravamiento);
+	}
+
 	/** Corre el aviso a la oficina con el reloj en ese momento. */
 	private void avisar(Instant ahora) {
 		Transacciones enTransaccion = Supplier::get;
@@ -111,6 +137,13 @@ class AvisarOficinaTest {
 					momento);
 			candidatos.add(aviso);
 			return aviso;
+		}
+
+		AvisoOficina agravamientoDe(AvisoOficina aviso, Instant momento) {
+			AvisoOficina agravamiento = new AvisoOficina(aviso.idAlerta(), aviso.idUsuario(),
+					Proposito.AGRAVAMIENTO, aviso.canal(), momento);
+			candidatos.add(agravamiento);
+			return agravamiento;
 		}
 
 		@Override

@@ -18,6 +18,13 @@ export type TipoEvento =
   | 'RELOJ_NO_PUESTO'
   | 'EXCESO_ALERTAS';
 
+/** A quién está avisando el reloj, o cómo terminó ese recorrido. Lo calcula la vista alerta_estado. */
+export type EstadoContacto =
+  'RECIBIDA' | 'AVISANDO_CONTACTO' | 'CONFIRMADA' | 'SIN_RESPUESTA' | 'RESUELTA' | 'PENDIENTE_DIA_HABIL' | 'CANCELADA';
+
+/** De qué habla la alerta: la salud de la persona o el reloj. */
+export type CategoriaAlerta = 'SALUD' | 'TECNICA';
+
 /** Lo que ha hecho el equipo PRLAC con la alerta. */
 export type EstadoAtencion = 'SIN_ASIGNAR' | 'EN_ATENCION' | 'EN_SEGUIMIENTO' | 'RESUELTA';
 
@@ -34,9 +41,18 @@ export interface ResumenAlerta {
   };
   tipoEvento: TipoEvento;
   severidad: Severidad;
+  estadoContacto: EstadoContacto;
   estadoAtencion: EstadoAtencion;
   /** Nombre de quien tomó el caso; null si nadie */
   responsable: string | null;
   /** Instante ISO en UTC en que llegó al servidor */
   recepcion: string;
+  /** true si nadie de la lista confirmó y sigue abierta: va primero en la lista */
+  prioridadMaxima: boolean;
+  /** Salud o técnica: decide la pestaña */
+  categoria: CategoriaAlerta;
+  /** true si es un ensayo, no una emergencia real */
+  simulacro: boolean;
+  /** Último contacto del paciente al que el reloj pidió avisar; null si ninguno */
+  contactoEnCurso: string | null;
 }

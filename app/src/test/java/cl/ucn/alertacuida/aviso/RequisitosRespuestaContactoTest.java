@@ -35,7 +35,9 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * del WhatsApp"). Sin Docker se omite.
  * <ul>
  * <li>R1 Las rutas son públicas: el contacto no tiene cuenta. El enlace del correo lleva un token que
- * sirve con ellas; uno inventado o el de un aviso a una cuenta del equipo responde 400.</li>
+ * sirve con ellas; uno inventado o el de un correo del vigilante al equipo responde 400. El aviso a un
+ * coordinador por una alerta de salud sí sirve (decisión del 16-11-2026; lo prueba
+ * RequisitosEscalamientoCompletoTest).</li>
  * <li>R2 Abrir el enlace no registra nada: muestra folio, alias, tipo, gravedad y hora.</li>
  * <li>R3 "Voy" confirma la alerta y deja el aviso ALERTA_CONFIRMADA para el reloj; "No puedo" queda
  * registrado sin confirmar la alerta.</li>
@@ -112,10 +114,10 @@ class RequisitosRespuestaContactoTest {
 		responder("inventado.abc", "VOY_EN_CAMINO").andExpect(status().isBadRequest());
 	}
 
-	/** R1: el token de un aviso a una cuenta del equipo no sirve: solo un contacto del paciente confirma. */
+	/** R1: el token del correo del vigilante no sirve: ese correo no pide confirmar. */
 	@Test
-	void avisoAlEquipoNoSirve() throws Exception {
-		consultar(tokenDelCorreo(correoAlEquipo())).andExpect(status().isBadRequest());
+	void elCorreoDelVigilanteNoSirve() throws Exception {
+		consultar(tokenDelCorreo(correoDelVigilante())).andExpect(status().isBadRequest());
 	}
 
 	/** R3: "voy" confirma la alerta y deja el aviso para que el reloj deje de escalar. */
@@ -247,8 +249,8 @@ class RequisitosRespuestaContactoTest {
 				.query(UUID.class).single();
 	}
 
-	/** @return un aviso por correo, ya enviado, a una cuenta del equipo (contacto interno) */
-	private UUID correoAlEquipo() {
+	/** @return el correo del vigilante, ya enviado, a una cuenta del equipo (contacto interno) */
+	private UUID correoDelVigilante() {
 		UUID cuenta = jdbc.sql("""
 				INSERT INTO usuario (codigo_rol, rut, rut_hash, nombre_profesional, correo, hash_contrasena, activo)
 				VALUES ('PERSONAL', 'cifrado', 'hash-respuesta-ana', 'Ana', 'ana@muni.cl', 'clave', true)
@@ -257,8 +259,9 @@ class RequisitosRespuestaContactoTest {
 		UUID interno = jdbc.sql("INSERT INTO contacto (id_usuario) VALUES (:u) RETURNING id_contacto")
 				.param("u", cuenta).query(UUID.class).single();
 		return jdbc.sql("""
-				INSERT INTO registro_intento (event_id, id_alerta, id_contacto_interno, canal, fecha_hora_envio)
-				VALUES (gen_random_uuid(), :a, :i, 'CORREO', :t) RETURNING id_intento""")
+				INSERT INTO registro_intento (event_id, id_alerta, id_contacto_interno, canal, proposito,
+					fecha_hora_envio)
+				VALUES (gen_random_uuid(), :a, :i, 'CORREO', 'VIGILANTE', :t) RETURNING id_intento""")
 				.param("a", alerta).param("i", interno).param("t", Timestamp.from(DETECCION.plusSeconds(40)))
 				.query(UUID.class).single();
 	}

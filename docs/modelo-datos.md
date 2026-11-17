@@ -270,6 +270,7 @@ Las tablas las crea Flyway con las migraciones de [`adapters/src/main/resources/
 | `V11__correo_y_contacto_interno` | Contacto interno (`contacto.id_usuario`), avisos al equipo y reintentos en `registro_intento`, sus disparadores, y la vista `alerta_estado` sin contar los avisos al equipo |
 | `V12__vigilante_del_escalamiento` | `registro_intento.fecha_hora_solicitud` (cuándo se pidió o encoló cada aviso) y `registro_intento.proposito` (`AVISO` o `VIGILANTE`), que entra en la unicidad de los avisos al equipo |
 | `V13__aviso_de_agravamiento` | Propósito `AGRAVAMIENTO` en `registro_intento`: el segundo aviso a los coordinadores cuando la alerta pasa a grave |
+| `V14__respuesta_de_coordinadores` | La respuesta también se guarda en el aviso a la oficina y en el de agravamiento a un coordinador: su "Voy en camino" confirma la alerta |
 
 Una migración ya aplicada no se edita: los cambios van en una migración nueva (`V7__...`).
 
@@ -288,7 +289,7 @@ Resumen de lo que DBML no dibuja (está dentro de cada tabla en las migraciones 
   - rangos: batería 0–100, prioridad ≥ 1, cantidades e intentos ≥ 0, ronda 1 o 2;
   - `USUARIO`: activo solo con contraseña, correo en minúsculas;
   - `CONTACTO`: el externo con nombre y algún canal, el interno sin datos propios;
-  - `REGISTRO_INTENTO`: un solo destino (vínculo o contacto interno), ronda solo con vínculo, respuesta solo de un vínculo, reintentos ≥ 0, y pendiente de envío solo si no salió ni falló.
+  - `REGISTRO_INTENTO`: un solo destino (vínculo o contacto interno), ronda solo con vínculo, respuesta solo de un vínculo o del aviso a la oficina o de agravamiento a un coordinador (V14), reintentos ≥ 0, y pendiente de envío solo si no salió ni falló.
 - **Disparadores (V11)**, que responden con el código de un `CHECK`: un contacto interno no entra en `CONTACTO_PACIENTE`, un contacto no cambia de interno a externo, y `REGISTRO_INTENTO.id_contacto_interno` apunta a un contacto interno. Son reglas entre tablas que un `CHECK` no puede revisar.
 - **Bandeja de salida:** índice parcial `registro_intento (fecha_hora_proximo_envio) WHERE fecha_hora_proximo_envio IS NOT NULL`, y único `(id_alerta, id_contacto_interno, canal)` para no repetir un aviso al equipo.
 - **Vista** `ALERTA_ESTADO`, con las dos tablas de estados de arriba.

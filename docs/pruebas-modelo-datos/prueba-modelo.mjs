@@ -647,8 +647,10 @@ await rechaza('Aviso a un vínculo y a un contacto interno a la vez',
   aviso(MEDIA_ROSA, R2, 2, ', id_contacto_interno', `, '${INTERNO_ANA}'`, 'CORREO'), 'check');
 await rechaza('Aviso sin destino',
   `INSERT INTO "REGISTRO_INTENTO"(id_intento, event_id, id_alerta, canal) VALUES (gen_random_uuid(), gen_random_uuid(), '${MEDIA_ROSA}', 'CORREO')`, 'check');
-await rechaza('Respuesta "Voy en camino" de una cuenta del equipo (solo confirma un contacto del paciente)',
-  avisoInterno(MEDIA_ROSA, INTERNO_ANA, ', respuesta, fecha_hora_respuesta', `, 'VOY_EN_CAMINO', now()`), 'check');
+await acepta('Un coordinador responde el aviso a la oficina (V14: su "Voy en camino" también confirma)',
+  avisoInterno(GRAVE_ROSA, INTERNO_ANA, ', respuesta, fecha_hora_respuesta', `, 'NO_PUEDO', now()`));
+await rechaza('Respuesta en el correo del vigilante (no pide confirmar)',
+  avisoInterno(MEDIA_ROSA, INTERNO_ANA, ', proposito, respuesta, fecha_hora_respuesta', `, 'VIGILANTE', 'VOY_EN_CAMINO', now()`), 'check');
 await rechaza('Reintentos negativos', avisoInterno(MEDIA_ROSA, INTERNO_ANA, ', reintentos', ', -1'), 'check');
 await rechaza('Pendiente de envío pero ya enviado',
   aviso(MEDIA_ROSA, R2, 2, ', fecha_hora_proximo_envio', ', now()', 'CORREO'), 'check');

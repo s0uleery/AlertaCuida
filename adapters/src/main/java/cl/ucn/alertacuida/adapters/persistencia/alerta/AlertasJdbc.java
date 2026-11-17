@@ -74,22 +74,27 @@ public class AlertasJdbc implements Alertas {
 				.optional();
 	}
 
-	/** El contacto que confirmó es el primero que respondió "Voy en camino". */
+	/**
+	 * El contacto que confirmó es el primero que respondió "Voy en camino": un vínculo de la lista del paciente o
+	 * un coordinador (su contacto interno).
+	 */
 	@Override
 	public EstadoAlerta estado(UUID idAlerta) {
 		return jdbc.sql("""
-				SELECT a.event_id, e.estado_contacto, e.severidad_actual, c.id_contacto_paciente,
+				SELECT a.event_id, e.estado_contacto, e.severidad_actual, c.id_contacto,
 					c.fecha_hora_respuesta
 				FROM alerta a
 				JOIN alerta_estado e USING (id_alerta)
 				LEFT JOIN LATERAL (
-					SELECT i.id_contacto_paciente, i.fecha_hora_respuesta FROM registro_intento i
+					SELECT COALESCE(i.id_contacto_paciente, i.id_contacto_interno) AS id_contacto,
+						i.fecha_hora_respuesta
+					FROM registro_intento i
 					WHERE i.id_alerta = a.id_alerta AND i.respuesta = 'VOY_EN_CAMINO'
 					ORDER BY i.fecha_hora_respuesta LIMIT 1) c ON true
 				WHERE a.id_alerta = :id""")
 				.param("id", idAlerta)
 				.query((fila, n) -> {
-					UUID contacto = fila.getObject("id_contacto_paciente", UUID.class);
+					UUID contacto = fila.getObject("id_contacto", UUID.class);
 					ConfirmacionContacto confirmacion = contacto == null ? null
 							: new ConfirmacionContacto(contacto, fila.getTimestamp("fecha_hora_respuesta").toInstant());
 					return EstadoAlerta.de(fila.getObject("event_id", UUID.class),

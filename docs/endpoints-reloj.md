@@ -222,6 +222,7 @@ El reloj la consulta antes de avisar al siguiente contacto, para saber si alguie
 ```
 - `estado`: `RECIBIDA`, `AVISANDO_CONTACTO`, `CONFIRMADA`, `SIN_RESPUESTA`, `RESUELTA`, `PENDIENTE_DIA_HABIL` o `CANCELADA`.
 - **Si `detenerEscalamiento` es `true`** (confirmada, resuelta o cancelada), el reloj deja de avisar.
+- `confirmadaPor.idContacto` es el contacto que confirmó. Puede ser un coordinador del PRLAC, que confirma desde el aviso a la oficina y no está en la lista del reloj (16-11-2026, pregunta 12 de [api-reloj.md](api-reloj.md)).
 - 404 `ALERTA_DESCONOCIDA` si este reloj no envió una alerta con ese `eventId`.
 
 ## `GET /api/reloj/v1/configuracion`

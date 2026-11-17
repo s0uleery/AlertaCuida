@@ -286,7 +286,7 @@ class ModeloDatosTest {
 	private DynamicContainer estructura() {
 		return grupo("1. Estructura de la base (migraciones)",
 			c.vale("Migraciones aplicadas por Flyway", """
-					SELECT count(*) n FROM flyway_schema_history WHERE success AND version IS NOT NULL""", 13),
+					SELECT count(*) n FROM flyway_schema_history WHERE success AND version IS NOT NULL""", 14),
 			c.vale("Cantidad de tablas", """
 					SELECT count(*) n FROM information_schema.tables WHERE table_schema = 'public'
 					AND table_type = 'BASE TABLE' AND table_name <> 'flyway_schema_history'""", 30),
@@ -1177,9 +1177,12 @@ class ModeloDatosTest {
 			c.rechaza("Aviso sin destino", """
 					INSERT INTO registro_intento (id_intento, event_id, id_alerta, canal)
 					VALUES (gen_random_uuid(), gen_random_uuid(), '{MEDIA_ROSA}', 'CORREO')""", CHECK),
-			c.rechaza("Respuesta \"Voy en camino\" de una cuenta del equipo (solo confirma un contacto del paciente)",
-					avisoInterno("MEDIA_ROSA", "INTERNO_ANA", ", respuesta, fecha_hora_respuesta",
-							", 'VOY_EN_CAMINO', now()"), CHECK),
+			c.acepta("Un coordinador responde el aviso a la oficina (V14: su \"Voy en camino\" también confirma)",
+					avisoInterno("GRAVE_ROSA", "INTERNO_ANA", ", respuesta, fecha_hora_respuesta",
+							", 'NO_PUEDO', now()")),
+			c.rechaza("Respuesta en el correo del vigilante (no pide confirmar)",
+					avisoInterno("MEDIA_ROSA", "INTERNO_ANA", ", proposito, respuesta, fecha_hora_respuesta",
+							", 'VIGILANTE', 'VOY_EN_CAMINO', now()"), CHECK),
 			c.rechaza("Reintentos negativos",
 					avisoInterno("MEDIA_ROSA", "INTERNO_ANA", ", reintentos", ", -1"), CHECK),
 			c.rechaza("Pendiente de envío pero ya enviado",

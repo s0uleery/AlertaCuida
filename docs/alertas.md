@@ -1,6 +1,6 @@
 # Alertas: cómo funcionan y qué se decidió
 
-Resumen de las alertas a la fecha (10-11-2026): qué las origina, quién hace cada cosa, qué reglas siguen, dónde se cambia cada valor y qué decisiones hay detrás.
+Resumen de las alertas a la fecha (16-11-2026): qué las origina, quién hace cada cosa, qué reglas siguen, dónde se cambia cada valor y qué decisiones hay detrás.
 
 Más detalle: [backend](backend.md), [modelo de datos](modelo-datos.md), [contrato con el reloj](api-reloj.md), [endpoints del reloj](endpoints-reloj.md) y [cronograma](cronograma.md).
 
@@ -14,7 +14,7 @@ El reloj y el servidor son dos sistemas aparte, y la app del reloj está fuera d
 | Vibra 30 segundos para que el paciente pueda cancelar | Guarda cada alerta sin descartar ninguna y marca lo que no calza |
 | Elige el contacto por prioridad y horario, espera y pasa al siguiente | Envía el WhatsApp o el correo que pide el reloj (la clave de Meta queda solo aquí) |
 | Al terminar la lista, la repite una vez e informa `SIN_RESPUESTA` | Recibe la respuesta del contacto, avisa al reloj por FCM y registra el recorrido |
-| | Crea las alertas técnicas y avisa a la oficina PRLAC |
+| | Avisa a la oficina PRLAC de las alertas de salud, crea las técnicas y las avisa por correo |
 
 Nadie llama automáticamente al SAMU. En las alertas graves, el mensaje le indica al contacto que llame al 131.
 
@@ -34,7 +34,7 @@ Nadie llama automáticamente al SAMU. En las alertas graves, el mensaje le indic
 | `RELOJ_NO_PUESTO` | Sigue sin ponérselo durante el día | Servidor | `LEVE` |
 | `EXCESO_ALERTAS` | Demasiadas alertas de un reloj, posible falla | Solo el servidor | `LEVE` |
 
-Las clínicas (de `CAIDA` a `BOTON_AYUDA`) escalan a los contactos del paciente. Las técnicas (las cuatro últimas) avisan a la oficina PRLAC.
+Las de salud (de `CAIDA` a `BOTON_AYUDA`) escalan a los contactos del paciente, y además se avisan a la oficina PRLAC. Las técnicas (las cuatro últimas) solo se avisan por correo a las cuentas con `recibe_avisos`. En el dashboard van en pestañas separadas (Salud y Reloj).
 
 El servidor solo puede crear alertas técnicas y simulacros: lo impide un `CHECK` de la base. Por eso hoy no puede crear una `INACTIVIDAD`. El contrato todavía permite que el reloj envíe `BATERIA_BAJA` y `RELOJ_NO_PUESTO` (pregunta 2 de [api-reloj.md](api-reloj.md)).
 
@@ -132,15 +132,16 @@ El vigilante (`VigilarRelojes`) revisa cada 5 minutos todos los vínculos vigent
 
 ## Aviso a la oficina PRLAC
 
-Definido el 05-11-2026, confirmado para las alertas técnicas el 08-11-2026 y programado el 13-11-2026 (2.10.5). Mientras no esté el canal de WhatsApp (2.9), los avisos salen por el correo de respaldo. Detalle técnico en [backend.md](backend.md#escalamiento-dirigido-por-el-reloj).
+Definido el 05-11-2026, programado el 13-11-2026 y cambiado el 16-11-2026 en la revisión del flujo. Detalle técnico en [backend.md](backend.md#escalamiento-dirigido-por-el-reloj).
 
-- WhatsApp a la vez, en paralelo al escalamiento del reloj, a todas las cuentas activas con rol `COORDINADOR` que tengan teléfono y opt-in vigente, sin opción de apagarlo.
-- Un coordinador activo sin opt-in vigente (nunca lo dio o lo revocó) recibe un correo en su lugar.
+- **Solo alertas de salud.** Las técnicas no van a la oficina: se avisan por correo a las cuentas con `recibe_avisos` (ver abajo).
+- A todas las cuentas activas con rol `COORDINADOR`, a la vez, en paralelo al escalamiento del reloj y sin opción de apagarlo. A cada una le llegan **un correo y, si tiene teléfono y opt-in vigente, también un WhatsApp**.
+- **El coordinador puede confirmar.** El correo lleva el enlace a `/responder` (texto `aviso-oficina` en `correos.yml`), y el WhatsApp tendrá sus botones con la 2.9. La primera respuesta "Voy en camino" de un coordinador, por cualquier canal, confirma la alerta y detiene al reloj, igual que la de un contacto del paciente. El reloj recibe en `confirmadaPor.idContacto` el contacto interno del coordinador, que no está en su lista.
+- Si la alerta pasa a grave después del aviso, se avisa de nuevo de la misma forma (correo con enlace y WhatsApp), solo si el agravamiento ocurrió en horario laboral. El texto dice "pasó a grave" sin nombrar qué se detectó (texto `agravamiento`). Si ya era grave cuando salió el primer aviso, no se repite.
+- Si la alerta llegó fuera de horario (sin primer aviso) y se agrava en horario laboral, se avisa en ese momento con el texto de agravamiento (16-11-2026).
 - No se avisa de simulacros ni de alertas canceladas o resueltas.
-- Si la alerta pasa a grave después del aviso, se avisa de nuevo, solo si el agravamiento ocurrió en horario laboral. El correo dice "pasó a grave" sin nombrar qué se detectó (texto `agravamiento` en `correos.yml`). Si ya era grave cuando salió el primer aviso, no se repite.
-- Solo en horario laboral y para todas las gravedades. Fuera de horario no se envía nada, ni siquiera al empezar la jornada: la alerta queda en el dashboard.
-- Si un WhatsApp falla, se envía un correo de respaldo.
-- Las demás cuentas reciben correo solo con `recibe_avisos`, que está apagado por defecto en las cuentas nuevas. Lo cambia el administrador en Administración > Perfiles (interruptor "Avisos técnicos") o al crear la cuenta.
+- Solo en horario laboral y para todas las gravedades. Fuera de horario no se envía nada, ni siquiera al empezar la jornada: la alerta queda en el dashboard. Tampoco se avisa al empezar la jornada de una leve que esperó el día hábil (16-11-2026).
+- Si el WhatsApp falla, no sale otro correo: el coordinador ya tiene el suyo.
 - Se define por rol, nunca con una cantidad fija de coordinadores.
 
 ### Correo institucional
@@ -148,17 +149,18 @@ Definido el 05-11-2026, confirmado para las alertas técnicas el 08-11-2026 y pr
 Programado el 10-11-2026. Detalle técnico en [backend.md](backend.md#correo-institucional).
 
 - **Técnicas y de salud van separadas.** A quién se avisa de una alerta de salud lo decide el reloj, que recorre los contactos del paciente; `recibe_avisos` no aplica a ellas. Las técnicas hablan del reloj y las avisa el servidor al equipo. La lista está en `TipoEvento.tecnicas()`.
-- **A quién y cuándo:** a las cuentas activas con `recibe_avisos`, de cualquier rol (los coordinadores también, además de su WhatsApp), por cada alerta técnica, solo si ocurrió en horario hábil. No se avisa de simulacros ni de alertas resueltas.
+- **A quién y cuándo:** a las cuentas activas con `recibe_avisos`, de cualquier rol (también los coordinadores: es su única vía para las técnicas), por cada alerta técnica, solo si ocurrió en horario hábil. No se avisa de simulacros ni de alertas resueltas. `recibe_avisos` está apagado por defecto y lo cambia el administrador en Administración > Perfiles o al crear la cuenta.
 - **Respaldo de WhatsApp:** cada WhatsApp fallido, a un contacto del paciente o a una cuenta del equipo, genera un correo al mismo destino, si tiene correo, a cualquier hora.
 - **Reintentos:** a los 1, 5 y 15 minutos; después queda fallido, con el motivo, en `registro_intento`.
 - **Contenido:** sin datos clínicos. Va el alias del paciente o, si no tiene, el folio de la alerta. Al contacto de una alerta grave se le pide llamar al 131. Los textos se editan en `app/src/main/resources/correos.yml`, sin tocar código; un marcador mal escrito impide arrancar el backend.
 - **Importante:** las alertas graves salen marcadas como importantes (`Importance: High` y `X-Priority: 1`). Outlook lo muestra; Gmail suele decidir por su cuenta.
 - **Respuesta por correo (hecha el 12-11-2026):** el correo al contacto lleva **un solo enlace** a la página pública `/responder` del dashboard, que muestra la alerta (alias o folio, tipo, gravedad y hora; en una grave, el 131) y dos botones, "Confirmo que voy" y "No puedo asistir", que cuentan igual que los botones del WhatsApp. No se usan acuses de lectura: casi siempre se bloquean.
   - **La respuesta se registra al presionar el botón**, no al abrir el enlace: Gmail y Outlook abren enlaces solos para revisarlos.
-  - El enlace lleva un token firmado por el servidor (HMAC con `RESPUESTA_CLAVE`) después de `#`, así que no se guarda en la base ni llega a los registros del servidor. Solo sirve para correos a contactos del paciente, no a cuentas del equipo.
+  - El enlace lleva un token firmado por el servidor (HMAC con `RESPUESTA_CLAVE`) después de `#`, así que no se guarda en la base ni llega a los registros del servidor. Sirve para los correos a contactos del paciente y para el aviso a la oficina y el de agravamiento a un coordinador.
   - **Vale solo la primera respuesta.** Si la alerta fue resuelta o cancelada, no se registra y la página lo dice. Si otro contacto ya confirmó o el reloj terminó la lista sin respuesta, se registra igual.
   - "Voy" confirma la alerta y deja el aviso `ALERTA_CONFIRMADA` al reloj para que deje de escalar. "No puedo" queda registrado y el reloj sigue con el siguiente.
-  - Hoy el correo al contacto solo sale como respaldo de un WhatsApp fallido; cuando exista la solicitud de aviso del reloj (2.10.2), también saldrá cuando el reloj lo pida por correo.
+  - El correo al contacto sale cuando el reloj pide avisarle por correo, o como respaldo de su WhatsApp fallido.
+  - El aviso a la oficina y el de agravamiento a los coordinadores también llevan el enlace (16-11-2026). El correo del vigilante y los de las técnicas no lo llevan: no piden confirmar.
 - **Registro:** cada correo queda en `registro_intento`. Las cuentas del equipo figuran como **contacto interno**, que es solo un enlace a su cuenta y nunca entra en la lista que recorre el reloj. Estos avisos no cambian el estado de contacto de la alerta.
 
 ## Estado y cierre
@@ -169,7 +171,7 @@ El estado no se guarda: se calcula con la vista `ALERTA_ESTADO`. `ALERTA` es la 
 |---|---|
 | `CANCELADA` | El paciente la canceló |
 | `RESUELTA` | La atención tiene fecha de cierre |
-| `CONFIRMADA` | Un contacto respondió "Voy en camino" |
+| `CONFIRMADA` | Un contacto del paciente o un coordinador respondió "Voy en camino" |
 | `SIN_RESPUESTA` | El reloj terminó la lista dos veces |
 | `AVISANDO_CONTACTO` | Hay al menos un aviso |
 | `PENDIENTE_DIA_HABIL` | Leve fuera de horario, a la espera del día hábil |
@@ -207,6 +209,8 @@ Los de `application.properties` requieren reiniciar el backend.
 | Texto de los correos | Ver arriba | `app/src/main/resources/correos.yml` |
 | Horario hábil y feriados | Ver arriba | `app/src/main/resources/calendario.yml` |
 | Gravedad de cada técnica | Tabla de tipos | Código de cada regla (`ReglaSilencioDatos`, `ReglaBateriaBaja`, `ReglaRelojNoPuesto`) y `RecibirAlerta` |
+| Atraso del semáforo de relojes (amarillo) | Más de 2 h 30 min sin sincronizar | `alertacuida.relojes.atraso` |
+| Aviso de plan de datos por vencer (semáforo) | 30 días | `alertacuida.relojes.aviso-plan-dias` |
 
 ## Decisiones
 
@@ -235,7 +239,7 @@ Los de `application.properties` requieren reiniciar el backend.
 | 08-11-2026 | Reloj no puesto: 2 sincronizaciones seguidas, solo de día | Carga nocturna | Confirmada |
 | 08-11-2026 | Batería baja: 2 sincronizaciones seguidas bajo 20 % | Confirma que el estado persiste, con margen para reaccionar | Confirmada |
 | 08-11-2026 | Las tres técnicas se cierran solas al volver a la normalidad | | Confirmada |
-| 08-11-2026 | Las alertas técnicas siguen la misma regla: WhatsApp a los coordinadores, con correo de respaldo | Aclara el cronograma, que aún decía solo correo | Confirmada |
+| 08-11-2026 | Las alertas técnicas siguen la misma regla: WhatsApp a los coordinadores, con correo de respaldo | Aclara el cronograma, que aún decía solo correo | Reemplazada el 16-11 (técnicas solo por correo a `recibe_avisos`) |
 | 08-11-2026 | Tras un cierre a mano no se crea otra alerta hasta que el reloj se normalice y el problema reaparezca | Evita repetir el WhatsApp a todos los coordinadores | Confirmada |
 | 08-11-2026 | Las técnicas leves fuera de horario quedan pendientes para el día hábil | Las alertas siempre deben responderse, aunque sea con días de retraso | Confirmada |
 | 08-11-2026 | Una técnica leve pendiente del día hábil también se cierra sola si el reloj se normaliza | El problema ya se resolvió y no deja trabajo al equipo | Confirmada |
@@ -246,10 +250,10 @@ Los de `application.properties` requieren reiniciar el backend.
 | 10-11-2026 | Sin alias, el mensaje usa el folio de la alerta | | Confirmada |
 | 10-11-2026 | Correo con Spring Mail; pruebas con GreenMail y Mailpit en local | Ningún correo real en desarrollo | Confirmada |
 | 10-11-2026 | `recibe_avisos` es solo para las alertas técnicas; las de salud las enruta el reloj | Separar técnicas de salud: el reloj decide a quién avisar | Confirmada |
-| 10-11-2026 | Los coordinadores con `recibe_avisos` también reciben el correo, además del WhatsApp | | Confirmada |
+| 10-11-2026 | Los coordinadores con `recibe_avisos` también reciben el correo, además del WhatsApp | | Reemplazada el 16-11 (las técnicas ya no van por WhatsApp) |
 | 10-11-2026 | El respaldo de WhatsApp sale para cualquier alerta y a cualquier hora, si el destino tiene correo | Un aviso que no llegó debe intentar otra vía | Sin confirmar |
 | 10-11-2026 | Solo se avisa lo ocurrido en la última hora | No avisar de alertas viejas tras encender `recibe_avisos` o tras una caída del servidor | Sin confirmar |
-| 10-11-2026 | Solo un contacto del paciente puede confirmar ("Voy en camino") | El estado que consulta el reloj depende del contacto que confirmó | Sin confirmar |
+| 10-11-2026 | Solo un contacto del paciente puede confirmar ("Voy en camino") | El estado que consulta el reloj depende del contacto que confirmó | Reemplazada el 16-11 (también confirma un coordinador) |
 | 11-11-2026 | Resolver deja pendiente el aviso FCM hasta que exista el envío | No perder el aviso de las alertas resueltas antes de tener Firebase | Confirmada |
 | 11-11-2026 | Resuelve cualquier cuenta con `ALERTAS:EDITAR`; sin responsable, quien resuelve queda a cargo | Una emergencia no se traba porque el responsable no esté | Confirmada |
 | 11-11-2026 | Observaciones obligatorias al resolver, también en las técnicas | | Confirmada |
@@ -279,6 +283,13 @@ Los de `application.properties` requieren reiniciar el backend.
 | 13-11-2026 | Aviso a la oficina: no se avisa de simulacros | Igual que el correo de `recibe_avisos` | Confirmada |
 | 13-11-2026 | Aviso a la oficina: un coordinador sin opt-in vigente recibe correo en su lugar | Que a la oficina le llegue siempre | Confirmada |
 | 13-11-2026 | Aviso a la oficina: si la alerta pasa a grave después del aviso, se avisa de nuevo (propósito `AGRAVAMIENTO`, V13), con texto propio "pasó a grave" | | Confirmada |
+| 16-11-2026 | Aviso a la oficina: si la alerta llegó fuera de horario y se agrava en horario laboral, se avisa al agravarse (texto `agravamiento`) | | Confirmada |
+| 16-11-2026 | Aviso a la oficina solo por alertas de salud, por correo y además WhatsApp (si tiene opt-in) a cada coordinador, también al agravarse | Que el coordinador reciba siempre el aviso y pueda responder | Confirmada |
+| 16-11-2026 | La primera respuesta "Voy en camino" de un coordinador, por cualquier canal, confirma la alerta y detiene al reloj; `confirmadaPor.idContacto` es su contacto interno (V14) | El coordinador figura como un contacto más | Confirmada; avisar a quien desarrolla el reloj |
+| 16-11-2026 | Alertas técnicas: solo correo a las cuentas con `recibe_avisos`, sin WhatsApp | | Confirmada |
+| 16-11-2026 | Una leve que esperó el día hábil no se avisa a la oficina al empezar la jornada; queda en el dashboard | | Confirmada |
+| 16-11-2026 | En la lista de alertas, los simulacros aparecen con la etiqueta "Simulacro"; las canceladas no aparecen | | Confirmada |
+| 16-11-2026 | Cuando nadie responde (`SIN_RESPUESTA`), que el reloj vuelva a recorrer la lista | El escalamiento de salud lo decide el reloj | Por definir con quien desarrolla el reloj |
 | 13-11-2026 | "Medias y graves destacadas en el dashboard" (2.10.5) se hace con la lista de alertas (3.4.2) | | Confirmada |
 
 ## Qué falta
@@ -286,23 +297,23 @@ Los de `application.properties` requieren reiniciar el backend.
 **Por programar en el servidor** (tareas del [cronograma](cronograma.md)):
 
 - Mostrar en el dashboard los correos fallidos (hoy quedan en `registro_intento`).
-- Crear el proyecto de Firebase y probar los avisos con Firebase y el simulador de reloj (2.3).
 - Red de seguridad sobre las lecturas (2.7) y simulacro (2.8).
-- Canal de WhatsApp (2.9) y lo que falta del escalamiento del lado del servidor (2.10).
-- Destacar las alertas medias y graves en la lista de alertas (3.4.2).
-- Pantalla de alertas y discrepancias (3.4). Hoy las alertas solo se consultan y atienden por la API.
+- Simulador de contactos (0.9) y canal de WhatsApp (2.9), con los botones que confirman, también para los coordinadores; con eso, la confirmación por webhook de la 2.10.4.
+- Ficha de la alerta con su línea de tiempo y las acciones de asumir y resolver (3.4.3 y 3.4.4). La lista de alertas (3.4.2) ya está.
 - Registrar notas y derivaciones de un caso: la línea de tiempo ya las muestra, pero aún no hay endpoint para crearlas.
 - Editar el teléfono y el opt-in de una cuenta ya creada, y registrar la baja del opt-in de un coordinador por webhook.
 
 **Por definir:**
 
-1. Inactividad como respaldo del servidor (pregunta 11 de [api-reloj.md](api-reloj.md)).
-2. Quién envía `BATERIA_BAJA` y `RELOJ_NO_PUESTO`. Una enviada por el reloj no se cierra sola y, mientras siga abierta, el servidor no crea otra (pregunta 2).
-3. Con quien desarrolla el reloj: cada cuánto revisa el GPS, cuántas posiciones fuera del círculo exige, si vuelve a alertar al regresar, y dónde va el botón y cómo evitar presionarlo por error (preguntas 9 y 10).
-4. Matriz FC × SpO2, pendiente del Anexo B, y validación clínica de todos los valores provisionales.
+1. Con quien desarrolla el reloj: si al terminar la lista sin respuesta (`SIN_RESPUESTA`) vuelve a empezarla, y que `confirmadaPor.idContacto` puede ser un coordinador que no está en su lista (pregunta 12 de [api-reloj.md](api-reloj.md)).
+2. Inactividad como respaldo del servidor (pregunta 11 de [api-reloj.md](api-reloj.md)).
+3. Quién envía `BATERIA_BAJA` y `RELOJ_NO_PUESTO`. Una enviada por el reloj no se cierra sola y, mientras siga abierta, el servidor no crea otra (pregunta 2).
+4. Con quien desarrolla el reloj: cada cuánto revisa el GPS, cuántas posiciones fuera del círculo exige, si vuelve a alertar al regresar, y dónde va el botón y cómo evitar presionarlo por error (preguntas 9 y 10).
+5. Matriz FC × SpO2, pendiente del Anexo B, y validación clínica de todos los valores provisionales.
 
 ## Pruebas
 
-- `RecibirAlertaTest`, `RevisionDiscrepanciasTest`, `VigilarRelojesTest`, `PlantillasCorreoTest`, `EncolarCorreosTest` y `EnviarCorreosPendientesTest`: unitarias, sin base de datos.
-- `RequisitosRecepcionAlertasTest`, `RequisitosReglasAusenciaTest` y `RequisitosCorreoTest`: contra PostgreSQL real, diseñadas desde los requisitos. La del correo usa GreenMail, sin enviar correos reales. Sin Docker se omiten.
+- `RecibirAlertaTest`, `RevisionDiscrepanciasTest`, `VigilarRelojesTest`, `PlantillasCorreoTest`, `EncolarCorreosTest`, `EnviarCorreosPendientesTest`, `AvisarOficinaTest` y `SolicitarAvisoTest`: unitarias, sin base de datos.
+- `RequisitosRecepcionAlertasTest`, `RequisitosReglasAusenciaTest`, `RequisitosCorreoTest`, `RequisitosSolicitudAvisoTest`, `RequisitosVigilanteEscalamientoTest`, `RequisitosAvisoOficinaTest`, `RequisitosRespuestaContactoTest`, `RequisitosAvisosRelojTest` y `RequisitosAtencionAlertasTest`: contra PostgreSQL real, diseñadas desde los requisitos. La del correo usa GreenMail, sin enviar correos reales. Sin Docker se omiten.
+- `RequisitosEscalamientoCompletoTest` recorre el escalamiento de punta a punta (incluido un coordinador que confirma y un reloj sin señal), y `RequisitosReinicioEscalamientoTest` reinicia el servidor de verdad a mitad del recorrido.
 - `ApiRelojTest` cubre la API del reloj, y `ModeloDatosTest` las reglas de la base.

@@ -25,18 +25,19 @@ public class BandejaAvisosRelojJdbc implements BandejaAvisosReloj {
 		this.jdbc = jdbc;
 	}
 
-	/** Quien confirmó es el primero que respondió "Voy en camino", como en el estado de la alerta. */
+	/** Quien confirmó es el primero que respondió "Voy en camino" (contacto o coordinador), como en el estado. */
 	@Override
 	public List<AvisoPendiente> sinAcusar(int maximoEnvios) {
 		return jdbc.sql("""
-				SELECT f.id_aviso, s.id_dispositivo, s.token_fcm, f.tipo, a.event_id, c.id_contacto_paciente,
+				SELECT f.id_aviso, s.id_dispositivo, s.token_fcm, f.tipo, a.event_id, c.id_contacto,
 					f.intentos, f.fecha_hora_envio
 				FROM aviso_fcm f
 				JOIN alerta a USING (id_alerta)
 				JOIN asignacion_reloj v USING (id_asignacion)
 				JOIN smartwatch s USING (id_dispositivo)
 				LEFT JOIN LATERAL (
-					SELECT i.id_contacto_paciente FROM registro_intento i
+					SELECT COALESCE(i.id_contacto_paciente, i.id_contacto_interno) AS id_contacto
+					FROM registro_intento i
 					WHERE i.id_alerta = a.id_alerta AND i.respuesta = 'VOY_EN_CAMINO'
 					ORDER BY i.fecha_hora_respuesta LIMIT 1) c ON f.tipo = 'ALERTA_CONFIRMADA'
 				WHERE f.fecha_hora_recepcion IS NULL AND s.token_fcm IS NOT NULL AND f.intentos < :maximo
@@ -47,7 +48,7 @@ public class BandejaAvisosRelojJdbc implements BandejaAvisosReloj {
 					return new AvisoPendiente(fila.getObject("id_aviso", UUID.class),
 							fila.getObject("id_dispositivo", UUID.class), fila.getString("token_fcm"),
 							TipoAvisoReloj.valueOf(fila.getString("tipo")), fila.getObject("event_id", UUID.class),
-							fila.getObject("id_contacto_paciente", UUID.class), fila.getInt("intentos"),
+							fila.getObject("id_contacto", UUID.class), fila.getInt("intentos"),
 							envio == null ? null : envio.toInstant());
 				})
 				.list();

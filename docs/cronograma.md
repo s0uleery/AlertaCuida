@@ -479,17 +479,20 @@ Depende de: 1.9, 2.1, 2.3, 2.9. Listo cuando: con el simulador de reloj, una ale
 
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
-| [ ] | 2.10.1 | Máquina de estados de la alerta en el servidor según lo que informa el reloj (recibida, avisando al contacto n, confirmada, sin respuesta, resuelta, pendiente de día hábil, cancelada) | 4 |
+| [x] | 2.10.1 | Máquina de estados de la alerta en el servidor según lo que informa el reloj (recibida, avisando al contacto n, confirmada, sin respuesta, resuelta, pendiente de día hábil, cancelada) | 4 |
 | [x] | 2.10.2 | Endpoint de solicitud de aviso: el reloj pide avisar a un contacto; el servidor verifica que sea del paciente y tenga opt-in, y envía por WhatsApp o correo. Una solicitud repetida no envía dos veces | 5 |
-| [ ] | 2.10.3 | Endpoint de estado de la alerta, que el reloj consulta antes de pasar al siguiente contacto (respaldo si FCM se atrasa) | 2 |
+| [x] | 2.10.3 | Endpoint de estado de la alerta, que el reloj consulta antes de pasar al siguiente contacto (respaldo si FCM se atrasa) | 2 |
 | [ ] | 2.10.4 | Al recibir la confirmación por webhook: marcar la alerta como confirmada y avisar al reloj por FCM | 2 |
 | [x] | 2.10.5 | WhatsApp simultáneo a todos los coordinadores con opt-in, en paralelo al escalamiento del reloj, solo en horario laboral y para todas las gravedades; correo de respaldo si el WhatsApp falla. Medias y graves destacadas en el dashboard | 3 |
 | [x] | 2.10.6 | Registrar el fin de la lista informado por el reloj (`SIN_RESPUESTA`), y vigilante: alerta abierta sin noticias del reloj en un plazo → correo a los profesionales | 3 |
-| [ ] | 2.10.7 | Pruebas, incluidos un reloj sin señal y un reinicio del servidor a mitad de un escalamiento | 4 |
+| [x] | 2.10.7 | Pruebas, incluidos un reloj sin señal y un reinicio del servidor a mitad de un escalamiento | 4 |
 | [x] | 2.10.8 | Teléfono con WhatsApp (obligatorio para coordinadores, cifrado) y opt-in en las cuentas del equipo (V9) | 2 |
 
 Nota (13-11-2026): 2.10.2 y 2.10.6 hechas (el vigilante del escalamiento avisa por correo a los coordinadores; migración V12). Mientras WhatsApp no esté configurado, los avisos por WhatsApp caen al correo de respaldo; la 2.9 solo agrega el canal real.
 Nota (13-11-2026, tarde): 2.10.5 hecha. Cada alerta real se avisa a todos los coordinadores activos (WhatsApp con opt-in; correo si no lo tienen), solo en horario laboral; si pasa a grave después, se avisa de nuevo (migración V13). Los simulacros no se avisan. Lo de destacar medias y graves en el dashboard pasa a la lista de alertas (3.4.2).
+Nota (16-11-2026): 2.10.1 y 2.10.3 revisadas y marcadas. Los siete estados los calcula la vista `alerta_estado` (V11) y el reloj los consulta con `GET /api/reloj/v1/alertas/{eventId}`. El contacto en curso ("avisando al contacto n") se saca del último intento cuando se haga la lista de alertas (3.4.2).
+Nota (16-11-2026): 2.10.7 hecha con pruebas de punta a punta (recorrido completo, reloj sin señal y reinicio real del servidor), por correo. Falta la 2.10.4, que espera el webhook de WhatsApp (2.9). Además, una alerta que llega fuera de horario y se agrava en horario ahora sí se avisa a los coordinadores.
+Nota (16-11-2026, revisión del flujo): el aviso a la oficina (2.10.5) ahora es solo por alertas de salud, por correo con enlace de respuesta y además WhatsApp a cada coordinador; la confirmación de un coordinador detiene al reloj (V14). Las técnicas van solo por correo a `recibe_avisos`. Queda para quien desarrolla el reloj si repite la lista al quedar sin respuesta (pregunta 12 de api-reloj.md).
 
 Notas (05-11-2026): la 2.10.5 depende del canal de WhatsApp (2.9). Falta poder editar el teléfono y el opt-in de una cuenta ya creada (hoy solo se piden al crearla) y que el webhook de Meta registre la baja del opt-in de un coordinador.
  
@@ -546,11 +549,12 @@ Depende de: 2.5, 2.10. Listo cuando: el personal ve de un vistazo qué pacientes
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
 | [ ] | 3.4.1 | Panel de estado general (pacientes, última sincronización, configuración pendiente, estado del reloj, tipo de conexión) | 6 |
-| [ ] | 3.4.2 | Lista de alertas activas con gravedad, antigüedad y contacto en curso (el último que pidió el reloj); medias y graves destacadas (viene de la 2.10.5) | 6 |
+| [x] | 3.4.2 | Lista de alertas activas con gravedad, antigüedad y contacto en curso (el último que pidió el reloj); medias y graves destacadas (viene de la 2.10.5) | 6 |
 | [ ] | 3.4.3 | Detalle de la alerta: línea de tiempo (solicitudes del reloj, WhatsApp, correos, avisos FCM) y evidencia de lecturas | 6 |
 | [ ] | 3.4.4 | Botón "Resolver alerta" con observaciones y clasificación: avisa al reloj para que detenga el escalamiento | 3 |
 | [ ] | 3.4.5 | Actualización automática por consulta periódica | 2 |
 | [ ] | 3.4.6 | Pruebas | 3 |
+Nota (16-11-2026): 3.4.2 hecha. Sección Alertas con pestañas Salud y Reloj, filtro de abiertas, cerradas o todas, búsqueda por nombre o folio, antigüedad, contacto en curso, simulacros con etiqueta y medias y graves destacadas. `GET /api/alertas` suma `categoria`, `simulacro` y `contactoEnCurso`. La portada ya usa las alertas reales. La ficha de la alerta (3.4.3) queda pendiente.
 
 ### 3.5 Historial y gráficos de tendencias (28 h). Cambia.
 Gráficos de la evolución de FC y SpO2 de cada paciente, con la hora real de cada medición y los eventos marcados.
@@ -598,10 +602,12 @@ Depende de: 1.2, 1.7. Listo cuando: el equipo ve en una sola pantalla el estado 
 
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
-| [ ] | 3.8.1 | Consulta en el backend: versión de la app, batería, última sincronización, configuración pendiente, tipo de conexión (LTE o Wi-Fi) | 2 |
-| [ ] | 3.8.2 | Registro de la SIM de cada reloj, con su número y la fecha de vencimiento del plan de datos | 2 |
-| [ ] | 3.8.3 | Vista con alertas visuales (sin sincronizar, versión antigua, batería baja, plan por vencer) | 3 |
-| [ ] | 3.8.4 | Pruebas | 1 |
+| [x] | 3.8.1 | Consulta en el backend: versión de la app, batería, última sincronización, configuración pendiente, tipo de conexión (LTE o Wi-Fi) | 2 |
+| [x] | 3.8.2 | Registro de la SIM de cada reloj, con su número y la fecha de vencimiento del plan de datos | 2 |
+| [x] | 3.8.3 | Vista con alertas visuales (sin sincronizar, versión antigua, batería baja, plan por vencer) | 3 |
+| [x] | 3.8.4 | Pruebas | 1 |
+
+Nota (16-11-2026): 3.8 hecha. Semáforo por reloj (verde, amarillo, rojo o gris) en el inventario y en la ficha del usuario, con los motivos al pasar el mouse, desde `GET /api/relojes/estado`. La 3.8.2 (SIM con número y vencimiento del plan) ya existía desde el registro de relojes. Versión antigua = más antigua que la más nueva del programa; plan por vencer = 30 días o menos (amarillo), vencido = rojo.
  
 ---
 

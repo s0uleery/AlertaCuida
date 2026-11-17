@@ -39,7 +39,7 @@ public class PlantillasCorreo {
 	/** Tres o más saltos de línea (con espacios entre medio): quedan cuando un párrafo se vacía. */
 	private static final Pattern LINEAS_DE_MAS = Pattern.compile("\\n[ \\t]*(\\n[ \\t]*){2,}");
 
-	/** El marcador del enlace de respuesta, obligatorio en el cuerpo del correo al contacto. */
+	/** El marcador del enlace de respuesta, obligatorio en el contacto, el aviso a la oficina y el agravamiento. */
 	private static final Set<String> ENLACE = Set.of("responder");
 
 	private final String urlDashboard;
@@ -72,16 +72,35 @@ public class PlantillasCorreo {
 		return switch (correo.proposito()) {
 			case VIGILANTE -> alertaQueNoAvanza(correo);
 			case AGRAVAMIENTO -> alertaAgravada(correo);
-			case AVISO -> correo.tipo() == TipoEvento.SILENCIO_DATOS ? silencioDeDatos(correo)
-					: alertaAlEquipo(correo);
+			case AVISO -> avisoAlEquipo(correo);
 		};
 	}
 
-	/** La alerta pasó a grave después de su primer aviso a los coordinadores. */
+	/**
+	 * @return el aviso de una alerta al equipo: las de salud van a los coordinadores (aviso a la oficina, con
+	 *         enlace de respuesta); las técnicas, a las cuentas con recibe_avisos
+	 */
+	private Mensaje avisoAlEquipo(CorreoPendiente correo) {
+		if (!correo.tipo().esTecnica()) {
+			return avisoALaOficina(correo);
+		}
+		return correo.tipo() == TipoEvento.SILENCIO_DATOS ? silencioDeDatos(correo) : alertaAlEquipo(correo);
+	}
+
+	/** Aviso a un coordinador por una alerta de salud, con el enlace para confirmar que va. */
+	private Mensaje avisoALaOficina(CorreoPendiente correo) {
+		TextosCorreo.AvisoOficina t = textos.avisoOficina();
+		Map<String, String> valores = Map.of("alerta", nombreAlerta(correo), "deQuien", deQuien(correo),
+				"folio", folio(correo), "dashboard", urlDashboard, "pie", textos.pieEquipo(),
+				"responder", enlaceRespuesta(correo));
+		return mensaje(correo, t.asunto(), t.cuerpo(), valores);
+	}
+
+	/** La alerta de salud pasó a grave: a los coordinadores, con el enlace para confirmar que van. */
 	private Mensaje alertaAgravada(CorreoPendiente correo) {
 		TextosCorreo.Agravamiento t = textos.agravamiento();
 		Map<String, String> valores = Map.of("deQuien", deQuien(correo), "folio", folio(correo),
-				"dashboard", urlDashboard, "pie", textos.pieEquipo());
+				"dashboard", urlDashboard, "pie", textos.pieEquipo(), "responder", enlaceRespuesta(correo));
 		return mensaje(correo, t.asunto(), t.cuerpo(), valores);
 	}
 
@@ -105,7 +124,7 @@ public class PlantillasCorreo {
 		return mensaje(correo, t.asunto(), t.cuerpo(), valores);
 	}
 
-	/** Una alerta grave, o el respaldo de un WhatsApp a la oficina por cualquier alerta. */
+	/** Una alerta técnica, a las cuentas con recibe_avisos. */
 	private Mensaje alertaAlEquipo(CorreoPendiente correo) {
 		TextosCorreo.AlertaEquipo t = textos.alertaEquipo();
 		Map<String, String> valores = Map.of("alerta", nombreAlerta(correo), "deQuien", deQuien(correo),
@@ -210,7 +229,14 @@ public class PlantillasCorreo {
 				Set.of("alerta", "deQuien", "folio", "minutos", "dashboard", "pie"));
 		TextosCorreo.Agravamiento agravamiento = requerido("agravamiento", textos.agravamiento());
 		revisar("agravamiento.asunto", agravamiento.asunto(), Set.of("deQuien", "folio", "dashboard"));
-		revisar("agravamiento.cuerpo", agravamiento.cuerpo(), Set.of("deQuien", "folio", "dashboard", "pie"));
+		revisar("agravamiento.cuerpo", agravamiento.cuerpo(),
+				Set.of("deQuien", "folio", "dashboard", "pie", "responder"));
+		exigir("agravamiento.cuerpo", agravamiento.cuerpo(), ENLACE);
+		TextosCorreo.AvisoOficina oficina = requerido("aviso-oficina", textos.avisoOficina());
+		revisar("aviso-oficina.asunto", oficina.asunto(), Set.of("alerta", "deQuien", "folio", "dashboard"));
+		revisar("aviso-oficina.cuerpo", oficina.cuerpo(),
+				Set.of("alerta", "deQuien", "folio", "dashboard", "pie", "responder"));
+		exigir("aviso-oficina.cuerpo", oficina.cuerpo(), ENLACE);
 		for (Severidad severidad : Severidad.values()) {
 			if (textos.gravedades() == null || vacio(textos.gravedades().get(severidad))) {
 				throw new IllegalArgumentException("correos.yml: falta el nombre de la gravedad " + severidad

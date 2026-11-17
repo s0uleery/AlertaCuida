@@ -83,6 +83,7 @@ Los tipos de TypeScript de cada respuesta ya están en `frontend/src/features/*/
 | `GET /api/pacientes/{id}/reloj/configuracion` | `USUARIOS:VER` | 200 `ConfiguracionAplicada` |
 | **Inventario de relojes** | | |
 | `GET /api/relojes` | `USUARIOS:VER` | 200 `RelojConPaciente[]` |
+| `GET /api/relojes/estado` | `USUARIOS:VER` | 200 `EstadoTecnicoReloj[]` |
 | `POST /api/relojes` | `USUARIOS:CREAR` | 201 `{id}` |
 | `PUT /api/relojes/{id}` | `USUARIOS:EDITAR` | 204 |
 | **Calendario** | | |
@@ -382,6 +383,19 @@ Si el reloj ya aplica la configuración vigente (contactos, umbrales, calendario
 ```
 `idPaciente` y `nombrePaciente` son `null` si el reloj no está asignado.
 
+### `GET /api/relojes/estado`
+Semáforo y última sincronización de cada reloj registrado, para el inventario y la ficha del usuario (se cruzan por `idDispositivo`). No se audita: no trae datos de pacientes.
+```json
+[{
+  "idDispositivo": "…", "semaforo": "AMARILLO", "motivos": ["BATERIA_BAJA", "PLAN_POR_VENCER"],
+  "ultimaSincronizacion": "2026-11-16T15:00:00Z", "nivelBateria": 15, "relojPuesto": true,
+  "tipoConexion": "LTE", "versionApp": "1.2.0", "configuracionPendiente": false
+}]
+```
+- `semaforo`: `VERDE` (funcionando), `AMARILLO` (atención), `ROJO` (sin señal) o `GRIS` (sin vincular). Es el más grave de los `motivos`.
+- `motivos`: `SIN_VINCULAR` (gris); `SIN_SENAL` (4 h sin sincronizar, desde el vínculo si nunca sincronizó) y `PLAN_VENCIDO` (rojo); `BATERIA_BAJA` (bajo 20 %), `NO_PUESTO` (entre 08:00 y 22:00 de Chile), `CONFIGURACION_PENDIENTE`, `ALERTA_TECNICA_ABIERTA`, `ATRASO` (más de 2 h 30 min sin sincronizar), `VERSION_ANTIGUA` (más antigua que la más nueva que informa algún reloj) y `PLAN_POR_VENCER` (30 días o menos) (amarillo). Batería y "no puesto" miran solo la última sincronización.
+- Los datos (`ultimaSincronizacion`, `nivelBateria`, `relojPuesto`, `tipoConexion`, `versionApp`) son los de la última sincronización del vínculo vigente; `null` si no hay. `configuracionPendiente` es `true` si la configuración que informó el reloj no es la vigente de su paciente.
+
 ### `POST /api/relojes` y `PUT /api/relojes/{id}`
 El cuerpo es `datos`. Obligatorio: `identificadorReloj`. 409 si el identificador ya existe, o si se marca como no operativo un reloj que alguien está usando.
 
@@ -408,17 +422,18 @@ Lo ve todo el equipo: basta con tener sesión. Es de solo lectura; el horario y 
 ## Alertas
 
 ### `GET /api/alertas`
-Hasta 200 alertas no canceladas: primero las `SIN_RESPUESTA` abiertas y después las más recientes. Las canceladas por el paciente no aparecen, porque solo sirven para métricas. El front todavía usa datos de ejemplo.
+Hasta 200 alertas no canceladas, simulacros incluidos: primero las `SIN_RESPUESTA` abiertas y después las más recientes. Las canceladas por el paciente no aparecen, porque solo sirven para métricas. La usan la sección Alertas (pestañas Salud y Reloj) y la portada.
 ```json
 [{
   "id": "…", "numero": 142,
   "paciente": { "id": "…", "nombres": "María", "apellidos": "Soto Rojas", "edad": 82 },
   "tipoEvento": "CAIDA", "severidad": "GRAVE",
   "estadoContacto": "SIN_RESPUESTA", "estadoAtencion": "SIN_ASIGNAR",
-  "responsable": null, "recepcion": "2026-11-11T15:00:00Z", "prioridadMaxima": true
+  "responsable": null, "recepcion": "2026-11-11T15:00:00Z", "prioridadMaxima": true,
+  "categoria": "SALUD", "simulacro": false, "contactoEnCurso": "Ana Rojas"
 }]
 ```
-`severidad` es la actual: `GRAVE` si se agravó. `prioridadMaxima` es `true` si nadie de la lista confirmó y la alerta sigue abierta.
+`severidad` es la actual: `GRAVE` si se agravó. `prioridadMaxima` es `true` si nadie de la lista confirmó y la alerta sigue abierta. `categoria` es `SALUD` o `TECNICA` (`TipoEvento.tecnicas()`) y decide la pestaña. `simulacro` marca los ensayos. `contactoEnCurso` es el nombre del último contacto del paciente al que el reloj pidió avisar (los avisos al equipo no cuentan), o `null` si todavía no pidió ninguno.
 
 ### `GET /api/alertas/{id}`
 Los mismos campos de la lista, más `atencion` (`null` si sigue abierta; si no, `fechaHora`, `resolutor`, `clasificacion` y `observaciones`) y `lineaTiempo`, del paso más antiguo al más reciente:

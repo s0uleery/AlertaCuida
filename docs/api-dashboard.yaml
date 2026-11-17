@@ -1025,6 +1025,22 @@ paths:
         '403': { $ref: '#/components/responses/SinPermiso' }
         '404': { $ref: '#/components/responses/NoEncontrado' }
 
+  /api/relojes/estado:
+    get:
+      tags: [Inventario de relojes]
+      operationId: estadoRelojes
+      summary: Semáforo y última sincronización de cada reloj
+      description: 'Permiso: `USUARIOS:VER`. No se audita: no trae datos de pacientes.'
+      responses:
+        '200':
+          description: Estado técnico de todos los relojes.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/EstadoTecnicoReloj' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
   /api/relojes:
     get:
       tags: [Inventario de relojes]
@@ -1193,6 +1209,12 @@ components:
         responsable: { type: string, nullable: true }
         recepcion: { type: string, format: date-time }
         prioridadMaxima: { type: boolean, description: Nadie de la lista confirmó y sigue abierta. }
+        categoria: { type: string, enum: [SALUD, TECNICA], description: Decide la pestaña del dashboard (Salud o Reloj). }
+        simulacro: { type: boolean, description: Es un ensayo; se muestra con la etiqueta Simulacro. }
+        contactoEnCurso:
+          type: string
+          nullable: true
+          description: Último contacto del paciente al que el reloj pidió avisar; null si ninguno.
     PasoAlerta:
       type: object
       properties:
@@ -1675,6 +1697,27 @@ components:
         reloj: { $ref: '#/components/schemas/Reloj' }
         idPaciente: { type: ['string', 'null'], format: uuid, description: null si no está asignado. }
         nombrePaciente: { type: ['string', 'null'] }
+    EstadoTecnicoReloj:
+      type: object
+      required: [idDispositivo, semaforo, motivos, configuracionPendiente]
+      properties:
+        idDispositivo: { type: string, format: uuid }
+        semaforo:
+          type: string
+          enum: [VERDE, AMARILLO, ROJO, GRIS]
+          description: El más grave de los motivos; VERDE si no hay.
+        motivos:
+          type: array
+          items:
+            type: string
+            enum: [SIN_VINCULAR, SIN_SENAL, PLAN_VENCIDO, BATERIA_BAJA, NO_PUESTO, CONFIGURACION_PENDIENTE,
+              ALERTA_TECNICA_ABIERTA, ATRASO, VERSION_ANTIGUA, PLAN_POR_VENCER]
+        ultimaSincronizacion: { type: ['string', 'null'], format: date-time, description: Del vínculo vigente. }
+        nivelBateria: { type: ['integer', 'null'] }
+        relojPuesto: { type: ['boolean', 'null'] }
+        tipoConexion: { type: ['string', 'null'], enum: [LTE, WIFI, null] }
+        versionApp: { type: ['string', 'null'] }
+        configuracionPendiente: { type: boolean, description: La configuración informada no es la vigente. }
 
     Calendario:
       type: object

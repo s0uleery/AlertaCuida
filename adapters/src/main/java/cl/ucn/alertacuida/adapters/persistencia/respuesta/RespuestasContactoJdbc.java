@@ -27,7 +27,11 @@ public class RespuestasContactoJdbc implements RespuestasContacto {
 		this.jdbc = jdbc;
 	}
 
-	/** Solo los correos a un vínculo de la lista del paciente: los de cuentas del equipo no confirman. */
+	/**
+	 * Solo los correos que piden confirmar: los avisos a un vínculo de la lista del paciente y, en las alertas de
+	 * salud, el aviso a la oficina y el de agravamiento a un coordinador (contacto interno). Los del vigilante y
+	 * los de las técnicas no confirman.
+	 */
 	@Override
 	public Optional<AvisoRespondible> buscar(UUID idIntento) {
 		return jdbc.sql("""
@@ -39,8 +43,11 @@ public class RespuestasContactoJdbc implements RespuestasContacto {
 				JOIN alerta_estado e ON e.id_alerta = i.id_alerta
 				JOIN asignacion_reloj r ON r.id_asignacion = a.id_asignacion
 				JOIN paciente p ON p.id_paciente = r.id_paciente
-				WHERE i.id_intento = :id AND i.canal = 'CORREO' AND i.id_contacto_paciente IS NOT NULL""")
+				WHERE i.id_intento = :id AND i.canal = 'CORREO' AND (i.id_contacto_paciente IS NOT NULL
+					OR (i.id_contacto_interno IS NOT NULL AND i.proposito IN ('AVISO', 'AGRAVAMIENTO')
+						AND a.tipo_evento NOT IN (:tecnicas)))""")
 				.param("id", idIntento)
+				.param("tecnicas", TipoEvento.tecnicas().stream().map(Enum::name).toList())
 				.query((fila, n) -> {
 					String respuesta = fila.getString("respuesta");
 					Timestamp fechaRespuesta = fila.getTimestamp("fecha_hora_respuesta");

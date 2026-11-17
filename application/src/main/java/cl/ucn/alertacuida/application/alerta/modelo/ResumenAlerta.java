@@ -1,5 +1,6 @@
 package cl.ucn.alertacuida.application.alerta.modelo;
 
+import cl.ucn.alertacuida.domain.alerta.CategoriaAlerta;
 import cl.ucn.alertacuida.domain.alerta.EstadoAtencion;
 import cl.ucn.alertacuida.domain.alerta.EstadoContacto;
 import cl.ucn.alertacuida.domain.alerta.Severidad;
@@ -14,8 +15,12 @@ import java.util.UUID;
  * @param severidad       la actual: GRAVE si se agravó
  * @param responsable     nombre de quien tomó el caso; null si nadie
  * @param prioridadMaxima si nadie de la lista confirmó y la alerta sigue abierta
+ * @param categoria       salud o técnica, para las pestañas del dashboard
+ * @param simulacro       si es un ensayo y no una emergencia real
+ * @param contactoEnCurso nombre del último contacto del paciente al que el reloj pidió avisar; null si ninguno
  */
 public record ResumenAlerta(UUID id, long numero, PacienteDeAlerta paciente, TipoEvento tipoEvento,
 		Severidad severidad, EstadoContacto estadoContacto, EstadoAtencion estadoAtencion, String responsable,
-		Instant recepcion, boolean prioridadMaxima) {
+		Instant recepcion, boolean prioridadMaxima, CategoriaAlerta categoria, boolean simulacro,
+		String contactoEnCurso) {
 }

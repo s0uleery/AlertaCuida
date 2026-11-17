@@ -1,7 +1,7 @@
 package cl.ucn.alertacuida.application.escalamiento;
 
+import cl.ucn.alertacuida.application.aviso.EncoladorAlEquipo;
 import cl.ucn.alertacuida.application.comun.puerto.Transacciones;
-import cl.ucn.alertacuida.application.escalamiento.modelo.AlertaTrabada;
 import cl.ucn.alertacuida.application.escalamiento.puerto.EscalamientosTrabados;
 import cl.ucn.alertacuida.domain.calendario.CalendarioHabil;
 import java.time.Clock;
@@ -22,10 +22,8 @@ public class VigilarEscalamiento {
 	private static final System.Logger LOG = System.getLogger(VigilarEscalamiento.class.getName());
 
 	private final EscalamientosTrabados trabados;
-	private final CalendarioHabil calendario;
 	private final Duration plazo;
-	private final Duration ventana;
-	private final Transacciones transacciones;
+	private final EncoladorAlEquipo encolador;
 	private final Clock reloj;
 
 	/**
@@ -38,36 +36,18 @@ public class VigilarEscalamiento {
 	public VigilarEscalamiento(EscalamientosTrabados trabados, CalendarioHabil calendario, Duration plazo,
 			Duration ventana, Transacciones transacciones, Clock reloj) {
 		this.trabados = trabados;
-		this.calendario = calendario;
 		this.plazo = plazo;
-		this.ventana = ventana;
-		this.transacciones = transacciones;
+		this.encolador = new EncoladorAlEquipo(calendario, ventana, transacciones, LOG);
 		this.reloj = reloj;
 	}
 
 	/** Revisa una vez. Si falla el aviso de una alerta, lo registra y sigue con las demás. */
 	public void vigilar() {
 		Instant ahora = reloj.instant();
-		Instant desde = ahora.minus(ventana);
-		for (AlertaTrabada alerta : trabados.trabadas(ahora.minus(plazo))) {
-			Instant vencimiento = alerta.ultimaNoticia().plus(plazo);
-			if (!vencimiento.isBefore(desde) && calendario.esHabil(vencimiento)) {
-				avisarSinFallar(alerta, ahora);
-			}
-		}
-	}
-
-	/** Encola el aviso de una alerta en su propia transacción; si falla, lo registra y sigue. */
-	private void avisarSinFallar(AlertaTrabada alerta, Instant ahora) {
-		try {
-			transacciones.ejecutar(() -> {
-				trabados.avisarCoordinadores(alerta.idAlerta(), ahora);
-				return null;
-			});
-		} catch (RuntimeException falla) {
-			LOG.log(System.Logger.Level.ERROR, "No se pudo avisar a los coordinadores de la alerta trabada "
-					+ alerta.idAlerta(), falla);
-		}
+		encolador.encolar(trabados.trabadas(ahora.minus(plazo)).stream()
+				.filter(alerta -> encolador.corresponde(alerta.ultimaNoticia().plus(plazo), ahora)).toList(),
+				alerta -> trabados.avisarCoordinadores(alerta.idAlerta(), ahora),
+				alerta -> "el aviso a los coordinadores de la alerta trabada " + alerta.idAlerta());
 	}
 
 }

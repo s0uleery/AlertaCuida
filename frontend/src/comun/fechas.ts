@@ -18,6 +18,17 @@ export function formatearHoraReciente(iso: string): string {
   return formatearFechaHora(iso);
 }
 
+/** Cuánto tiempo pasó: "hace 5 min", "hace 3 h" o "hace 2 días". Recibe un instante ISO en UTC. */
+export function formatearAntiguedad(iso: string): string {
+  const minutos = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60_000));
+  if (minutos < 1) return 'recién';
+  if (minutos < 60) return `hace ${minutos} min`;
+  const horas = Math.floor(minutos / 60);
+  if (horas < 24) return `hace ${horas} h`;
+  const dias = Math.floor(horas / 24);
+  return dias === 1 ? 'hace 1 día' : `hace ${dias} días`;
+}
+
 /** Solo la fecha, por ejemplo "24-10-2026". Recibe una fecha sin hora ("2026-10-24"). */
 export function formatearFecha(fecha: string): string {
   const [anio, mes, dia] = fecha.split('-');

@@ -122,7 +122,7 @@ ALTER TABLE "CONTACTO" ADD CONSTRAINT contacto_interno_sin_datos CHECK (id_usuar
 ALTER TABLE "REGISTRO_INTENTO" ADD CONSTRAINT intento_destino CHECK ((id_contacto_paciente IS NULL) <> (id_contacto_interno IS NULL));
 ALTER TABLE "REGISTRO_INTENTO" ADD CONSTRAINT intento_ronda_externo CHECK ((ronda IS NULL) = (id_contacto_paciente IS NULL));
 ALTER TABLE "REGISTRO_INTENTO" ADD CONSTRAINT intento_reintentos CHECK (reintentos >= 0);
-ALTER TABLE "REGISTRO_INTENTO" ADD CONSTRAINT intento_respuesta_externo CHECK (respuesta IS NULL OR id_contacto_paciente IS NOT NULL);
+ALTER TABLE "REGISTRO_INTENTO" ADD CONSTRAINT intento_respuesta_externo CHECK (respuesta IS NULL OR id_contacto_paciente IS NOT NULL OR proposito IN ('AVISO', 'AGRAVAMIENTO'));
 ALTER TABLE "REGISTRO_INTENTO" ADD CONSTRAINT intento_pendiente CHECK (fecha_hora_proximo_envio IS NULL OR (fecha_hora_envio IS NULL AND fecha_hora_fallo IS NULL));
 
 -- Vigilante del escalamiento (migración V12)
