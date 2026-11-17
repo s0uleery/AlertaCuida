@@ -186,16 +186,18 @@ Depende de: —. Listo cuando: hay un acta con los acuerdos sobre acceso, red, c
 | [ ] | 0.8.2 | Reunión con TI y acta de acuerdos | 2 |
 | [ ] | 0.8.3 | Ajustar el diseño de despliegue según las respuestas | 1 |
 
-### 0.9 Simulador de contactos de WhatsApp (8 h). Nueva.
+### 0.9 Simulador de contactos de WhatsApp (8 h). Nueva. Hecha.
 Programa que imita la API de Meta y a los contactos: acepta los envíos y manda al webhook respuestas y estados de entrega falsos. Permite probar el escalamiento sin enviar mensajes reales.
 
 Depende de: 0.4. Listo cuando: el servidor envía "mensajes" al simulador y este responde al webhook confirmando, rechazando o sin responder, según el escenario.
 
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
-| [ ] | 0.9.1 | Servidor falso que imita los endpoints de envío de la API de Meta | 3 |
-| [ ] | 0.9.2 | Enviar al webhook respuestas de botón y estados de entrega (confirma, no puede, no responde, mensaje fallido) | 3 |
-| [ ] | 0.9.3 | Firmar los mensajes simulados como lo hace Meta y documentar su uso | 2 |
+| [x] | 0.9.1 | Servidor falso que imita los endpoints de envío de la API de Meta | 3 |
+| [x] | 0.9.2 | Enviar al webhook respuestas de botón y estados de entrega (confirma, no puede, no responde, mensaje fallido) | 3 |
+| [x] | 0.9.3 | Firmar los mensajes simulados como lo hace Meta y documentar su uso | 2 |
+
+Nota (16-11-2026): el simulador está en `simulador-whatsapp/` (Node sin dependencias, pruebas con `node --test simulador-whatsapp/`). El último dígito del número decide la respuesta: 1, 0 y 5 a 9 "Voy en camino"; 2 "No puedo"; 3 lee y no responde; 4 el mensaje falla. El contacto responde a los 5 s (`--demora`). Como el webhook del backend llega con la 2.9, el "Listo cuando" se probó con un webhook falso; falta repetirlo contra el backend en la 2.9.8.
  
 ---
 

@@ -298,7 +298,7 @@ Los de `application.properties` requieren reiniciar el backend.
 
 - Mostrar en el dashboard los correos fallidos (hoy quedan en `registro_intento`).
 - Red de seguridad sobre las lecturas (2.7) y simulacro (2.8).
-- Simulador de contactos (0.9) y canal de WhatsApp (2.9), con los botones que confirman, también para los coordinadores; con eso, la confirmación por webhook de la 2.10.4.
+- Canal de WhatsApp (2.9), con los botones que confirman, también para los coordinadores; con eso, la confirmación por webhook de la 2.10.4. El simulador de contactos (0.9) ya está en `simulador-whatsapp/`.
 - Ficha de la alerta con su línea de tiempo y las acciones de asumir y resolver (3.4.3 y 3.4.4). La lista de alertas (3.4.2) ya está.
 - Registrar notas y derivaciones de un caso: la línea de tiempo ya las muestra, pero aún no hay endpoint para crearlas.
 - Editar el teléfono y el opt-in de una cuenta ya creada, y registrar la baja del opt-in de un coordinador por webhook.

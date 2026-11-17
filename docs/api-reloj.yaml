@@ -338,10 +338,13 @@ paths:
       operationId: recibirWebhook
       summary: "[Pendiente 2.9] Respuestas de los contactos (botones) y estados de entrega"
       description: |
-        Formato definido por Meta (Cloud API, objeto `whatsapp_business_account`); el servidor lee
-        `messages[].interactive.button_reply.id` ("VOY_EN_CAMINO" o "NO_PUEDO") y `statuses[]`
-        (`sent`, `delivered`, `read`, `failed`). Cada mensaje se vincula a su intento por el id del
-        mensaje de Meta. Un mensaje repetido no se procesa dos veces.
+        Formato definido por Meta (Cloud API, objeto `whatsapp_business_account`). Los avisos se envían
+        con plantillas, y Meta informa el botón de una plantilla como `messages[].type = "button"` con
+        `messages[].button.payload` ("VOY_EN_CAMINO" o "NO_PUEDO", el payload que el servidor pone en
+        cada botón al enviar). `messages[].interactive.button_reply.id` solo aparece si se envía un
+        mensaje interactivo. También lee `statuses[]` (`sent`, `delivered`, `read`, `failed`). Cada
+        respuesta se vincula a su intento por `messages[].context.id` y cada estado por
+        `statuses[].id`, el id del mensaje de Meta. Un mensaje repetido no se procesa dos veces.
       security: []
       parameters:
         - name: X-Hub-Signature-256
