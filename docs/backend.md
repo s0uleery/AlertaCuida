@@ -215,11 +215,10 @@ En el dashboard, a los pacientes se les llama "usuarios" (término del PRLAC); e
 | `GET /api/pacientes/{id}/condiciones` | `VER` | Enfermedades y luego situaciones, por orden alfabético. |
 | `POST /api/pacientes/{id}/condiciones` | `EDITAR` | Agrega una enfermedad o situación (texto libre); 409 si ya la tiene. |
 | `DELETE /api/pacientes/{id}/condiciones/{idCondicion}` | `EDITAR` | Quita una condición; 404 si es de otro paciente. |
-| `POST /api/pacientes/{id}/reloj` | `EDITAR` | Vincula un reloj con el código que muestra (201, sin token); sin código devuelve un token nuevo. |
+| `POST /api/pacientes/{id}/reloj` | `EDITAR` | Vincula un reloj con el código que muestra (201); el código es obligatorio y la respuesta nunca trae el token. |
 | `POST /api/pacientes/{id}/reloj/reemplazo` | `EDITAR` | Cambia el reloj por otro; el anterior puede quedar "en reparación". Mismo código opcional. |
 | `POST /api/pacientes/{id}/reloj/emparejamiento` | `EDITAR` | Empareja de nuevo el mismo reloj con su código; el token anterior deja de servir. |
 | `DELETE /api/pacientes/{id}/reloj` | `EDITAR` | Retira el reloj; su token deja de servir. |
-| `POST /api/pacientes/{id}/reloj/token` | `EDITAR` | Otro token para el mismo reloj (desarrollo). |
 | `GET /api/relojes` | `VER` | Inventario con el paciente que usa cada reloj. |
 | `POST /api/relojes` / `PUT /api/relojes/{id}` | `CREAR` / `EDITAR` | Registro y edición (modelo, SIM, plan, estado). |
 | `GET /api/relojes/estado` | `VER` | Semáforo y última sincronización de cada reloj (ver abajo). |
@@ -237,7 +236,7 @@ Decisiones:
 
 - **El historial nunca se pierde**: los vínculos se cierran con fecha de fin, no se borran. Así se sabe qué reloj mandó cada dato.
 - **Token del reloj (rol DEVICE)**: 256 bits aleatorios y en la base va su SHA-256, igual que el enlace de activación. Cerrar el vínculo lo revoca.
-- **Emparejamiento con código (23-11-2026)**: el reloj pide un código sin token (`EmparejarReloj`, `POST /api/reloj/v1/emparejamientos`) y recibe ahí mismo su token, que todavía no sirve. Quien instala escribe el código al vincular (`VinculoReloj`): el caso de uso borra el código (`DELETE ... RETURNING`, dentro de la transacción del vínculo, así un vínculo fallido no lo gasta) y guarda el hash del token en `asignacion_reloj`. El reloj pregunta con `.../consulta` hasta recibir `VINCULADO`. Códigos de 8 caracteres de un alfabeto de 31 (`CodigosCortosAleatorios`), 10 minutos de vigencia y un máximo de 50 pendientes, que protege la ruta pública (429); en `alertacuida.emparejamiento.*`. Los vencidos se borran cada vez que se pide uno nuevo. Sin código, vincular sigue entregando el token una sola vez (desarrollo y simulador).
+- **Emparejamiento con código (23-11-2026)**: el reloj pide un código sin token (`EmparejarReloj`, `POST /api/reloj/v1/emparejamientos`) y recibe ahí mismo su token, que todavía no sirve. Quien instala escribe el código al vincular (`VinculoReloj`): el caso de uso borra el código (`DELETE ... RETURNING`, dentro de la transacción del vínculo, así un vínculo fallido no lo gasta) y guarda el hash del token en `asignacion_reloj`. El reloj pregunta con `.../consulta` hasta recibir `VINCULADO`. Códigos de 8 caracteres de un alfabeto de 31 (`CodigosCortosAleatorios`), 10 minutos de vigencia y un máximo de 50 pendientes, que protege la ruta pública (429); en `alertacuida.emparejamiento.*`. Los vencidos se borran cada vez que se pide uno nuevo. El código es obligatorio: no hay forma de vincular entregando el token a nadie (desde el 23-11-2026 se quitaron el vínculo sin código y `POST .../reloj/token`).
 - **La edad no se guarda**: se calcula con la fecha de hoy en Chile (`ZonaHoraria`).
 - **Datos personales cifrados** (ver [Cifrado](#cifrado-de-datos-personales)): RUN, nombres, apellidos, fecha de nacimiento, dirección y la descripción de las condiciones. Por eso la lista se ordena en Java y la búsqueda se hace en el dashboard: la base no puede ordenar ni buscar datos cifrados. Por lo mismo, las condiciones repetidas se detectan en el caso de uso y no con un `UNIQUE`.
 - **Enfermedades y situaciones en texto libre**: el dashboard sugiere las comunes, pero se puede escribir cualquiera.

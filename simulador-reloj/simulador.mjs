@@ -2,9 +2,10 @@
 /**
  * Simulador de reloj (versión mínima: solo los avisos del servidor).
  *
- * Se hace pasar por uno o varios relojes vinculados a un paciente. Con --emparejar, primero pide un código de
- * emparejamiento, lo muestra y espera a que alguien lo escriba en el dashboard, como hará el reloj real. Al partir, registra un token FCM
- * inventado por cada reloj (PUT /token-fcm) y escucha los avisos que le entrega el backend con
+ * Se hace pasar por uno o varios relojes. Como el reloj real, se empareja con código: pide un código, lo
+ * muestra y espera a que alguien lo escriba en el dashboard; nadie escribe ni copia su token. Guarda el token en
+ * simulador-reloj/.tokens/ (fuera de git) para no emparejarse de nuevo en cada arranque. Después registra un
+ * token FCM inventado por cada reloj (PUT /token-fcm) y escucha los avisos que le entrega el backend con
  * FCM_CANAL=SIMULADOR. Por cada aviso: lo muestra, acusa recibo si corresponde (POST .../recepcion) y,
  * si es CONFIGURACION_NUEVA, descarga la configuración (GET /configuracion).
  *
@@ -13,18 +14,26 @@
  */
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+
+/** Donde cada reloj simulado guarda su token, como el reloj real lo guarda en su memoria. Está en .gitignore. */
+const CARPETA_TOKENS = join(dirname(fileURLToPath(import.meta.url)), '.tokens');
 
 const AYUDA = `Simulador de reloj: recibe los avisos del backend (FCM_CANAL=SIMULADOR).
 
 Uso:
-  node simulador-reloj/simulador.mjs --emparejar [opciones]
-  node simulador-reloj/simulador.mjs --token <token del reloj> [--token <otro>] [opciones]
+  node simulador-reloj/simulador.mjs [opciones]
+
+La primera vez, cada reloj muestra un código de emparejamiento: escríbelo en el dashboard ("Entregar reloj",
+"Reemplazar reloj" o "Emparejar de nuevo"). Después el reloj recuerda su token y no hay que emparejarlo otra vez,
+salvo que lo desvinculen.
 
 Opciones:
-  --emparejar        pide un código de emparejamiento, lo muestra y espera a que lo escriban en el dashboard
-                     ("Entregar reloj" o "Emparejar de nuevo"), como el reloj real
-  --token <t>        token del reloj que mostró el dashboard al vincularlo sin código (se puede repetir)
+  --relojes <n>      cuántos relojes simular a la vez (por defecto 1)
+  --nuevo            olvida los tokens guardados y empareja de nuevo, como un reloj restaurado de fábrica
   --backend <url>    dirección del backend (por defecto http://localhost:8080)
   --puerto <n>       puerto donde escucha los avisos (por defecto 9090, igual que FCM_SIMULADOR_URL)
   --sin-acuse        no acusa los avisos: sirve para ver los reintentos del servidor (1, 1 y 2 min)
@@ -33,14 +42,14 @@ Opciones:
 
 /**
  * Lee las opciones de la línea de comandos.
- * @returns {{tokens: string[], emparejar: boolean, backend: string, puerto: number, sinAcuse: boolean,
+ * @returns {{relojes: number, nuevo: boolean, backend: string, puerto: number, sinAcuse: boolean,
  *   rechazarToken: boolean}}
  */
 function leerOpciones() {
 	const { values } = parseArgs({
 		options: {
-			token: { type: 'string', multiple: true, default: [] },
-			emparejar: { type: 'boolean', default: false },
+			relojes: { type: 'string', default: '1' },
+			nuevo: { type: 'boolean', default: false },
 			backend: { type: 'string', default: 'http://localhost:8080' },
 			puerto: { type: 'string', default: '9090' },
 			'sin-acuse': { type: 'boolean', default: false },
@@ -48,13 +57,14 @@ function leerOpciones() {
 			ayuda: { type: 'boolean', default: false },
 		},
 	});
-	if (values.ayuda || (values.token.length === 0 && !values.emparejar)) {
+	const relojes = Number(values.relojes);
+	if (values.ayuda || !Number.isInteger(relojes) || relojes < 1) {
 		console.log(AYUDA);
 		process.exit(values.ayuda ? 0 : 1);
 	}
 	return {
-		tokens: values.token,
-		emparejar: values.emparejar,
+		relojes,
+		nuevo: values.nuevo,
 		backend: values.backend.replace(/\/$/, ''),
 		puerto: Number(values.puerto),
 		sinAcuse: values['sin-acuse'],
@@ -237,23 +247,67 @@ async function emparejar(opciones, nombre) {
 	}
 }
 
+/**
+ * Pregunta al backend en qué está el emparejamiento de un token.
+ * @param {object} opciones las de la línea de comandos
+ * @param {string} token el token del reloj
+ * @returns {Promise<string>} PENDIENTE, VINCULADO o VENCIDO
+ */
+async function estadoDelToken(opciones, token) {
+	const respuesta = await fetch(`${opciones.backend}/api/reloj/v1/emparejamientos/consulta`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ token }),
+	});
+	return (await respuesta.json()).estado;
+}
+
+/**
+ * Entrega el token del reloj: el guardado si sigue vinculado; si no (o con --nuevo), empareja con código y lo
+ * guarda. Así se comporta el reloj real al encenderse.
+ * @param {object} opciones las de la línea de comandos
+ * @param {string} nombre nombre corto del reloj simulado, que también nombra su archivo de token
+ * @returns {Promise<string>} un token que sirve para la API
+ */
+async function tokenDelReloj(opciones, nombre) {
+	const archivo = join(CARPETA_TOKENS, nombre);
+	let guardado = null;
+	try {
+		guardado = opciones.nuevo ? null : readFileSync(archivo, 'utf8').trim();
+	} catch {
+		// Primera vez: no hay token guardado
+	}
+	if (guardado && (await estadoDelToken(opciones, guardado)) === 'VINCULADO') {
+		anotar(nombre, 'sigue vinculado con su token guardado');
+		return guardado;
+	}
+	if (guardado) {
+		anotar(nombre, 'su token guardado ya no sirve (lo desvincularon o reemplazaron): se empareja de nuevo');
+	}
+	const token = await emparejar(opciones, nombre);
+	mkdirSync(CARPETA_TOKENS, { recursive: true });
+	writeFileSync(archivo, token, { mode: 0o600 });
+	return token;
+}
+
 /** Punto de entrada. */
 async function main() {
 	const opciones = leerOpciones();
-	if (opciones.emparejar) {
+	const relojes = [];
+	for (let i = 1; i <= opciones.relojes; i++) {
+		const nombre = `reloj-${i}`;
 		try {
-			opciones.tokens.push(await emparejar(opciones, `reloj-${opciones.tokens.length + 1}`));
+			relojes.push({
+				nombre,
+				tokenApi: await tokenDelReloj(opciones, nombre),
+				tokenFcm: `sim-${i}-${randomUUID()}`,
+				recibidos: new Map(),
+			});
 		} catch (e) {
-			console.error(`No se pudo emparejar con el backend en ${opciones.backend}: ${e.message}`);
+			console.error(`No se pudo emparejar ${nombre} con el backend en ${opciones.backend}: ${e.message}`);
 			process.exit(1);
 		}
 	}
-	const relojes = opciones.tokens.map((tokenApi, i) => ({
-		nombre: `reloj-${i + 1}`,
-		tokenApi,
-		tokenFcm: `sim-${i + 1}-${randomUUID()}`,
-		recibidos: new Map(),
-	}));
 	escucharAvisos(opciones, new Map(relojes.map((r) => [r.tokenFcm, r])));
 	for (const reloj of relojes) {
 		try {

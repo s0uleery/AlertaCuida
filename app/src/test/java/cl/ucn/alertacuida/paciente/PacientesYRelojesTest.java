@@ -101,18 +101,29 @@ class PacientesYRelojesTest {
 				.andExpect(status().isBadRequest());
 	}
 
-	/** Vincular entrega el token una vez; la base guarda solo su hash y las listas muestran el vínculo. */
+	/**
+	 * Se vincula con el código que muestra el reloj: la respuesta no trae ningún token, la base guarda solo el
+	 * hash del token que ya tiene el reloj y las listas muestran el vínculo. Sin código responde 400.
+	 */
 	@Test
-	void vincularEntregaElTokenUnaVezYLaBaseSoloGuardaSuHash() throws Exception {
+	void vincularConCodigoNoEntregaTokenYLaBaseSoloGuardaSuHash() throws Exception {
 		String maria = crearPaciente("12.345.678-5", "2026-01-10");
 		String reloj = crearReloj("R-001");
+		conJson(post("/api/pacientes/" + maria + "/reloj"), "{\"idDispositivo\": \"" + reloj + "\"}")
+				.andExpect(status().isBadRequest());
 
-		ResultActions vinculo = vincular(maria, reloj).andExpect(status().isCreated());
-		String token = JsonPath.read(vinculo.andReturn().getResponse().getContentAsString(), "$.token");
+		String pedido = mvc.perform(post("/api/reloj/v1/emparejamientos")).andReturn().getResponse()
+				.getContentAsString();
+		String tokenDelReloj = JsonPath.read(pedido, "$.token");
+		String respuesta = vincularConCodigo(maria, reloj, JsonPath.read(pedido, "$.codigo"))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.idAsignacion").isString())
+				.andExpect(jsonPath("$.token").doesNotExist())
+				.andReturn().getResponse().getContentAsString();
 
 		String guardado = jdbc.sql("SELECT hash_token_reloj FROM asignacion_reloj").query(String.class).single();
-		assertThat(token).hasSizeGreaterThan(40);
-		assertThat(guardado).isNotEqualTo(token).hasSize(64);
+		assertThat(respuesta).doesNotContain(tokenDelReloj);
+		assertThat(guardado).isNotEqualTo(tokenDelReloj).hasSize(64);
 		mvc.perform(conToken(get("/api/pacientes"), coordinador))
 				.andExpect(jsonPath("$[0].relojActual").value("R-001"));
 		mvc.perform(conToken(get("/api/relojes"), coordinador))
@@ -173,7 +184,8 @@ class PacientesYRelojesTest {
 		vincular(maria, reloj1);
 
 		conJson(post("/api/pacientes/" + maria + "/reloj/reemplazo"),
-				"{\"idDispositivo\": \"" + reloj2 + "\", \"estadoRelojAnterior\": \"EN_REPARACION\"}")
+				"{\"idDispositivo\": \"" + reloj2 + "\", \"estadoRelojAnterior\": \"EN_REPARACION\","
+						+ " \"codigoEmparejamiento\": \"" + codigoDeUnReloj() + "\"}")
 				.andExpect(status().isOk());
 
 		mvc.perform(conToken(get("/api/pacientes/" + maria), coordinador))
@@ -309,9 +321,21 @@ class PacientesYRelojesTest {
 				.andExpect(status().isCreated()));
 	}
 
-	/** El coordinador vincula el reloj al paciente. */
+	/** El coordinador vincula el reloj al paciente con el código que pidió un reloj recién encendido. */
 	private ResultActions vincular(String idPaciente, String idReloj) throws Exception {
-		return conJson(post("/api/pacientes/" + idPaciente + "/reloj"), "{\"idDispositivo\": \"" + idReloj + "\"}");
+		return vincularConCodigo(idPaciente, idReloj, codigoDeUnReloj());
+	}
+
+	/** El coordinador vincula el reloj al paciente con ese código de emparejamiento. */
+	private ResultActions vincularConCodigo(String idPaciente, String idReloj, String codigo) throws Exception {
+		return conJson(post("/api/pacientes/" + idPaciente + "/reloj"),
+				"{\"idDispositivo\": \"" + idReloj + "\", \"codigoEmparejamiento\": \"" + codigo + "\"}");
+	}
+
+	/** @return un código de emparejamiento, pedido como lo hace el reloj (sin token) */
+	private String codigoDeUnReloj() throws Exception {
+		return JsonPath.read(mvc.perform(post("/api/reloj/v1/emparejamientos")).andReturn().getResponse()
+				.getContentAsString(), "$.codigo");
 	}
 
 	/** Petición del coordinador con cuerpo JSON. */

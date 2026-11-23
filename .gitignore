@@ -74,3 +74,6 @@ CLAUDE.local.md
 ### Llave de Firebase (cuenta de servicio): va fuera del repositorio, ver docs/backend.md ###
 *firebase-adminsdk*.json
 firebase*.json
+
+# Tokens que guarda el simulador de reloj al emparejarse (como la memoria del reloj real)
+simulador-reloj/.tokens/

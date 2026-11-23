@@ -50,7 +50,7 @@ sequenceDiagram
 - **El código** tiene 8 caracteres sin letras que se confundan (ni 0/O ni 1/I/L), se muestra con un guion y da lo mismo cómo se escriba (minúsculas, espacios). Vence a los 10 minutos y sirve una sola vez. Si vence, la consulta responde `VENCIDO` y el reloj pide otro.
 - **Las dos rutas no llevan token**: el reloj todavía no tiene uno que sirva. La consulta lleva el token en el cuerpo. Para proteger la ruta pública, con más de 50 códigos pendientes a la vez responde 429 `DEMASIADAS_PETICIONES` con `Retry-After`.
 - **Emparejar de nuevo** (reloj restaurado de fábrica): el reloj pide otro código y en el dashboard se usa "Emparejar de nuevo". El token anterior deja de servir; el vínculo sigue.
-- **Sin código** (desarrollo y simulador): vincular sin `codigoEmparejamiento` sigue entregando un token una sola vez, para cargarlo a mano.
+- **No hay otra forma de vincular** (desde el 23-11-2026): sin código el dashboard responde 400, y ninguna respuesta ni pantalla muestra el token. Nadie lo escribe ni lo copia, ni siquiera en desarrollo: el simulador también se empareja con código.
 
 ## Flujo de una alerta
 

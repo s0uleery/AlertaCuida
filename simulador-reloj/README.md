@@ -21,20 +21,20 @@ Requisitos: Node 18 o superior. No tiene dependencias que instalar.
 1. Levantar el backend con el canal del simulador:
    - Con Maven: `FCM_CANAL=SIMULADOR ./mvnw -pl app spring-boot:run -Dspring-boot.run.profiles=dev`
    - Con Docker: poner `FCM_CANAL=SIMULADOR` en `.env` y `docker compose up -d --build`. El backend llega al simulador por `host.docker.internal`.
-2. Desde la raíz del repositorio, emparejar el reloj simulado como lo hará el real:
+2. Desde la raíz del repositorio:
 
 ```sh
-node simulador-reloj/simulador.mjs --emparejar
+node simulador-reloj/simulador.mjs
 ```
 
-   El simulador muestra un código (ej. `K7PM-42QX`). En el dashboard, en la ficha del usuario, usar **Entregar reloj** (o **Emparejar de nuevo**), elegir el reloj y escribir el código. En unos segundos el simulador muestra "emparejado" y sigue como siempre.
+   La primera vez, el simulador se empareja como lo hará el reloj real: muestra un código (ej. `K7PM-42QX`). En el dashboard, en la ficha del usuario, usar **Entregar reloj** (o **Reemplazar reloj** / **Emparejar de nuevo**), elegir el reloj y escribir el código. En unos segundos el simulador muestra "emparejado" y sigue solo. Nadie escribe ni copia el token: no hay otra forma de vincular un reloj.
 
-   Sin emparejar: vincular el reloj en el dashboard dejando el código vacío, copiar el token (se muestra una sola vez) y usar `--token <token del reloj>`.
+   El simulador guarda su token en `simulador-reloj/.tokens/` (fuera de git), como el reloj real lo guarda en su memoria. Las veces siguientes muestra "sigue vinculado con su token guardado" y no pide código. Si lo desvincularon o reemplazaron en el dashboard, lo detecta y se empareja de nuevo.
 
 | Opción | Para qué |
 |---|---|
-| `--emparejar` | Pide un código de emparejamiento, lo muestra y espera a que lo escriban en el dashboard. Si vence, pide otro. |
-| `--token <t>` | Token del reloj vinculado sin código. Se puede repetir para simular varios relojes a la vez. |
+| `--relojes <n>` | Cuántos relojes simular a la vez (por defecto 1). Cada uno se empareja con su propio código. |
+| `--nuevo` | Olvida los tokens guardados y empareja de nuevo, como un reloj restaurado de fábrica. |
 | `--backend <url>` | Dirección del backend. Por defecto `http://localhost:8080`. |
 | `--puerto <n>` | Puerto donde escucha. Por defecto `9090`; si se cambia, cambiar también `FCM_SIMULADOR_URL` (o `SIM_PUERTO` en `.env` con Docker). |
 | `--sin-acuse` | No acusa los avisos, para ver los reintentos del servidor (a 1, 1 y 2 minutos). |
@@ -44,6 +44,7 @@ Cada aviso se muestra con la hora local. Si un mismo `idAviso` llega otra vez (u
 
 ## Qué probar
 
+- **Emparejamiento:** correr el simulador con `--nuevo` y escribir el código en el dashboard. Si el código vence sin escribirlo (10 minutos), el simulador pide otro solo.
 - **Alerta resuelta:** enviar una alerta con el token del reloj y resolverla desde el dashboard. Llega `ALERTA_RESUELTA`, el simulador la acusa, y la línea de tiempo de la alerta muestra `FCM_ENVIADO` y `FCM_RECIBIDO`.
 - **Sin acuse:** lo mismo con `--sin-acuse`. El aviso llega 4 veces (envío y 3 reintentos) y la línea de tiempo termina en `FCM_NO_CONFIRMADO`.
 - **Configuración nueva:** cambiar un contacto del paciente. Llega `CONFIGURACION_NUEVA` y el simulador descarga la configuración.
