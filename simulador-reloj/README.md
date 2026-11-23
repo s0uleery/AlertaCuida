@@ -21,16 +21,20 @@ Requisitos: Node 18 o superior. No tiene dependencias que instalar.
 1. Levantar el backend con el canal del simulador:
    - Con Maven: `FCM_CANAL=SIMULADOR ./mvnw -pl app spring-boot:run -Dspring-boot.run.profiles=dev`
    - Con Docker: poner `FCM_CANAL=SIMULADOR` en `.env` y `docker compose up -d --build`. El backend llega al simulador por `host.docker.internal`.
-2. En el dashboard, vincular un reloj a un paciente y copiar el token del reloj (se muestra una sola vez).
-3. Desde la raíz del repositorio:
+2. Desde la raíz del repositorio, emparejar el reloj simulado como lo hará el real:
 
 ```sh
-node simulador-reloj/simulador.mjs --token <token del reloj>
+node simulador-reloj/simulador.mjs --emparejar
 ```
+
+   El simulador muestra un código (ej. `K7PM-42QX`). En el dashboard, en la ficha del usuario, usar **Entregar reloj** (o **Emparejar de nuevo**), elegir el reloj y escribir el código. En unos segundos el simulador muestra "emparejado" y sigue como siempre.
+
+   Sin emparejar: vincular el reloj en el dashboard dejando el código vacío, copiar el token (se muestra una sola vez) y usar `--token <token del reloj>`.
 
 | Opción | Para qué |
 |---|---|
-| `--token <t>` | Token del reloj. Se puede repetir para simular varios relojes a la vez. |
+| `--emparejar` | Pide un código de emparejamiento, lo muestra y espera a que lo escriban en el dashboard. Si vence, pide otro. |
+| `--token <t>` | Token del reloj vinculado sin código. Se puede repetir para simular varios relojes a la vez. |
 | `--backend <url>` | Dirección del backend. Por defecto `http://localhost:8080`. |
 | `--puerto <n>` | Puerto donde escucha. Por defecto `9090`; si se cambia, cambiar también `FCM_SIMULADOR_URL` (o `SIM_PUERTO` en `.env` con Docker). |
 | `--sin-acuse` | No acusa los avisos, para ver los reintentos del servidor (a 1, 1 y 2 minutos). |

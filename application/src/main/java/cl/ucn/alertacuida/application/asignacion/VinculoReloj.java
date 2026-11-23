@@ -1,8 +1,10 @@
 package cl.ucn.alertacuida.application.asignacion;
 
 import cl.ucn.alertacuida.application.asignacion.modelo.AsignacionVigente;
+import cl.ucn.alertacuida.application.asignacion.modelo.CodigoEmparejamiento;
 import cl.ucn.alertacuida.application.asignacion.modelo.TokenReloj;
 import cl.ucn.alertacuida.application.asignacion.puerto.Asignaciones;
+import cl.ucn.alertacuida.application.asignacion.puerto.Emparejamientos;
 import cl.ucn.alertacuida.application.auditoria.puerto.RegistroAuditoria;
 import cl.ucn.alertacuida.application.comun.error.Conflicto;
 import cl.ucn.alertacuida.application.comun.error.NoEncontrado;
@@ -30,29 +32,44 @@ import java.util.UUID;
  * </ul>
  * La base también impide los cruces (EXCLUDE), por si dos personas vinculan al mismo tiempo.
  *
- * <p>Cada vínculo tiene su token (rol DEVICE): se entrega una sola vez y en la base va su hash.
- * Cerrar el vínculo revoca el token.
+ * <p>Cada vínculo tiene su token (rol DEVICE) y en la base va su hash. Cerrar el vínculo revoca el token.
+ * Hay dos formas de que el reloj lo reciba:
+ * <ul>
+ * <li><b>Con código de emparejamiento</b> (lo normal): el reloj ya tiene su token desde que pidió el
+ * código ({@link EmparejarReloj}); al vincular se escribe ese código y el token empieza a servir.
+ * La respuesta no trae token.</li>
+ * <li><b>Sin código</b> (desarrollo y simulador): se genera un token y se entrega una sola vez, para
+ * cargarlo a mano en el reloj.</li>
+ * </ul>
  */
 public class VinculoReloj {
 
 	private final Asignaciones asignaciones;
 	private final Pacientes pacientes;
 	private final Relojes relojes;
+	private final Emparejamientos emparejamientos;
 	private final SecretosUnSoloUso secretos;
 	private final RegistroAuditoria auditoria;
 	private final Transacciones transacciones;
 	private final Clock reloj;
 
 	/** Recibe los puertos que usa; los arma ConfiguracionPacientesYRelojes. */
-	public VinculoReloj(Asignaciones asignaciones, Pacientes pacientes, Relojes relojes, SecretosUnSoloUso secretos,
-			RegistroAuditoria auditoria, Transacciones transacciones, Clock reloj) {
+	public VinculoReloj(Asignaciones asignaciones, Pacientes pacientes, Relojes relojes,
+			Emparejamientos emparejamientos, SecretosUnSoloUso secretos, RegistroAuditoria auditoria,
+			Transacciones transacciones, Clock reloj) {
 		this.asignaciones = asignaciones;
 		this.pacientes = pacientes;
 		this.relojes = relojes;
+		this.emparejamientos = emparejamientos;
 		this.secretos = secretos;
 		this.auditoria = auditoria;
 		this.transacciones = transacciones;
 		this.reloj = reloj;
+	}
+
+	/** Vincula sin código de emparejamiento: entrega un token nuevo (desarrollo y simulador). */
+	public TokenReloj vincular(UUID idPaciente, UUID idDispositivo, UUID idUsuario, String ip) {
+		return vincular(idPaciente, idDispositivo, null, idUsuario, ip);
 	}
 
 	/**
@@ -60,22 +77,29 @@ public class VinculoReloj {
 	 *
 	 * @param idPaciente    paciente que recibe el reloj
 	 * @param idDispositivo reloj entregado
+	 * @param codigo        el que muestra el reloj; vacío = sin código, se entrega un token nuevo
 	 * @param idUsuario     quien lo vincula, para la auditoría
 	 * @param ip            desde dónde llegó la petición, para la auditoría
-	 * @return el token para configurar el reloj (se muestra una sola vez)
+	 * @return el vínculo; con el token solo si se vinculó sin código (se muestra una sola vez)
 	 * @throws NoEncontrado       si el paciente o el reloj no existen
-	 * @throws SolicitudRechazada si el paciente no firmó el consentimiento
+	 * @throws SolicitudRechazada si el paciente no firmó el consentimiento, o el código no existe o venció
 	 * @throws Conflicto          si el paciente ya tiene reloj, está dado de baja, o el reloj no está
 	 *                            operativo o lo usa otro paciente
 	 */
-	public TokenReloj vincular(UUID idPaciente, UUID idDispositivo, UUID idUsuario, String ip) {
+	public TokenReloj vincular(UUID idPaciente, UUID idDispositivo, String codigo, UUID idUsuario, String ip) {
 		pacienteVinculable(idPaciente);
 		if (asignaciones.vigenteDelPaciente(idPaciente).isPresent()) {
 			throw new Conflicto("El usuario ya tiene un reloj: usa reemplazar");
 		}
 		relojVinculable(idDispositivo);
 		Instant ahora = reloj.instant();
-		return transacciones.ejecutar(() -> abrir(idDispositivo, idPaciente, ahora, idUsuario, ip));
+		return transacciones.ejecutar(() -> abrir(idDispositivo, idPaciente, codigo, ahora, idUsuario, ip));
+	}
+
+	/** Reemplaza sin código de emparejamiento: entrega un token nuevo (desarrollo y simulador). */
+	public TokenReloj reemplazar(UUID idPaciente, UUID idDispositivo, EstadoReloj estadoAnterior, UUID idUsuario,
+			String ip) {
+		return reemplazar(idPaciente, idDispositivo, estadoAnterior, null, idUsuario, ip);
 	}
 
 	/**
@@ -85,16 +109,18 @@ public class VinculoReloj {
 	 * @param idPaciente      paciente
 	 * @param idDispositivo   reloj nuevo
 	 * @param estadoAnterior  en qué estado queda el reloj anterior (ej. EN_REPARACION); vacío = sin cambio
+	 * @param codigo          el que muestra el reloj nuevo; vacío = sin código, se entrega un token nuevo
 	 * @param idUsuario       quien lo reemplaza, para la auditoría
 	 * @param ip              desde dónde llegó la petición, para la auditoría
-	 * @return el token del reloj nuevo; el del anterior deja de servir
+	 * @return el vínculo nuevo (con su token solo si fue sin código); el token del anterior deja de servir
 	 * @throws NoEncontrado       si el paciente o el reloj no existen
-	 * @throws SolicitudRechazada si el paciente no firmó el consentimiento o el reloj es el mismo
+	 * @throws SolicitudRechazada si el paciente no firmó el consentimiento, el reloj es el mismo, o el
+	 *                            código no existe o venció
 	 * @throws Conflicto          si el paciente no tiene reloj, está dado de baja, o el reloj nuevo no
 	 *                            está operativo o lo usa otro paciente
 	 */
-	public TokenReloj reemplazar(UUID idPaciente, UUID idDispositivo, EstadoReloj estadoAnterior, UUID idUsuario,
-			String ip) {
+	public TokenReloj reemplazar(UUID idPaciente, UUID idDispositivo, EstadoReloj estadoAnterior, String codigo,
+			UUID idUsuario, String ip) {
 		pacienteVinculable(idPaciente);
 		AsignacionVigente actual = vigente(idPaciente);
 		if (actual.idDispositivo().equals(idDispositivo)) {
@@ -109,7 +135,7 @@ public class VinculoReloj {
 				auditoria.registrar(idUsuario, "MODIFICAR", "SMARTWATCH", actual.idDispositivo().toString(), ip,
 						ahora);
 			}
-			return abrir(idDispositivo, idPaciente, ahora, idUsuario, ip);
+			return abrir(idDispositivo, idPaciente, codigo, ahora, idUsuario, ip);
 		});
 	}
 
@@ -149,6 +175,28 @@ public class VinculoReloj {
 		});
 	}
 
+	/**
+	 * Empareja de nuevo el reloj vigente del paciente, por ejemplo después de restaurarlo de fábrica:
+	 * el reloj pide otro código y su nuevo token reemplaza al anterior, sin cerrar el vínculo.
+	 *
+	 * @param codigo el que muestra el reloj
+	 * @return el vínculo, sin token (el reloj ya lo tiene)
+	 * @throws NoEncontrado       si el paciente no existe
+	 * @throws SolicitudRechazada si el código no existe o venció
+	 * @throws Conflicto          si no tiene reloj
+	 */
+	public TokenReloj emparejar(UUID idPaciente, String codigo, UUID idUsuario, String ip) {
+		pacientes.buscar(idPaciente).orElseThrow(() -> new NoEncontrado("No existe ese usuario"));
+		AsignacionVigente actual = vigente(idPaciente);
+		Instant ahora = reloj.instant();
+		return transacciones.ejecutar(() -> {
+			asignaciones.cambiarToken(actual.idAsignacion(), usarCodigo(codigo, ahora));
+			auditoria.registrar(idUsuario, "MODIFICAR", "ASIGNACION_RELOJ", actual.idAsignacion().toString(), ip,
+					ahora);
+			return new TokenReloj(actual.idAsignacion(), null);
+		});
+	}
+
 	/** Revisa que el paciente exista, siga en el programa y haya firmado el consentimiento. */
 	private void pacienteVinculable(UUID idPaciente) {
 		Paciente paciente = pacientes.buscar(idPaciente).orElseThrow(() -> new NoEncontrado("No existe ese usuario"));
@@ -180,12 +228,34 @@ public class VinculoReloj {
 				.orElseThrow(() -> new Conflicto("El usuario no tiene un reloj vinculado"));
 	}
 
-	/** Crea el vínculo con un token nuevo. Llamar dentro de una transacción. */
-	private TokenReloj abrir(UUID idDispositivo, UUID idPaciente, Instant ahora, UUID idUsuario, String ip) {
-		String token = secretos.nuevo();
-		UUID idAsignacion = asignaciones.abrir(idDispositivo, idPaciente, ahora, secretos.hash(token));
+	/**
+	 * Crea el vínculo. Con código, usa el token que ya tiene el reloj; sin código, genera uno nuevo.
+	 * Llamar dentro de una transacción: si algo falla, el código vuelve a quedar pendiente.
+	 */
+	private TokenReloj abrir(UUID idDispositivo, UUID idPaciente, String codigo, Instant ahora, UUID idUsuario,
+			String ip) {
+		boolean conCodigo = codigo != null && !codigo.isBlank();
+		String token = conCodigo ? null : secretos.nuevo();
+		String hash = conCodigo ? usarCodigo(codigo, ahora) : secretos.hash(token);
+		UUID idAsignacion = asignaciones.abrir(idDispositivo, idPaciente, ahora, hash);
 		auditoria.registrar(idUsuario, "CREAR", "ASIGNACION_RELOJ", idAsignacion.toString(), ip, ahora);
 		return new TokenReloj(idAsignacion, token);
+	}
+
+	/**
+	 * Usa el código de emparejamiento (sirve una sola vez). Llamar dentro de una transacción.
+	 *
+	 * @return el hash del token que ya tiene el reloj
+	 * @throws SolicitudRechazada si el código no existe o venció
+	 */
+	private String usarCodigo(String codigo, Instant ahora) {
+		String normalizado = CodigoEmparejamiento.normalizar(codigo);
+		if (normalizado.isEmpty()) {
+			throw new SolicitudRechazada("Escribe el código que muestra el reloj");
+		}
+		return emparejamientos.usar(secretos.hash(normalizado), ahora)
+				.orElseThrow(() -> new SolicitudRechazada(
+						"El código no existe o venció: pide uno nuevo en el reloj y vuelve a escribirlo"));
 	}
 
 	/** Cierra el vínculo (revoca su token). Llamar dentro de una transacción. */

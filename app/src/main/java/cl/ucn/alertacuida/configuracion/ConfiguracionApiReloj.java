@@ -4,7 +4,10 @@ import cl.ucn.alertacuida.application.alerta.RecibirAlerta;
 import cl.ucn.alertacuida.application.alerta.RevisionDiscrepancias;
 import cl.ucn.alertacuida.application.alerta.puerto.Alertas;
 import cl.ucn.alertacuida.application.asignacion.AutenticarReloj;
+import cl.ucn.alertacuida.application.asignacion.EmparejarReloj;
 import cl.ucn.alertacuida.application.asignacion.puerto.Asignaciones;
+import cl.ucn.alertacuida.application.asignacion.puerto.CodigosCortos;
+import cl.ucn.alertacuida.application.asignacion.puerto.Emparejamientos;
 import cl.ucn.alertacuida.application.calendario.ReglaEnrutamiento;
 import cl.ucn.alertacuida.application.clinica.PerfilClinicoPaciente;
 import cl.ucn.alertacuida.application.comun.puerto.SecretosUnSoloUso;
@@ -27,13 +30,21 @@ import org.springframework.context.annotation.Configuration;
  * {@link ConfiguracionPacientesYRelojes}, que tiene los del dashboard.
  */
 @Configuration
-@EnableConfigurationProperties(PropiedadesAlertas.class)
+@EnableConfigurationProperties({PropiedadesAlertas.class, PropiedadesEmparejamiento.class})
 public class ConfiguracionApiReloj {
 
 	/** Reconoce al reloj por su token en cada petición. */
 	@Bean
 	AutenticarReloj autenticarReloj(Asignaciones asignaciones, SecretosUnSoloUso secretos) {
 		return new AutenticarReloj(asignaciones, secretos);
+	}
+
+	/** El reloj pide su código de emparejamiento y pregunta si ya lo vincularon. */
+	@Bean
+	EmparejarReloj emparejarReloj(Emparejamientos emparejamientos, Asignaciones asignaciones, CodigosCortos codigos,
+			SecretosUnSoloUso secretos, PropiedadesEmparejamiento propiedades, Clock reloj) {
+		return new EmparejarReloj(emparejamientos, asignaciones, codigos, secretos, propiedades.vigencia(),
+				propiedades.maximoPendientes(), propiedades.segundosConsulta(), reloj);
 	}
 
 	/**

@@ -545,6 +545,9 @@ Depende de: 1.2, 1.5. Listo cuando: el personal configura un paciente completo d
 | [ ] | 3.3.6 | Validaciones de formularios y mensajes de error | 3 |
 | [ ] | 3.3.7 | Pruebas | 3 |
 | [x] | 3.3.8 | Zona segura y botón de ayuda en el perfil clínico; teléfono y opt-in de WhatsApp en el alta de cuentas; tipos de alerta nuevos | 3 |
+| [x] | 3.3.9 | Emparejamiento del reloj con código (como un Smart TV): el reloj muestra un código y quien instala lo escribe al vincular, sin ver ni copiar el token. Nueva | 7 |
+
+Nota (23-11-2026): 3.3.9 hecha. El reloj pide el código sin token (`POST /api/reloj/v1/emparejamientos`) y pregunta si ya lo vincularon (`.../consulta`); en el dashboard, "Entregar reloj", "Reemplazar reloj" y "Emparejar de nuevo" piden el código. Vence a los 10 minutos y sirve una vez (migración V15). Sin código se sigue entregando el token, solo para desarrollo y el simulador (`--emparejar` prueba el flujo nuevo). Detalle en [api-reloj.md](api-reloj.md#configuración-inicial-emparejamiento-con-código-23-11-2026). Falta acordarlo con quien desarrolle el reloj (0.4.8).
 
 ### 3.4 Estado actual y alertas activas (26 h). Cambia.
 Panel principal con el estado de cada paciente y las alertas activas, su línea de tiempo, su evidencia y el botón "Resolver alerta".

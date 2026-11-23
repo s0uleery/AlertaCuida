@@ -6,7 +6,7 @@ Lo que el backend **ya atiende** para el reloj (o el simulador), al 13 de noviem
 
 - **Base:** `/api/reloj/v1`. En desarrollo, `http://localhost:8080/api/reloj/v1`. El subdominio público está por definir con TI.
 - **Token del reloj:** cada petición lleva `Authorization: Bearer <token>`.
-  - El token se obtiene al vincular el reloj con un paciente desde el dashboard (`POST /api/pacientes/{id}/reloj`) y se muestra una sola vez.
+  - El token se obtiene con el [emparejamiento](#emparejamiento-sin-token): el reloj pide un código, lo muestra, y su token empieza a servir cuando alguien escribe el código al vincularlo en el dashboard. En desarrollo también se puede vincular sin código: el dashboard muestra el token una sola vez.
   - Con él, el servidor sabe qué reloj es y de qué paciente: el reloj **nunca** envía el id del paciente.
   - El token del dashboard no sirve aquí, ni el del reloj en el dashboard.
 - **Horas:** siempre en UTC, ISO 8601 (`2026-10-26T14:00:00Z`).
@@ -23,12 +23,15 @@ Lo que el backend **ya atiende** para el reloj (o el simulador), al 13 de noviem
 | 404 | `ALERTA_DESCONOCIDA` | El servidor no tiene esa alerta. Reenviar primero la alerta y después repetir el mensaje. |
 | 409 | `NO_APLICA` | El `eventId` ya se usó para otra cosa (por ejemplo, se envió como alerta y ahora llega como cancelación). No reintentar. |
 | 413 | `LOTE_GRANDE` | Más de 2.000 lecturas o ubicaciones. Partir el historial en varios lotes, cada uno con su `eventId`. |
+| 429 | `DEMASIADAS_PETICIONES` | Solo al pedir un código de emparejamiento: hay demasiados pendientes. Esperar `Retry-After` segundos y pedir otro. |
 | 429 / 5xx / sin red | — | Reintentar más tarde (respetar `Retry-After` si viene). |
 
 ## Resumen
 
 | Método y ruta | Cuándo | Respuesta |
 |---|---|---|
+| `POST /api/reloj/v1/emparejamientos` (sin token) | Al abrir la app sin token, o si el código venció | 201, 429 |
+| `POST /api/reloj/v1/emparejamientos/consulta` (sin token) | Cada `segundosConsulta` mientras muestra el código | 200 |
 | `POST /api/reloj/v1/sincronizaciones` | Cada 2 h, o al bajar del 15 % de batería | 200 |
 | `POST /api/reloj/v1/alertas` | Al terminar la ventana de 30 s sin cancelación | 201 nueva, 200 reenvío |
 | `POST /api/reloj/v1/cancelaciones` | Si el paciente canceló dentro de los 30 s (solo métricas) | 201 nueva, 200 reenvío |
@@ -39,6 +42,29 @@ Lo que el backend **ya atiende** para el reloj (o el simulador), al 13 de noviem
 | `GET /api/reloj/v1/configuracion` | Si la sincronización responde `configuracionNueva: true` | 200, 304 si no cambió |
 | `PUT /api/reloj/v1/token-fcm` | Al instalarse y cada vez que Firebase renueva el token | 204 |
 | `POST /api/reloj/v1/avisos-fcm/{idAviso}/recepcion` | Apenas llega un aviso de una alerta | 204 |
+
+## Emparejamiento (sin token)
+
+Son las únicas rutas sin `Authorization`: el reloj todavía no tiene un token que sirva. Decisiones en [api-reloj.md](api-reloj.md#configuración-inicial-emparejamiento-con-código-23-11-2026).
+
+### `POST /api/reloj/v1/emparejamientos`
+
+Sin cuerpo. Respuesta 201:
+```json
+{ "codigo": "K7PM-42QX", "token": "…", "expiraEn": "2026-11-23T15:10:00Z", "segundosConsulta": 5 }
+```
+- Mostrar `codigo` en pantalla y guardar `token` (todavía no sirve).
+- 429 `DEMASIADAS_PETICIONES`: esperar `Retry-After` segundos y volver a pedir.
+
+### `POST /api/reloj/v1/emparejamientos/consulta`
+
+```json
+{ "token": "…" }
+```
+Respuesta 200 con `estado`:
+- `PENDIENTE`: nadie ha escrito el código todavía. Volver a preguntar en `segundosConsulta`.
+- `VINCULADO`: el token ya sirve. Registrar el token de Firebase, sincronizar y descargar la configuración.
+- `VENCIDO`: el código venció (o el token no corresponde a nada). Pedir un código nuevo.
 
 ## `POST /api/reloj/v1/sincronizaciones`
 

@@ -8,6 +8,8 @@ Contrato entre el reloj (o el simulador) y la plataforma, tareas 0.4.3 a 0.4.7 d
 
 | Mensaje | Endpoint | Cuándo |
 |---|---|---|
+| Pedir código de emparejamiento | `POST /api/reloj/v1/emparejamientos` (sin token) | Al abrir la app sin token, o si el código venció |
+| Consultar el emparejamiento | `POST /api/reloj/v1/emparejamientos/consulta` (sin token) | Cada `segundosConsulta` mientras muestra el código |
 | Sincronización | `POST /api/reloj/v1/sincronizaciones` | Cada 2 h, o al 15 % de batería |
 | Configuración | `GET /api/reloj/v1/configuracion` | Si la sincronización o un aviso FCM dice que hay una nueva |
 | Alerta | `POST /api/reloj/v1/alertas` | Al terminar la ventana de 30 s sin cancelación |
@@ -20,6 +22,35 @@ Contrato entre el reloj (o el simulador) y la plataforma, tareas 0.4.3 a 0.4.7 d
 | Acuse de aviso FCM | `POST /api/reloj/v1/avisos-fcm/{idAviso}/recepcion` | Apenas llega un aviso de una alerta |
 | Avisos FCM (servidor → reloj) | Firebase, esquema `AvisoFcm` | Alerta confirmada o resuelta, simulacro, configuración nueva |
 | Webhook de WhatsApp (Meta → servidor) | `GET` y `POST /api/webhooks/whatsapp` | Verificación inicial; respuestas de botones y estados de entrega |
+
+## Configuración inicial: emparejamiento con código (23-11-2026)
+
+El reloj no tiene cámara ni un teclado cómodo, así que no se le escribe el token: se empareja con un código corto, como un Smart TV.
+
+```mermaid
+sequenceDiagram
+    participant R as Reloj
+    participant S as Servidor
+    participant D as Dashboard (quien instala)
+    R->>S: POST /emparejamientos (sin token)
+    S-->>R: 201 codigo "K7PM-42QX", token, expiraEn (10 min), segundosConsulta (5)
+    Note over R: Muestra el código y guarda el token
+    loop cada 5 s
+        R->>S: POST /emparejamientos/consulta {token}
+        S-->>R: PENDIENTE
+    end
+    D->>S: POST /api/pacientes/{id}/reloj {idDispositivo, codigoEmparejamiento}
+    S-->>D: 201 (sin token)
+    R->>S: POST /emparejamientos/consulta {token}
+    S-->>R: VINCULADO
+    R->>S: PUT /token-fcm, POST /sincronizaciones, GET /configuracion (con su token)
+```
+
+- **El reloj recibe su token al pedir el código**, pero no sirve hasta que alguien escribe el código en el dashboard. Al vincular, el servidor asocia ese token al vínculo: nadie ve ni copia el token, y la base guarda solo hashes.
+- **El código** tiene 8 caracteres sin letras que se confundan (ni 0/O ni 1/I/L), se muestra con un guion y da lo mismo cómo se escriba (minúsculas, espacios). Vence a los 10 minutos y sirve una sola vez. Si vence, la consulta responde `VENCIDO` y el reloj pide otro.
+- **Las dos rutas no llevan token**: el reloj todavía no tiene uno que sirva. La consulta lleva el token en el cuerpo. Para proteger la ruta pública, con más de 50 códigos pendientes a la vez responde 429 `DEMASIADAS_PETICIONES` con `Retry-After`.
+- **Emparejar de nuevo** (reloj restaurado de fábrica): el reloj pide otro código y en el dashboard se usa "Emparejar de nuevo". El token anterior deja de servir; el vínculo sigue.
+- **Sin código** (desarrollo y simulador): vincular sin `codigoEmparejamiento` sigue entregando un token una sola vez, para cargarlo a mano.
 
 ## Flujo de una alerta
 
@@ -52,7 +83,7 @@ Si nadie confirma, el reloj recorre la lista dos veces y termina con `POST /aler
 
 ## Decisiones
 
-- **El reloj se identifica solo con su token.** Es el que se muestra una vez al vincular el reloj (rol DEVICE). De él se deduce la asignación y, de ahí, el paciente: el reloj nunca envía el id del paciente, así que no puede escribir datos de otro. Si el reloj se desvincula o se reemplaza, el token deja de servir y todo responde 401.
+- **El reloj se identifica solo con su token.** Lo recibe al pedir su código de emparejamiento y empieza a servir cuando alguien escribe el código al vincular (rol DEVICE; ver [Configuración inicial](#configuración-inicial-emparejamiento-con-código-23-11-2026)). De él se deduce la asignación y, de ahí, el paciente: el reloj nunca envía el id del paciente, así que no puede escribir datos de otro. Si el reloj se desvincula o se reemplaza, el token deja de servir y todo responde 401.
 - **Las alertas se identifican por el `eventId` del reloj**, no por el id interno del servidor. Si la respuesta de `POST /alertas` se pierde por falta de señal, el reloj igual puede pedir avisos y consultar el estado con el id que ya conoce. Si el servidor todavía no tiene la alerta, responde 404 `ALERTA_DESCONOCIDA` y el reloj la reenvía primero.
 - **Todo lo que se reintenta es idempotente.** Sincronizaciones, alertas, cancelaciones y solicitudes de aviso llevan un `eventId` (UUID v4) único en la base. Repetir el mensaje devuelve la misma respuesta. Además, el mismo contacto, canal y ronda no se avisa dos veces aunque llegue con otro `eventId` (por ejemplo, tras reiniciarse el reloj).
 - **Una lectura mala no traba la sincronización.** Las lecturas fuera de rango (FC fuera de 20 a 250; SpO2 fuera de 50 a 100), con hora futura o anteriores a la asignación se descartan una por una y se informan en `lecturasRechazadas`. Si se rechazara el lote completo, el reloj lo reintentaría para siempre. Las lecturas repetidas se ignoran sin error (`lecturasRepetidas`).

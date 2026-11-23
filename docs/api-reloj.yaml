@@ -8,8 +8,9 @@ info:
     decisión y el flujo completo están en `docs/api-reloj.md`.
 
     - Todo va por HTTPS. Las horas van en ISO-8601 con zona (UTC, terminadas en `Z`).
-    - El reloj se identifica con el token que se le entrega al vincularlo (rol DEVICE). El
-      servidor deduce de él la asignación y el paciente: el reloj nunca envía el id del paciente.
+    - El reloj se identifica con su token (rol DEVICE), que recibe al pedir su código de
+      emparejamiento y que sirve desde que alguien escribe ese código al vincularlo. El servidor
+      deduce de él la asignación y el paciente: el reloj nunca envía el id del paciente.
     - Las alertas se identifican por el `eventId` que genera el reloj (o el servidor, en los
       simulacros y alertas técnicas).
     - Lo que el reloj puede reintentar lleva un `eventId`: repetirlo devuelve la misma respuesta
@@ -26,6 +27,8 @@ servers:
   - url: https://alertacuida.example.cl
     description: Servidor municipal (subdominio por definir con TI)
 tags:
+  - name: Emparejamiento
+    description: Configuración inicial con código, como un Smart TV. Sin token.
   - name: Sincronización
     description: Estado del reloj y lecturas acumuladas, cada 2 horas o al 15 % de batería.
   - name: Configuración
@@ -43,6 +46,59 @@ security:
   - tokenReloj: []
 
 paths:
+  /api/reloj/v1/emparejamientos:
+    post:
+      tags: [Emparejamiento]
+      operationId: pedirCodigoEmparejamiento
+      summary: Pide un código de emparejamiento y el token que usará el reloj
+      description: |
+        El reloj lo llama al abrir la app sin token, o cuando su código venció. Muestra `codigo` en
+        pantalla y guarda `token`, que empieza a servir cuando alguien escribe el código al vincular el
+        reloj en el dashboard. El código vence en 10 minutos y sirve una sola vez.
+      security: []
+      responses:
+        '201':
+          description: Código entregado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CodigoEmparejamiento' }
+        '429': { $ref: '#/components/responses/DemasiadasPeticiones' }
+
+  /api/reloj/v1/emparejamientos/consulta:
+    post:
+      tags: [Emparejamiento]
+      operationId: consultarEmparejamiento
+      summary: Pregunta si ya vincularon al reloj
+      description: |
+        Cada `segundosConsulta` mientras muestra el código. El token va en el cuerpo porque, mientras
+        está pendiente, la cabecera Authorization respondería 401.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string, minLength: 1, maxLength: 200 }
+      responses:
+        '200':
+          description: Estado del emparejamiento.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [estado]
+                properties:
+                  estado:
+                    type: string
+                    enum: [PENDIENTE, VINCULADO, VENCIDO]
+                    description: |
+                      PENDIENTE: seguir preguntando. VINCULADO: el token ya sirve; registrar el token de
+                      Firebase, sincronizar y descargar la configuración. VENCIDO: pedir un código nuevo.
+        '400': { $ref: '#/components/responses/MalFormado' }
+
   /api/reloj/v1/sincronizaciones:
     post:
       tags: [Sincronización]
@@ -429,6 +485,18 @@ components:
           schema: { $ref: '#/components/schemas/Problema' }
 
   schemas:
+    CodigoEmparejamiento:
+      type: object
+      required: [codigo, token, expiraEn, segundosConsulta]
+      properties:
+        codigo:
+          type: string
+          pattern: '^[2-9A-HJKMNP-Z]{4}-[2-9A-HJKMNP-Z]{4}$'
+          description: Para mostrar en pantalla. Sin 0, O, 1, I ni L.
+          examples: [K7PM-42QX]
+        token: { type: string, description: Token del reloj; sirve cuando alguien escribe el código al vincular. }
+        expiraEn: { type: string, format: date-time }
+        segundosConsulta: { type: integer, minimum: 1, examples: [5] }
     Problema:
       type: object
       description: Error en formato RFC 9457, el mismo que usa el dashboard.
