@@ -65,6 +65,17 @@ public class AlertasRelojController {
 				solicitud.segundosInmovilidad());
 	}
 
+	/**
+	 * El reloj recorrió la lista dos veces sin confirmación. Repetirlo no cambia la hora.
+	 *
+	 * @return 200 con el estado. 404 si la alerta no es de este reloj; 409 si se canceló
+	 */
+	@PostMapping("/alertas/{eventIdAlerta}/sin-respuesta")
+	public EstadoAlerta sinRespuesta(@PathVariable UUID eventIdAlerta,
+			@Valid @RequestBody SolicitudSinRespuesta solicitud, @AuthenticationPrincipal PrincipalReloj principal) {
+		return recibir.informarSinRespuesta(principal.reloj(), eventIdAlerta, solicitud.fechaHora());
+	}
+
 	/** @return 201 con la alerta cancelada; 200 si ya había llegado. 409 si ese eventId se envió como alerta */
 	@PostMapping("/cancelaciones")
 	public ResponseEntity<RespuestaAlerta> cancelar(@Valid @RequestBody SolicitudCancelacion solicitud,
@@ -92,7 +103,8 @@ public class AlertasRelojController {
 		if (evidencia == null || evidencia.lecturas() == null) {
 			return List.of();
 		}
-		return evidencia.lecturas().stream().map(lectura -> new LecturaEvidencia(lectura.tipo(), lectura.valor()))
+		return evidencia.lecturas().stream().map(lectura -> new LecturaEvidencia(lectura.tipo(), lectura.valor(),
+				lectura.fechaHoraMedicion()))
 				.toList();
 	}
 

@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import cl.ucn.alertacuida.application.comun.puerto.HashRun;
 import cl.ucn.alertacuida.domain.comun.Run;
+import cl.ucn.alertacuida.soporte.BaseDePrueba;
 import cl.ucn.alertacuida.soporte.PostgresDePrueba;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,11 +46,10 @@ class CuentasPersonalTest {
 	@Autowired
 	private PasswordEncoder encoder;
 
-	/** Un administrador y un coordinador activos, con contraseña "Clave-de-" + nombre + "1". */
+	/** Base vacía; un administrador y un coordinador activos, con contraseña "Clave-de-" + nombre + "1". */
 	@BeforeEach
 	void crearUsuarios() {
-		jdbc.sql("DELETE FROM registro_auditoria").update();
-		jdbc.sql("DELETE FROM usuario").update();
+		BaseDePrueba.vaciar(jdbc);
 		crear("11.111.111-1", "ADMINISTRADOR", "Admin", "admin@muni.cl");
 		crear("22.222.222-2", "COORDINADOR", "Coord", "coord@muni.cl");
 	}

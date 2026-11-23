@@ -46,6 +46,7 @@ class AltaYActivacionTest {
 	private CrearCuentaPersonal crear;
 	private NuevoEnlaceActivacion nuevoEnlace;
 	private ActivarCuenta activar;
+	private CrearAdministradorInicial adminInicial;
 
 	/** Casos de uso con dobles en memoria y un reloj que las pruebas pueden adelantar. */
 	@BeforeEach
@@ -53,7 +54,7 @@ class AltaYActivacionTest {
 		// El "hash" del RUN es "h-" + RUN normalizado; el de la contraseña, "hash:" + contraseña
 		SecretosUnSoloUso secretos = new SecretosContados();
 		EmisorEnlacesActivacion enlaces = new EmisorEnlacesActivacion(tokens, secretos, Duration.ofHours(48));
-		RegistroAuditoria registro = (usuario, accion, entidad, id, ip, fecha) ->
+		RegistroAuditoria registro = (usuario, accion, entidad, id, ip, fecha, detalle) ->
 				auditoria.add(accion + " " + entidad + " por " + usuario);
 		// Un método genérico no admite lambda, pero sí referencia a método
 		Transacciones enTransaccion = Supplier::get;
@@ -61,6 +62,7 @@ class AltaYActivacionTest {
 		nuevoEnlace = new NuevoEnlaceActivacion(cuentas, enlaces, registro, enTransaccion, reloj);
 		activar = new ActivarCuenta(tokens, secretos, cuentas, run -> "h-" + run.valor(),
 				contrasena -> "hash:" + contrasena, registro, enTransaccion, reloj);
+		adminInicial = new CrearAdministradorInicial(cuentas, crear);
 	}
 
 	/** La cuenta nace inactiva, sin contraseña y con un enlace que vence en 48 horas. */
@@ -81,11 +83,11 @@ class AltaYActivacionTest {
 	@Test
 	void elCoordinadorNecesitaTelefonoYSuOptInSeGuarda() {
 		assertThatThrownBy(() -> crear.crear(new DatosCuenta("12.345.678-5", "Rosa", null, "rosa@muni.cl",
-				"COORDINADOR", " ", false), ADMIN, "ip"))
+				"COORDINADOR", " ", false, false), ADMIN, "ip"))
 				.isInstanceOf(SolicitudRechazada.class).hasMessageContaining("WhatsApp");
 
 		EnlaceActivacion enlace = crear.crear(new DatosCuenta("12.345.678-5", "Rosa", null, "rosa@muni.cl",
-				"COORDINADOR", "9 1234 5678", true), ADMIN, "ip");
+				"COORDINADOR", "9 1234 5678", true, false), ADMIN, "ip");
 
 		NuevaCuenta guardada = cuentas.guardadas.get(enlace.idUsuario()).cuenta();
 		assertThat(guardada.telefono()).isEqualTo("+56912345678");
@@ -96,13 +98,14 @@ class AltaYActivacionTest {
 	@Test
 	void elOptInExigeUnTelefonoValido() {
 		EnlaceActivacion enlace = crear.crear(new DatosCuenta("12.345.678-5", "Ana", null, "ana@muni.cl", "PERSONAL",
-				"+56 9 1234 5678", false), ADMIN, "ip");
+				"+56 9 1234 5678", false, false), ADMIN, "ip");
 		assertThat(cuentas.guardadas.get(enlace.idUsuario()).cuenta().fechaOptIn()).isNull();
 
 		assertThatThrownBy(() -> crear.crear(new DatosCuenta("11.111.111-1", "Luis", null, "luis@muni.cl", "PERSONAL",
-				null, true), ADMIN, "ip")).isInstanceOf(SolicitudRechazada.class).hasMessageContaining("teléfono");
+				null, true, false), ADMIN, "ip")).isInstanceOf(SolicitudRechazada.class)
+				.hasMessageContaining("teléfono");
 		assertThatThrownBy(() -> crear.crear(new DatosCuenta("11.111.111-1", "Luis", null, "luis@muni.cl", "PERSONAL",
-				"123", false), ADMIN, "ip")).isInstanceOf(SolicitudRechazada.class);
+				"123", false, false), ADMIN, "ip")).isInstanceOf(SolicitudRechazada.class);
 	}
 
 	/** Se rechazan el RUN inválido, el rol inexistente y el RUN o correo repetidos. */
@@ -113,7 +116,7 @@ class AltaYActivacionTest {
 		assertThatThrownBy(() -> crear.crear(datos("12.345.678-0", "otra@muni.cl"), ADMIN, "ip"))
 				.isInstanceOf(SolicitudRechazada.class);
 		assertThatThrownBy(() -> crear.crear(new DatosCuenta("11.111.111-1", "Luis", null, "luis@muni.cl", "JEFE",
-				null, false),
+				null, false, false),
 				ADMIN, "ip")).isInstanceOf(SolicitudRechazada.class).hasMessageContaining("rol");
 		assertThatThrownBy(() -> crear.crear(datos("12345678-5", "otra@muni.cl"), ADMIN, "ip"))
 				.isInstanceOf(CuentaDuplicada.class).hasMessageContaining("RUN");
@@ -186,9 +189,49 @@ class AltaYActivacionTest {
 				.isInstanceOf(CuentaNoPendiente.class);
 	}
 
+	/**
+	 * En un servidor recién instalado no hay administrador: se crea uno pendiente con su enlace,
+	 * sin nadie que lo pida (la auditoría queda sin usuario).
+	 */
+	@Test
+	void sinAdministradorSeCreaElInicialPendienteConSuEnlace() {
+		Optional<EnlaceActivacion> enlace = adminInicial.crearSiFalta("12.345.678-5", " Ana Pérez ", "Ana@Muni.cl");
+
+		assertThat(enlace).isPresent();
+		CuentaGuardada guardada = cuentas.guardadas.get(enlace.get().idUsuario());
+		assertThat(guardada.cuenta().codigoRol()).isEqualTo("ADMINISTRADOR");
+		assertThat(guardada.cuenta().correo()).isEqualTo("ana@muni.cl");
+		assertThat(guardada.hashContrasena()).isNull();
+		assertThat(auditoria).containsExactly("CREAR USUARIO por null");
+	}
+
+	/** Si ya hay un administrador, aunque siga pendiente, no se crea otro: reiniciar no duplica. */
+	@Test
+	void conUnAdministradorYaCreadoNoSeCreaOtro() {
+		adminInicial.crearSiFalta("12.345.678-5", "Ana", "ana@muni.cl");
+
+		assertThat(adminInicial.crearSiFalta("11.111.111-1", "Luis", "luis@muni.cl")).isEmpty();
+		assertThat(cuentas.guardadas).hasSize(1);
+	}
+
+	/** Las cuentas de otros roles no cuentan como administrador. */
+	@Test
+	void otrosRolesNoCuentanComoAdministrador() {
+		crear.crear(datos("11.111.111-1", "luis@muni.cl"), ADMIN, "ip");
+
+		assertThat(adminInicial.crearSiFalta("12.345.678-5", "Ana", "ana@muni.cl")).isPresent();
+	}
+
+	/** Un RUN mal escrito en la configuración se rechaza, para que el servidor no arranque sin avisar. */
+	@Test
+	void unRunInvalidoSeRechaza() {
+		assertThatThrownBy(() -> adminInicial.crearSiFalta("12.345.678-0", "Ana", "ana@muni.cl"))
+				.isInstanceOf(SolicitudRechazada.class);
+	}
+
 	/** @return datos de una persona con rol PERSONAL, con ese RUN y correo */
 	private static DatosCuenta datos(String run, String correo) {
-		return new DatosCuenta(run, " Ana Pérez ", "Enfermera", correo, "PERSONAL", null, false);
+		return new DatosCuenta(run, " Ana Pérez ", "Enfermera", correo, "PERSONAL", null, false, false);
 	}
 
 	/** Una cuenta guardada en el doble en memoria, con su hash de contraseña (null = pendiente). */
@@ -208,6 +251,11 @@ class AltaYActivacionTest {
 		@Override
 		public boolean existeCorreo(String correo) {
 			return guardadas.values().stream().anyMatch(g -> g.cuenta().correo().equals(correo));
+		}
+
+		@Override
+		public boolean existeAdministrador() {
+			return guardadas.values().stream().anyMatch(g -> "ADMINISTRADOR".equals(g.cuenta().codigoRol()));
 		}
 
 		@Override

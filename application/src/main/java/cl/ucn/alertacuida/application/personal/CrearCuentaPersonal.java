@@ -10,7 +10,6 @@ import cl.ucn.alertacuida.application.personal.modelo.EnlaceActivacion;
 import cl.ucn.alertacuida.application.personal.modelo.NuevaCuenta;
 import cl.ucn.alertacuida.application.personal.puerto.CuentasPersonal;
 import cl.ucn.alertacuida.domain.comun.Run;
-import cl.ucn.alertacuida.domain.contacto.NumeroWhatsapp;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Locale;
@@ -21,9 +20,6 @@ import java.util.UUID;
  * elige la suya con el enlace de activación, así nadie más la conoce.
  */
 public class CrearCuentaPersonal {
-
-	/** Rol que recibe por WhatsApp los avisos de la oficina PRLAC: necesita teléfono. */
-	static final String ROL_AVISOS_OFICINA = "COORDINADOR";
 
 	private final CuentasPersonal cuentas;
 	private final HashRun hashRun;
@@ -89,32 +85,9 @@ public class CrearCuentaPersonal {
 			throw new CuentaDuplicada("Ya existe una cuenta con ese correo");
 		}
 		String cargo = datos.cargo() == null || datos.cargo().isBlank() ? null : datos.cargo().strip();
-		String telefono = telefono(datos);
+		String telefono = TelefonoAvisos.validar(datos.codigoRol(), datos.telefono(), datos.aceptaWhatsapp(), false);
 		return new NuevaCuenta(run.valor(), runHash, datos.nombre().strip(), cargo, correo, datos.codigoRol(),
-				telefono, datos.aceptaWhatsapp() ? ahora : null);
-	}
-
-	/**
-	 * @return el teléfono normalizado, o vacío si no se escribió
-	 * @throws SolicitudRechazada si no es un celular válido, falta en un coordinador o se acepta
-	 *                            WhatsApp sin teléfono
-	 */
-	private static String telefono(DatosCuenta datos) {
-		if (datos.telefono() == null || datos.telefono().isBlank()) {
-			if (ROL_AVISOS_OFICINA.equals(datos.codigoRol())) {
-				throw new SolicitudRechazada("Los coordinadores necesitan un teléfono con WhatsApp: reciben los "
-						+ "avisos de la oficina PRLAC");
-			}
-			if (datos.aceptaWhatsapp()) {
-				throw new SolicitudRechazada("Para aceptar WhatsApp falta el teléfono");
-			}
-			return null;
-		}
-		try {
-			return NumeroWhatsapp.de(datos.telefono()).valor();
-		} catch (IllegalArgumentException invalido) {
-			throw new SolicitudRechazada(invalido.getMessage());
-		}
+				telefono, datos.aceptaWhatsapp() ? ahora : null, datos.recibeAvisos());
 	}
 
 }

@@ -153,8 +153,9 @@ class RevisionDiscrepanciasTest {
 		return new Modulos(true, true, true, true, true, true, true);
 	}
 
+	/** @return una lectura de la evidencia, medida a la hora de la prueba */
 	private static LecturaEvidencia lectura(TipoLectura tipo, double valor) {
-		return new LecturaEvidencia(tipo, valor);
+		return new LecturaEvidencia(tipo, valor, AHORA);
 	}
 
 	private static BigDecimal numero(int valor) {

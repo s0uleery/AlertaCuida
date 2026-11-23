@@ -9,11 +9,19 @@ import cl.ucn.alertacuida.application.comun.puerto.HashRun;
 import cl.ucn.alertacuida.application.comun.puerto.SecretosUnSoloUso;
 import cl.ucn.alertacuida.application.comun.puerto.Transacciones;
 import cl.ucn.alertacuida.application.personal.ActivarCuenta;
+import cl.ucn.alertacuida.application.personal.CambiarRecibeAvisos;
+import cl.ucn.alertacuida.application.personal.CambiarRolPersonal;
+import cl.ucn.alertacuida.application.personal.CambiarTelefonoPersonal;
+import cl.ucn.alertacuida.application.personal.ConsultarEquipo;
+import cl.ucn.alertacuida.application.personal.CrearAdministradorInicial;
 import cl.ucn.alertacuida.application.personal.CrearCuentaPersonal;
 import cl.ucn.alertacuida.application.personal.EmisorEnlacesActivacion;
+import cl.ucn.alertacuida.application.personal.GuardarPermisosRol;
 import cl.ucn.alertacuida.application.personal.NuevoEnlaceActivacion;
 import cl.ucn.alertacuida.application.personal.puerto.CuentasPersonal;
+import cl.ucn.alertacuida.application.personal.puerto.EquipoPersonal;
 import cl.ucn.alertacuida.application.personal.puerto.HashContrasena;
+import cl.ucn.alertacuida.application.personal.puerto.RolesPermisos;
 import cl.ucn.alertacuida.application.personal.puerto.TokensActivacion;
 import cl.ucn.alertacuida.application.sesion.AperturaSesion;
 import cl.ucn.alertacuida.application.sesion.CerrarSesion;
@@ -117,11 +125,50 @@ public class ConfiguracionCasosDeUso {
 		return new CrearCuentaPersonal(cuentas, hashRun, enlaces, auditoria, transacciones, reloj);
 	}
 
+	/** Primer administrador de un servidor sin datos de ejemplo; lo usa AdministradorInicialAlArrancar. */
+	@Bean
+	CrearAdministradorInicial crearAdministradorInicial(CuentasPersonal cuentas, CrearCuentaPersonal crear) {
+		return new CrearAdministradorInicial(cuentas, crear);
+	}
+
 	/** Reemplazo de un enlace de activación perdido o vencido. */
 	@Bean
 	NuevoEnlaceActivacion nuevoEnlaceActivacion(CuentasPersonal cuentas, EmisorEnlacesActivacion enlaces,
 			RegistroAuditoria auditoria, Transacciones transacciones, Clock reloj) {
 		return new NuevoEnlaceActivacion(cuentas, enlaces, auditoria, transacciones, reloj);
+	}
+
+	/** Lista de las cuentas del equipo y de los roles con sus permisos. */
+	@Bean
+	ConsultarEquipo consultarEquipo(EquipoPersonal equipo, RolesPermisos roles) {
+		return new ConsultarEquipo(equipo, roles);
+	}
+
+	/** Cambio del rol de una cuenta del equipo. */
+	@Bean
+	CambiarRolPersonal cambiarRolPersonal(EquipoPersonal equipo, RolesPermisos roles, RegistroAuditoria auditoria,
+			Transacciones transacciones, Clock reloj) {
+		return new CambiarRolPersonal(equipo, roles, auditoria, transacciones, reloj);
+	}
+
+	/** Aviso por correo de las alertas técnicas de una cuenta. */
+	@Bean
+	CambiarRecibeAvisos cambiarRecibeAvisos(EquipoPersonal equipo, RegistroAuditoria auditoria, Clock reloj) {
+		return new CambiarRecibeAvisos(equipo, auditoria, reloj);
+	}
+
+	/** Celular con WhatsApp y opt-in de una cuenta ya creada. */
+	@Bean
+	CambiarTelefonoPersonal cambiarTelefonoPersonal(EquipoPersonal equipo, RegistroAuditoria auditoria,
+			Transacciones transacciones, Clock reloj) {
+		return new CambiarTelefonoPersonal(equipo, auditoria, transacciones, reloj);
+	}
+
+	/** Permisos de los roles. */
+	@Bean
+	GuardarPermisosRol guardarPermisosRol(RolesPermisos roles, RegistroAuditoria auditoria,
+			Transacciones transacciones, Clock reloj) {
+		return new GuardarPermisosRol(roles, auditoria, transacciones, reloj);
 	}
 
 	/** Activación de la cuenta con el enlace. */

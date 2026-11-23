@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import cl.ucn.alertacuida.application.comun.puerto.HashRun;
 import cl.ucn.alertacuida.domain.comun.Run;
+import cl.ucn.alertacuida.soporte.BaseDePrueba;
 import cl.ucn.alertacuida.soporte.PostgresDePrueba;
 import com.jayway.jsonpath.JsonPath;
 import java.util.List;
@@ -56,10 +57,7 @@ class AuditoriaTest {
 	/** Base con un administrador, un coordinador y un paciente; el registro parte vacío en cada prueba. */
 	@BeforeEach
 	void preparar() throws Exception {
-		for (String tabla : new String[] {"asignacion_reloj", "smartwatch", "paciente", "registro_auditoria",
-				"usuario"}) {
-			jdbc.sql("DELETE FROM " + tabla).update();
-		}
+		BaseDePrueba.vaciar(jdbc);
 		crearUsuario("11.111.111-1", "ADMINISTRADOR", "Admin");
 		crearUsuario("22.222.222-2", "COORDINADOR", "Coord");
 		administrador = token("11.111.111-1", "Clave-de-Admin1");

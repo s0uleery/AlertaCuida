@@ -17,6 +17,8 @@ import org.springframework.validation.annotation.Validated;
  * @param claveJwt      firma de los tokens (HS256): al menos 32 caracteres
  * @param claveCifrado  llave AES-256 de los datos personales: 32 bytes en base64. Si se pierde, no se
  *                      pueden leer los datos cifrados
+ * @param claveRespuesta firma (HMAC) de los enlaces con que un contacto responde a su correo: al menos 32
+ *                      caracteres. Si cambia, los enlaces ya enviados dejan de servir
  * @param duracionToken vida del token de acceso
  * @param sesion        cuánto dura una sesión y cómo viaja su token de renovación
  * @param bloqueo       cuándo se bloquea una cuenta por intentos fallidos
@@ -28,6 +30,7 @@ public record PropiedadesSeguridad(
 		@NotNull @Size(min = 16) String claveRun,
 		@NotNull @Size(min = 32) String claveJwt,
 		@NotBlank String claveCifrado,
+		@NotNull @Size(min = 32) String claveRespuesta,
 		@NotNull Duration duracionToken,
 		@NotNull @Valid Sesion sesion,
 		@NotNull @Valid Bloqueo bloqueo,

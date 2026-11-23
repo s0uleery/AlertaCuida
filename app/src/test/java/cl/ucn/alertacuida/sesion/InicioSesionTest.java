@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import cl.ucn.alertacuida.application.comun.puerto.HashRun;
 import cl.ucn.alertacuida.application.sesion.LimpiarTokensVencidos;
 import cl.ucn.alertacuida.domain.comun.Run;
+import cl.ucn.alertacuida.soporte.BaseDePrueba;
 import cl.ucn.alertacuida.soporte.PostgresDePrueba;
 import com.jayway.jsonpath.JsonPath;
 import jakarta.servlet.http.Cookie;
@@ -55,8 +56,7 @@ class InicioSesionTest {
 	 */
 	@BeforeEach
 	void crearUsuarios() {
-		jdbc.sql("DELETE FROM registro_auditoria").update();
-		jdbc.sql("DELETE FROM usuario").update();
+		BaseDePrueba.vaciar(jdbc);
 		crear("12.345.678-5", "PERSONAL", "Ana", "ana@muni.cl", true);
 		crear("11.111.111-1", "COORDINADOR", "Luis", "luis@muni.cl", false);
 	}

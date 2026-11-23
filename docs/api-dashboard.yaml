@@ -26,10 +26,9 @@ info:
       enumeración inválido) responden con el formato por defecto de Spring:
       `{timestamp, status, error, path}`, sin `detail`.
 
-    **Todavía no existen:** `/api/alertas` (3.4; el formato que espera el front está en
-    `features/alertas/tipos.ts`), panel de estado general (3.4.1), tendencias de FC y SpO2
+    **Todavía no existen:** panel de estado general (3.4.1), tendencias de FC y SpO2
     (3.5), reportes (3.6), bandeja de día hábil (3.7), estado técnico de los relojes (3.8),
-    cierre de sesión y renovación del token (1.3.4) y el listado de cuentas del equipo.
+    cierre de sesión y renovación del token (1.3.4), y editar los datos o desactivar una cuenta del equipo.
 servers:
   - url: http://localhost:8080
     description: Backend en desarrollo (desde el front, usar rutas relativas `/api/...`)
@@ -37,7 +36,13 @@ tags:
   - name: Sesión
     description: Inicio de sesión y activación de cuentas.
   - name: Cuentas del equipo
-    description: Alta de cuentas del personal. Solo el administrador.
+    description: Alta, lista, cambio de rol y aviso técnico por correo de las cuentas del personal. Solo el administrador.
+  - name: Roles y permisos
+    description: Permisos de cada rol (pestaña Permisos de Administración). Solo el administrador.
+  - name: Alertas
+    description: Lista, línea de tiempo y atención de las alertas.
+  - name: Reportes
+    description: Red de seguridad (posibles eventos que el reloj no alertó).
   - name: Pacientes
     description: Personas mayores atendidas (en pantalla, "usuarios").
   - name: Condiciones
@@ -52,6 +57,10 @@ tags:
     description: Registro y edición de los relojes.
   - name: Calendario
     description: Horario hábil y feriados, de solo lectura.
+  - name: Respuesta del contacto
+    description: >-
+      Página pública /responder, que abre un contacto del paciente desde los enlaces de su correo para decir
+      si va o no. Sin cuenta: la autoriza el token firmado del enlace.
 
 security:
   - tokenDashboard: []
@@ -144,6 +153,281 @@ paths:
         '401': { $ref: '#/components/responses/SinToken' }
         '403': { $ref: '#/components/responses/SinPermiso' }
 
+  /api/alertas:
+    get:
+      tags: [Alertas]
+      operationId: listarAlertas
+      summary: Hasta 200 alertas no canceladas
+      description: Exige `ALERTAS:VER`. Primero las `SIN_RESPUESTA` abiertas; después, las más recientes.
+      responses:
+        '200':
+          description: Alertas.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ResumenAlerta' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+
+  /api/alertas/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Alertas]
+      operationId: detalleAlerta
+      summary: Una alerta con su línea de tiempo
+      description: Exige `ALERTAS:VER`.
+      responses:
+        '200':
+          description: La alerta.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DetalleAlerta' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
+  /api/alertas/{id}/asumir:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [Alertas]
+      operationId: asumirAlerta
+      summary: La persona queda a cargo del caso
+      description: Exige `ALERTAS:EDITAR`.
+      responses:
+        '204': { description: Asumida. }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '409': { $ref: '#/components/responses/Conflicto' }
+
+  /api/alertas/{id}/resolver:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [Alertas]
+      operationId: resolverAlerta
+      summary: Cierra la alerta
+      description: |
+        Exige `ALERTAS:EDITAR`. La puede resolver cualquier cuenta con el permiso; si nadie la había
+        asumido, queda como responsable. Si la envió el reloj, deja pendiente el aviso FCM `ALERTA_RESUELTA`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SolicitudResolucion' }
+      responses:
+        '204': { description: Resuelta. }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '409': { $ref: '#/components/responses/Conflicto' }
+
+  /api/alertas/{id}/seguimiento/cerrar:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [Alertas]
+      operationId: cerrarSeguimientoAlerta
+      summary: Termina el seguimiento de una alerta POSITIVA
+      description: Exige `ALERTAS:EDITAR`.
+      responses:
+        '204': { description: Seguimiento cerrado. }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '409': { $ref: '#/components/responses/Conflicto' }
+
+  /api/hallazgos:
+    get:
+      tags: [Reportes]
+      operationId: listarHallazgos
+      summary: Red de seguridad — lecturas graves sin alerta del reloj cerca
+      description: >-
+        Exige `REPORTES:VER`; la lectura queda auditada como `LEER REPORTE`. Lecturas de FC o SpO2 más allá del
+        límite grave vigente al medir (estricto), con el módulo de esa variable encendido, sin una alerta del reloj
+        de FC, SPO2, FC_SPO2 o TENDENCIA a 30 minutos o menos (también canceladas; sin simulacros). No se guarda
+        nada ni se avisa a nadie. La más reciente primero, hasta 500.
+      parameters:
+        - { name: desde, in: query, required: false, description: 'Primer día de Chile, incluido. Por defecto, 6 días antes de hasta.', schema: { type: string, format: date } }
+        - { name: hasta, in: query, required: false, description: 'Último día de Chile, incluido. Por defecto, hoy.', schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Los hallazgos.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Hallazgo' }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+
+  /api/alertas/{id}/seguimiento:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [Alertas]
+      operationId: registrarSeguimiento
+      summary: Registra una llamada, visita, derivación o nota del caso
+      description: >-
+        Exige `ALERTAS:EDITAR`. Con la alerta sin asignar, en atención o en seguimiento. `nota` obligatoria salvo en
+        DERIVACION, que exige un `destino` activo. Nota cifrada; auditada como `CREAR SEGUIMIENTO`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tipo]
+              properties:
+                tipo: { type: string, enum: [LLAMADA, VISITA, DERIVACION, NOTA] }
+                destino: { type: string, nullable: true, examples: [CESFAM] }
+                nota: { type: string, nullable: true }
+      responses:
+        '201':
+          description: Registrada.
+          content:
+            application/json:
+              schema: { type: object, properties: { id: { type: string, format: uuid } } }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '409': { $ref: '#/components/responses/Conflicto' }
+
+  /api/destinos-derivacion:
+    get:
+      tags: [Alertas]
+      operationId: listarDestinosDerivacion
+      summary: Destinos activos a los que se puede derivar un caso
+      description: Exige `ALERTAS:VER`. Por nombre.
+      responses:
+        '200':
+          description: Los destinos.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    codigo: { type: string, examples: [CESFAM] }
+                    nombre: { type: string }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+
+  /api/personal/{id}/telefono:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      tags: [Cuentas del equipo]
+      operationId: cambiarTelefonoPersonal
+      summary: Cambia o quita el celular con WhatsApp de una cuenta y su opt-in
+      description: >-
+        Exige `ADMINISTRACION:EDITAR`. Vacío o null quita el teléfono (no en un coordinador). `aceptaWhatsapp`
+        deja el opt-in con la hora del cambio. Se guarda cifrado; la auditoría no guarda el número.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [aceptaWhatsapp]
+              properties:
+                telefono: { type: string, nullable: true, examples: ['+56 9 1234 5678'] }
+                aceptaWhatsapp: { type: boolean }
+      responses:
+        '204': { description: Guardado. }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
+  /api/pacientes/{id}/tendencias:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Reportes]
+      operationId: tendenciasPaciente
+      summary: Evolución de FC y SpO2 con sus alertas
+      description: >-
+        Exige `REPORTES:VER`; auditada como `LEER REPORTE`. Hasta 2 días cada lectura, hasta 31 por hora y hasta
+        90 por día (hora de Chile). Por defecto, los últimos 7 días.
+      parameters:
+        - { name: desde, in: query, required: false, schema: { type: string, format: date } }
+        - { name: hasta, in: query, required: false, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Las tendencias.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TendenciasPaciente' }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
+  /api/pacientes/{id}/reportes/diario:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Reportes]
+      operationId: reporteDiario
+      summary: Reporte de un día de Chile
+      description: Exige `REPORTES:VER`; auditado como `LEER REPORTE`. Se calcula al pedirlo. Por defecto, hoy.
+      parameters:
+        - { name: dia, in: query, required: false, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: El reporte; `anterior` va vacío.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReporteUsuario' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
+  /api/pacientes/{id}/reportes/semanal:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Reportes]
+      operationId: reporteSemanal
+      summary: Reporte de lunes a domingo, con la semana anterior
+      description: Exige `REPORTES:VER`; auditado como `LEER REPORTE`. `dia` es cualquier día de la semana; por defecto, hoy.
+      parameters:
+        - { name: dia, in: query, required: false, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: El reporte con `anterior`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReporteUsuario' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
+  /api/panel:
+    get:
+      tags: [Alertas]
+      operationId: panelGeneral
+      summary: Panel general de la portada
+      description: >-
+        Exige `ALERTAS:VER`. Totales de alertas abiertas (como la lista), sin respuesta y en seguimiento; relojes en
+        rojo y amarillo; una fila por usuario activo con su reloj vigente, su semáforo y sus alertas abiertas.
+      responses:
+        '200':
+          description: El panel.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Panel' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+
   /api/auth/yo:
     get:
       tags: [Sesión]
@@ -177,7 +461,77 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problema' }
 
+  /api/respuestas-contacto/consulta:
+    post:
+      tags: [Respuesta del contacto]
+      operationId: consultarRespuestaContacto
+      summary: La alerta del enlace y lo que ya respondió el contacto, sin registrar nada
+      description: >-
+        La persona llega desde el único enlace de su correo, `/responder#<token>`. Abrir el enlace
+        no registra nada: Gmail y Outlook abren enlaces solos para revisarlos. Solo sirve el token de un correo
+        a un contacto de la lista del paciente.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SolicitudConsultaRespuesta' }
+      responses:
+        '200':
+          description: La alerta.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VistaRespuesta' }
+        '400':
+          description: El enlace no sirve (mismo mensaje para cualquier causa).
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problema' }
+
+  /api/respuestas-contacto:
+    post:
+      tags: [Respuesta del contacto]
+      operationId: responderComoContacto
+      summary: Registra "Confirmo que voy" o "No puedo asistir"
+      description: >-
+        Cuenta igual que el botón del WhatsApp. Vale solo la primera respuesta: si ya había una, se devuelve
+        sin cambiarla. Si la alerta fue resuelta o cancelada, no se registra (`cerrada: true`). Si otro contacto
+        ya confirmó o el reloj terminó la lista sin respuesta, se registra igual. `VOY_EN_CAMINO` confirma la
+        alerta y deja el aviso `ALERTA_CONFIRMADA` al reloj.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SolicitudRespuestaContacto' }
+      responses:
+        '200':
+          description: Cómo quedó.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VistaRespuesta' }
+        '400':
+          description: El enlace no sirve, o falta la respuesta.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problema' }
+
   /api/personal:
+    get:
+      tags: [Cuentas del equipo]
+      operationId: listarCuentas
+      summary: Cuentas del equipo por nombre, con estado, último acceso y aviso técnico
+      description: 'Permiso: `ADMINISTRACION:VER`. No trae el RUN ni el teléfono, que van cifrados.'
+      responses:
+        '200':
+          description: Cuentas del equipo.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PerfilEquipo' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
     post:
       tags: [Cuentas del equipo]
       operationId: crearCuenta
@@ -217,6 +571,109 @@ paths:
         '403': { $ref: '#/components/responses/SinPermiso' }
         '404':
           description: La cuenta no existe o ya está activa.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problema' }
+
+  /api/personal/{idUsuario}/rol:
+    parameters:
+      - $ref: '#/components/parameters/IdUsuario'
+    put:
+      tags: [Cuentas del equipo]
+      operationId: cambiarRol
+      summary: Cambia el rol de otra cuenta
+      description: >-
+        Permiso: `ADMINISTRACION:EDITAR`. Rige cuando la persona vuelve a iniciar sesión. Al pasar a
+        COORDINADOR una cuenta sin teléfono (`tieneTelefono: false`) hay que enviar el teléfono.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SolicitudCambioRol' }
+      responses:
+        '204': { description: Rol cambiado; sin cambios si ya tenía ese rol. }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '409':
+          description: Es la cuenta propia, o el sistema quedaría sin un administrador activo.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problema' }
+
+  /api/personal/{idUsuario}/recibe-avisos:
+    parameters:
+      - $ref: '#/components/parameters/IdUsuario'
+    put:
+      tags: [Cuentas del equipo]
+      operationId: cambiarRecibeAvisos
+      summary: Enciende o apaga el correo de las alertas técnicas de una cuenta
+      description: 'Permiso: `ADMINISTRACION:EDITAR`. Sirve también para la cuenta propia.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recibeAvisos]
+              properties:
+                recibeAvisos: { type: boolean }
+      responses:
+        '204': { description: Guardado. }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
+  /api/roles:
+    get:
+      tags: [Roles y permisos]
+      operationId: listarRoles
+      summary: Roles activos con sus permisos, el administrador primero
+      description: 'Permiso: `ADMINISTRACION:VER`.'
+      responses:
+        '200':
+          description: Roles con sus permisos.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/RolConPermisos' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+
+  /api/roles/{codigo}/permisos:
+    parameters:
+      - name: codigo
+        in: path
+        required: true
+        description: Código del rol, por ejemplo PERSONAL.
+        schema: { type: string }
+    put:
+      tags: [Roles y permisos]
+      operationId: guardarPermisos
+      summary: Reemplaza todos los permisos de un rol
+      description: 'Permiso: `ADMINISTRACION:EDITAR`. Rigen cuando cada persona vuelve a iniciar sesión.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [permisos]
+              properties:
+                permisos:
+                  type: array
+                  items: { $ref: '#/components/schemas/Permiso' }
+      responses:
+        '204': { description: Guardado; sin cambios si ya los tenía. }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '409':
+          description: Es el administrador, cuyos permisos no se cambian.
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problema' }
@@ -757,6 +1214,22 @@ paths:
         '403': { $ref: '#/components/responses/SinPermiso' }
         '404': { $ref: '#/components/responses/NoEncontrado' }
 
+  /api/relojes/estado:
+    get:
+      tags: [Inventario de relojes]
+      operationId: estadoRelojes
+      summary: Semáforo y última sincronización de cada reloj
+      description: 'Permiso: `USUARIOS:VER`. No se audita: no trae datos de pacientes.'
+      responses:
+        '200':
+          description: Estado técnico de todos los relojes.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/EstadoTecnicoReloj' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
   /api/relojes:
     get:
       tags: [Inventario de relojes]
@@ -887,7 +1360,7 @@ components:
     SinPermiso:
       description: El token no tiene el permiso que exige el endpoint. Sin cuerpo.
     NoEncontrado:
-      description: El paciente, contacto o reloj no existe.
+      description: Lo pedido no existe (paciente, contacto, reloj, cuenta del equipo o rol).
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problema' }
@@ -903,6 +1376,232 @@ components:
           schema: { $ref: '#/components/schemas/Problema' }
 
   schemas:
+    PacienteDeAlerta:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        nombres: { type: string, nullable: true }
+        apellidos: { type: string, nullable: true }
+        edad: { type: integer, nullable: true }
+    ResumenAlerta:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        numero: { type: integer, format: int64, description: Folio legible. }
+        paciente: { $ref: '#/components/schemas/PacienteDeAlerta' }
+        tipoEvento: { type: string }
+        severidad: { type: string, enum: [LEVE, MEDIA, GRAVE], description: La actual. }
+        estadoContacto:
+          type: string
+          enum: [RECIBIDA, AVISANDO_CONTACTO, CONFIRMADA, SIN_RESPUESTA, RESUELTA, PENDIENTE_DIA_HABIL, CANCELADA]
+        estadoAtencion: { type: string, enum: [SIN_ASIGNAR, EN_ATENCION, EN_SEGUIMIENTO, RESUELTA] }
+        responsable: { type: string, nullable: true }
+        recepcion: { type: string, format: date-time }
+        prioridadMaxima: { type: boolean, description: Nadie de la lista confirmó y sigue abierta. }
+        categoria: { type: string, enum: [SALUD, TECNICA], description: Decide la pestaña del dashboard (Salud o Reloj). }
+        simulacro: { type: boolean, description: Es un ensayo; se muestra con la etiqueta Simulacro. }
+        contactoEnCurso:
+          type: string
+          nullable: true
+          description: Último contacto del paciente al que el reloj pidió avisar; null si ninguno.
+    PasoAlerta:
+      type: object
+      properties:
+        fechaHora: { type: string, format: date-time }
+        tipo:
+          type: string
+          enum: [ALERTA_RECIBIDA, ALERTA_AGRAVADA, ALERTA_CANCELADA, SALTO_CONTACTO, AVISO_ENVIADO, AVISO_ENTREGADO,
+            AVISO_LEIDO, AVISO_FALLIDO, RESPUESTA_CONTACTO, SIN_RESPUESTA, CASO_ASUMIDO, SEGUIMIENTO, ALERTA_RESUELTA,
+            SEGUIMIENTO_CERRADO, FCM_PENDIENTE, FCM_ENVIADO, FCM_RECIBIDO, FCM_NO_CONFIRMADO]
+        contacto: { type: string, nullable: true }
+        canal: { type: string, enum: [WHATSAPP, CORREO], nullable: true }
+        ronda: { type: integer, nullable: true }
+        detalle: { type: string, nullable: true }
+        usuario: { type: string, nullable: true }
+    DetalleAlerta:
+      allOf:
+        - { $ref: '#/components/schemas/ResumenAlerta' }
+        - type: object
+          properties:
+            atencion:
+              type: object
+              nullable: true
+              description: Vacía mientras siga abierta.
+              properties:
+                fechaHora: { type: string, format: date-time }
+                resolutor: { type: string, nullable: true, description: Vacío si la cerró el sistema. }
+                clasificacion: { type: string, enum: [POSITIVA, FALSA_ALARMA], nullable: true }
+                observaciones: { type: string, nullable: true }
+            lineaTiempo:
+              type: array
+              items: { $ref: '#/components/schemas/PasoAlerta' }
+            evidencia: { $ref: '#/components/schemas/EvidenciaAlerta' }
+            discrepancias:
+              type: array
+              description: Lo que no calzó con la configuración vigente al recibirla, ordenado por código; vacía si nada.
+              items:
+                type: object
+                properties:
+                  codigo: { type: string, enum: [VERSION_DISTINTA, MODULO_APAGADO, GRAVEDAD_DISTINTA, LECTURAS_EN_RANGO] }
+                  detalle: { type: string, examples: ['FC 95 dentro del rango normal 50–110'] }
+    EvidenciaAlerta:
+      type: object
+      description: >-
+        Lo que explica la alerta, leído de alerta.evidencia. Cada campo es null si la alerta no lo trae; un campo con
+        un tipo inesperado se omite y una evidencia ilegible sale vacía. La celda de la matriz no se muestra.
+      properties:
+        lecturas:
+          type: array
+          description: Las que mandó el reloj; vacía si no trae.
+          items:
+            type: object
+            properties:
+              tipo: { type: string, enum: [FC, SPO2] }
+              valor: { type: number, examples: [128.0] }
+              fechaHoraMedicion: { type: string, format: date-time }
+        nivelBateria: { type: integer, nullable: true, description: 'En %. Del reloj o de BATERIA_BAJA.' }
+        segundosInmovilidad: { type: integer, nullable: true, description: En las caídas. }
+        ubicacion:
+          type: object
+          nullable: true
+          properties:
+            latitud: { type: number }
+            longitud: { type: number }
+            precisionMetros: { type: number, nullable: true }
+            fechaHoraMedicion: { type: string, format: date-time }
+        alertasEnVentana: { type: integer, nullable: true, description: 'EXCESO_ALERTAS: cuántas llegaron.' }
+        ventanaMinutos: { type: integer, nullable: true, description: 'EXCESO_ALERTAS: largo de la ventana.' }
+        noPuestoDesde: { type: string, format: date-time, nullable: true, description: 'RELOJ_NO_PUESTO.' }
+        ultimaSincronizacion:
+          type: string
+          format: date-time
+          nullable: true
+          description: 'SILENCIO_DATOS: la última sincronización; null también si nunca sincronizó.'
+    Hallazgo:
+      type: object
+      description: Una lectura más allá del límite grave sin alerta del reloj cerca. Sirve para auditar el reloj.
+      properties:
+        paciente:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            nombres: { type: string, nullable: true }
+            apellidos: { type: string, nullable: true }
+        variable: { type: string, enum: [FC, SPO2] }
+        valor: { type: number, examples: [135.0] }
+        fechaHoraMedicion: { type: string, format: date-time }
+        limiteGrave: { type: number, description: 'El límite grave vigente al medir que superó.', examples: [130] }
+    PuntoTendencia:
+      type: object
+      properties:
+        fechaHora: { type: string, format: date-time, description: 'Hora de medición, o comienzo de la hora o del día de Chile.' }
+        promedio: { type: number }
+        minimo: { type: number }
+        maximo: { type: number }
+        cantidad: { type: integer }
+    TendenciasPaciente:
+      type: object
+      properties:
+        agrupacion: { type: string, enum: [LECTURA, HORA, DIA] }
+        desde: { type: string, format: date-time }
+        hasta: { type: string, format: date-time }
+        fc: { type: array, items: { $ref: '#/components/schemas/PuntoTendencia' } }
+        spo2: { type: array, items: { $ref: '#/components/schemas/PuntoTendencia' } }
+        alertas:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              numero: { type: integer }
+              tipoEvento: { type: string }
+              severidad: { type: string, enum: [LEVE, MEDIA, GRAVE] }
+              fechaHoraDeteccion: { type: string, format: date-time }
+              cancelada: { type: boolean }
+        ubicaciones:
+          type: array
+          description: Con LECTURA todas; con HORA o DIA la última de cada hora o día de Chile.
+          items:
+            type: object
+            properties:
+              latitud: { type: number }
+              longitud: { type: number }
+              precisionMetros: { type: number, nullable: true }
+              fechaHoraMedicion: { type: string, format: date-time }
+    Estadistica:
+      type: object
+      properties:
+        promedio: { type: number, nullable: true }
+        minimo: { type: number, nullable: true }
+        maximo: { type: number, nullable: true }
+        lecturas: { type: integer }
+    IndicadoresPeriodo:
+      type: object
+      properties:
+        fc: { $ref: '#/components/schemas/Estadistica' }
+        spo2: { $ref: '#/components/schemas/Estadistica' }
+        uso:
+          type: object
+          properties:
+            minutosPuesto: { type: integer }
+            sincronizaciones: { type: integer }
+        bateriaMinima: { type: integer, nullable: true }
+        alertasPorTipo: { type: object, additionalProperties: { type: integer } }
+        alertasPorGravedad: { type: object, additionalProperties: { type: integer } }
+        alertasCanceladas: { type: integer }
+    ReporteUsuario:
+      type: object
+      properties:
+        periodo: { type: string, enum: [DIARIO, SEMANAL] }
+        desde: { type: string, format: date }
+        hasta: { type: string, format: date }
+        indicadores: { $ref: '#/components/schemas/IndicadoresPeriodo' }
+        anterior:
+          allOf: [{ $ref: '#/components/schemas/IndicadoresPeriodo' }]
+          nullable: true
+          description: La semana anterior; vacío en el diario.
+    Panel:
+      type: object
+      properties:
+        totales:
+          type: object
+          properties:
+            alertasAbiertas: { type: integer }
+            sinRespuesta: { type: integer }
+            enSeguimiento: { type: integer }
+            relojesRojo: { type: integer }
+            relojesAmarillo: { type: integer }
+        usuarios:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              nombres: { type: string, nullable: true }
+              apellidos: { type: string, nullable: true }
+              alertasAbiertas: { type: integer }
+              reloj:
+                type: object
+                nullable: true
+                properties:
+                  idDispositivo: { type: string, format: uuid }
+                  identificador: { type: string }
+                  semaforo: { type: string, enum: [VERDE, AMARILLO, ROJO, GRIS] }
+                  motivos: { type: array, items: { type: string } }
+                  ultimaSincronizacion: { type: string, format: date-time, nullable: true }
+                  nivelBateria: { type: integer, nullable: true }
+                  tipoConexion: { type: string, enum: [LTE, WIFI], nullable: true }
+                  configuracionPendiente: { type: boolean }
+    SolicitudResolucion:
+      type: object
+      required: [observaciones]
+      properties:
+        clasificacion:
+          type: string
+          enum: [POSITIVA, FALSA_ALARMA]
+          nullable: true
+          description: Obligatoria en las alertas de salud; vacía en las técnicas.
+        observaciones: { type: string }
     Problema:
       type: object
       description: Error de una regla del negocio (RFC 9457).
@@ -974,6 +1673,31 @@ components:
         token: { type: string, description: El del enlace de activación. }
         contrasena: { type: string, format: password, minLength: 12 }
 
+    SolicitudConsultaRespuesta:
+      type: object
+      required: [token]
+      properties:
+        token: { type: string, description: 'Lo que viene después de "#" en el enlace del correo.' }
+    SolicitudRespuestaContacto:
+      type: object
+      required: [token, respuesta]
+      properties:
+        token: { type: string, description: 'Lo que viene después de "#" en el enlace del correo.' }
+        respuesta: { type: string, enum: [VOY_EN_CAMINO, NO_PUEDO] }
+    VistaRespuesta:
+      type: object
+      required: [numero, tipo, severidad, fechaHora, cerrada]
+      description: Sin datos clínicos ni de contacto.
+      properties:
+        numero: { type: integer, format: int64, description: Folio de la alerta. }
+        alias: { type: string, nullable: true, description: 'Sin alias, la página usa el folio.' }
+        tipo: { type: string, description: Tipo de evento, como en ResumenAlerta.tipoEvento. }
+        severidad: { type: string, enum: [LEVE, MEDIA, GRAVE], description: La actual. }
+        fechaHora: { type: string, format: date-time, description: Cuándo se detectó. }
+        respuesta: { type: string, enum: [VOY_EN_CAMINO, NO_PUEDO], nullable: true }
+        fechaRespuesta: { type: string, format: date-time, nullable: true }
+        cerrada: { type: boolean, description: La alerta fue resuelta o cancelada; ya no se registra. }
+
     Rol:
       type: string
       enum: [ADMINISTRADOR, COORDINADOR, PERSONAL]
@@ -994,6 +1718,55 @@ components:
         aceptaWhatsapp:
           type: ['boolean', 'null']
           description: La persona aceptó recibir esos avisos por WhatsApp (opt-in de Meta). Exige teléfono. null = no.
+        recibeAvisos:
+          type: ['boolean', 'null']
+          description: Recibe por correo los avisos de las alertas técnicas, solo en horario hábil. null = no.
+    SolicitudCambioRol:
+      type: object
+      required: [rol]
+      properties:
+        rol: { $ref: '#/components/schemas/Rol' }
+        telefono:
+          type: ['string', 'null']
+          maxLength: 30
+          description: Solo al pasar a COORDINADOR una cuenta sin teléfono (400 si falta). Se guarda cifrado.
+        aceptaWhatsapp:
+          type: ['boolean', 'null']
+          description: La persona aceptó recibir los avisos por WhatsApp. Exige teléfono. null = no.
+    EstadoCuenta:
+      type: string
+      enum: [ACTIVA, PENDIENTE, DESACTIVADA]
+      description: PENDIENTE = no ha usado su enlace; DESACTIVADA = tenía contraseña y se le quitó el acceso.
+    PerfilEquipo:
+      type: object
+      required: [id, nombre, correo, rol, estado, recibeAvisos, tieneTelefono]
+      properties:
+        id: { type: string, format: uuid }
+        nombre: { type: string }
+        cargo: { type: ['string', 'null'] }
+        correo: { type: string, format: email }
+        rol: { $ref: '#/components/schemas/Rol' }
+        estado: { $ref: '#/components/schemas/EstadoCuenta' }
+        ultimoAcceso:
+          type: ['string', 'null']
+          format: date-time
+          description: Último inicio de sesión; null si nunca ha entrado.
+        recibeAvisos: { type: boolean, description: Recibe por correo los avisos de las alertas técnicas. }
+        tieneTelefono: { type: boolean, description: Tiene celular con WhatsApp registrado. }
+    Permiso:
+      type: string
+      pattern: '^(ALERTAS|USUARIOS|REPORTES|ADMINISTRACION):(VER|CREAR|EDITAR|ELIMINAR|EXPORTAR)$'
+      examples: ['ALERTAS:VER']
+    RolConPermisos:
+      type: object
+      required: [codigo, nombre, esSistema, permisos]
+      properties:
+        codigo: { type: string }
+        nombre: { type: string }
+        esSistema: { type: boolean, description: El administrador; sus permisos no se editan. }
+        permisos:
+          type: array
+          items: { $ref: '#/components/schemas/Permiso' }
     RespuestaEnlace:
       type: object
       required: [idUsuario, enlaceActivacion, expiraEn]
@@ -1270,6 +2043,27 @@ components:
         reloj: { $ref: '#/components/schemas/Reloj' }
         idPaciente: { type: ['string', 'null'], format: uuid, description: null si no está asignado. }
         nombrePaciente: { type: ['string', 'null'] }
+    EstadoTecnicoReloj:
+      type: object
+      required: [idDispositivo, semaforo, motivos, configuracionPendiente]
+      properties:
+        idDispositivo: { type: string, format: uuid }
+        semaforo:
+          type: string
+          enum: [VERDE, AMARILLO, ROJO, GRIS]
+          description: El más grave de los motivos; VERDE si no hay.
+        motivos:
+          type: array
+          items:
+            type: string
+            enum: [SIN_VINCULAR, SIN_SENAL, PLAN_VENCIDO, BATERIA_BAJA, NO_PUESTO, CONFIGURACION_PENDIENTE,
+              ALERTA_TECNICA_ABIERTA, ATRASO, VERSION_ANTIGUA, PLAN_POR_VENCER]
+        ultimaSincronizacion: { type: ['string', 'null'], format: date-time, description: Del vínculo vigente. }
+        nivelBateria: { type: ['integer', 'null'] }
+        relojPuesto: { type: ['boolean', 'null'] }
+        tipoConexion: { type: ['string', 'null'], enum: [LTE, WIFI, null] }
+        versionApp: { type: ['string', 'null'] }
+        configuracionPendiente: { type: boolean, description: La configuración informada no es la vigente. }
 
     Calendario:
       type: object

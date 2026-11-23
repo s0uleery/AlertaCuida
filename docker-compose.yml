@@ -2,7 +2,8 @@
 # claves de desarrollo y datos de ejemplo, nunca datos reales. Requisitos y versiones: Versiones.md.
 #
 # Primera vez: copiar .env.example como .env (credenciales locales, no se sube al repositorio).
-# Levantar todo:       docker compose up -d --build     (dashboard en http://localhost:5173)
+# Levantar todo:       docker compose up -d --build     (dashboard en http://localhost:5173,
+#                                                         correos de prueba en http://localhost:8025)
 # Solo la base:        docker compose up -d postgres    (para correr el backend con Maven o IntelliJ)
 # Ver si está listo:   docker compose ps                (estado "healthy")
 # Ver los registros:   docker compose logs -f backend
@@ -47,13 +48,26 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${DB_NOMBRE:-alertacuida}
       DB_USUARIO: ${DB_USUARIO:-alertacuida}
       DB_CLAVE: "${DB_CLAVE:?Falta DB_CLAVE, copiar .env.example como .env}"
-      # Dirección de los enlaces de activación del personal nuevo
+      # Dirección de los enlaces de activación del personal nuevo y de los correos al equipo
       DASHBOARD_URL: http://localhost:${FRONT_PUERTO:-5173}
+      # Los correos van a Mailpit, que los guarda sin enviarlos (se ven en http://localhost:8025)
+      CORREO_CANAL: SMTP
+      SMTP_HOST: mailpit
+      SMTP_PUERTO: 1025
+      # Avisos al reloj: SIMULADO solo los anota en el log; SIMULADOR se los entrega al simulador de reloj
+      # (simulador-reloj/), que corre en este computador, fuera de Docker. Se elige con FCM_CANAL en .env
+      FCM_CANAL: ${FCM_CANAL:-SIMULADO}
+      FCM_SIMULADOR_URL: http://host.docker.internal:${SIM_PUERTO:-9090}/avisos
+    # En Linux host.docker.internal no existe por defecto; en Windows y Mac ya existe
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${BACK_PUERTO:-8080}:8080"
     depends_on:
       postgres:
         condition: service_healthy
+      mailpit:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/actuator/health"]
       interval: 5s
@@ -61,6 +75,14 @@ services:
       retries: 10
       # Tiempo para arrancar y aplicar las migraciones, sin contar los fallos como definitivos
       start_period: 60s
+
+  # Servidor de correo de prueba: recibe los correos del backend y los muestra en una página web,
+  # sin que ninguno salga a internet. Bandeja en http://localhost:8025 (MAIL_PUERTO en .env).
+  mailpit:
+    image: axllent/mailpit:v1.27
+    restart: unless-stopped
+    ports:
+      - "${MAIL_PUERTO:-8025}:8025"
 
   frontend:
     build: ./frontend

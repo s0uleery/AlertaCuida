@@ -8,16 +8,22 @@ import cl.ucn.alertacuida.application.comun.puerto.SecretosUnSoloUso;
 import cl.ucn.alertacuida.application.comun.puerto.Transacciones;
 import cl.ucn.alertacuida.application.condicion.CondicionesPaciente;
 import cl.ucn.alertacuida.application.condicion.puerto.Condiciones;
+import cl.ucn.alertacuida.application.configuracion.VersionVigente;
 import cl.ucn.alertacuida.application.paciente.ConsultarPacientes;
 import cl.ucn.alertacuida.application.paciente.DarDeBajaPaciente;
 import cl.ucn.alertacuida.application.paciente.EditarPaciente;
 import cl.ucn.alertacuida.application.paciente.RegistrarPaciente;
 import cl.ucn.alertacuida.application.paciente.puerto.Pacientes;
+import cl.ucn.alertacuida.application.panel.ConsultarPanel;
+import cl.ucn.alertacuida.application.panel.puerto.PanelUsuarios;
+import cl.ucn.alertacuida.application.reloj.ConsultarEstadoRelojes;
 import cl.ucn.alertacuida.application.reloj.ConsultarRelojes;
 import cl.ucn.alertacuida.application.reloj.EditarReloj;
 import cl.ucn.alertacuida.application.reloj.RegistrarReloj;
+import cl.ucn.alertacuida.application.reloj.puerto.EstadosTecnicos;
 import cl.ucn.alertacuida.application.reloj.puerto.Relojes;
 import java.time.Clock;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -27,6 +33,7 @@ import org.springframework.context.annotation.Configuration;
  * Igual que {@link ConfiguracionCasosDeUso}, que tiene los del inicio de sesión y el personal.
  */
 @Configuration
+@EnableConfigurationProperties(PropiedadesRelojes.class)
 public class ConfiguracionPacientesYRelojes {
 
 	/** Lista y ficha de pacientes. */
@@ -67,6 +74,19 @@ public class ConfiguracionPacientesYRelojes {
 	@Bean
 	ConsultarRelojes consultarRelojes(Relojes relojes) {
 		return new ConsultarRelojes(relojes);
+	}
+
+	/** Estado técnico y semáforo de los relojes. */
+	@Bean
+	ConsultarEstadoRelojes consultarEstadoRelojes(EstadosTecnicos estados, VersionVigente versiones,
+			PropiedadesRelojes relojes, PropiedadesVigilancia vigilancia, Clock reloj) {
+		return new ConsultarEstadoRelojes(estados, versiones, relojes.umbrales(vigilancia), reloj);
+	}
+
+	/** Panel general de la portada: usa el mismo semáforo que la lista de relojes. */
+	@Bean
+	ConsultarPanel consultarPanel(ConsultarEstadoRelojes estadoRelojes, PanelUsuarios usuarios) {
+		return new ConsultarPanel(estadoRelojes::consultar, usuarios);
 	}
 
 	/** Registro de relojes. */
