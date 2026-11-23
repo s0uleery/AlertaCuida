@@ -240,16 +240,70 @@ crear una cuenta de prueba con un correo propio y revisar la bandeja (y la carpe
 
 ## Actualizar a una versión nueva
 
-Después de hacer merge a `main`:
+**Es automático:** cada merge a `main` se despliega solo si pasan las pruebas (ver
+[Despliegue automático](#despliegue-automático)). No hay que entrar al servidor.
+
+A mano (por ejemplo, si GitHub Actions no está disponible), desde el servidor:
 
 ```bash
 cd ~/alertacuida
 git pull
-docker compose up -d --build
+servidor/desplegar.sh
 ```
 
-Las migraciones de Flyway se aplican solas al arrancar el backend. Más adelante esto se puede automatizar
-con GitHub Actions (un trabajo que, si las pruebas pasan en `main`, entra por SSH y corre estos comandos).
+El script respalda la base, compila, espera a que todo quede sano y borra las imágenes viejas. Las migraciones
+de Flyway se aplican solas al arrancar el backend.
+
+## Despliegue automático
+
+```
+merge a main ──▶ CI (pruebas del backend y del dashboard) ──✔──▶ workflow "Despliegue" ──SSH──▶ servidor
+                                                          ✘──▶ no se despliega
+```
+
+En el servidor, [`servidor/desplegar.sh`](../servidor/desplegar.sh):
+
+1. respalda la base en `~/respaldos/…-antes-de-desplegar.dump` (guarda los últimos 10);
+2. compila y levanta con `docker compose up -d --build --wait`: espera hasta 5 minutos a que todo quede sano;
+3. muestra el estado y borra las imágenes viejas.
+
+Si un paso falla, se detiene y el despliegue queda en rojo en GitHub (llega un correo a quien hizo el merge).
+Cada despliegue deja su registro en `~/despliegues/` del servidor (los últimos 30). Mientras compila, la página
+sigue funcionando con la versión anterior; el corte es de unos segundos, al reiniciar el backend.
+
+**Ver un despliegue:** GitHub → **Actions** → **Despliegue**. Para volver a desplegar sin cambios:
+**Run workflow**.
+
+### La llave de GitHub Actions (ya configurada el 23-11-2026)
+
+GitHub Actions entra con su propia llave, que en el servidor **solo puede desplegar**: su línea en
+`~/.ssh/authorized_keys` fuerza el comando, así que cualquier otra cosa que pida se ignora:
+
+```
+command="cd ~/alertacuida && git pull --ff-only -q && exec bash servidor/desplegar.sh",no-port-forwarding,no-X11-forwarding,no-agent-forwarding,no-pty ssh-ed25519 AAAA… alertacuida-github-actions
+```
+
+Si alguien la robara, solo podría volver a desplegar lo que ya está en `main`.
+
+En GitHub → repositorio → **Settings → Secrets and variables → Actions** van dos secretos:
+
+| Secreto | Valor |
+|---|---|
+| `DESPLIEGUE_SSH_LLAVE` | La llave **privada** completa, desde `-----BEGIN OPENSSH PRIVATE KEY-----` hasta `-----END OPENSSH PRIVATE KEY-----` |
+| `DESPLIEGUE_SSH_HOST_CONOCIDO` | La línea de la llave del servidor: `ssh-keyscan -t ed25519 alertacuida.app` (comprobar que su huella sea la misma que se ve al entrar por SSH) |
+
+**Cambiar la llave** (si se filtró o se quiere renovar): crear otra con
+`ssh-keygen -t ed25519 -f despliegue -N "" -C alertacuida-github-actions`, reemplazar en el servidor la línea
+`alertacuida-github-actions` de `authorized_keys` (misma restricción `command=…`, con la pública nueva) y
+actualizar `DESPLIEGUE_SSH_LLAVE`. **Quitar el despliegue automático:** borrar esa línea del servidor.
+
+### Si una versión nueva sale mal
+
+1. Volver el código a la versión anterior con un *revert* del merge en GitHub (o un PR que lo corrija): al
+   llegar a `main`, se despliega solo.
+2. Si además una migración dañó datos, restaurar el respaldo de antes del despliegue (ver
+   [Respaldos](#respaldos)) **antes** de desplegar la versión anterior, porque una base con una migración más
+   nueva que el código no arranca.
 
 ## Respaldos
 

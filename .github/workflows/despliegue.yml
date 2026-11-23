@@ -1,0 +1,61 @@
+# Despliega main en el servidor público cuando el CI de main termina bien (docs/despliegue.md).
+# Si las pruebas fallan, no se despliega. Un despliegue no cancela a otro: espera su turno.
+name: Despliegue
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  # Para volver a desplegar a mano: Actions -> Despliegue -> Run workflow
+  workflow_dispatch:
+
+concurrency:
+  group: despliegue
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  desplegar:
+    name: Servidor (alertacuida.app)
+    # Solo si el CI terminó bien en un push a main (no en un PR), o si se pidió a mano
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Preparar la llave SSH del despliegue
+        env:
+          LLAVE: ${{ secrets.DESPLIEGUE_SSH_LLAVE }}
+          HOST_CONOCIDO: ${{ secrets.DESPLIEGUE_SSH_HOST_CONOCIDO }}
+        run: |
+          if [ -z "$LLAVE" ] || [ -z "$HOST_CONOCIDO" ]; then
+            echo "Faltan los secretos DESPLIEGUE_SSH_LLAVE o DESPLIEGUE_SSH_HOST_CONOCIDO (docs/despliegue.md)"
+            exit 1
+          fi
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$LLAVE" > ~/.ssh/despliegue
+          chmod 600 ~/.ssh/despliegue
+          # Solo se confía en la llave del servidor guardada en el secreto: evita conectarse a un impostor
+          printf '%s\n' "$HOST_CONOCIDO" > ~/.ssh/known_hosts
+
+      # La llave solo puede desplegar: en el servidor, su línea de authorized_keys descarga main y corre
+      # servidor/desplegar.sh, sin importar el comando que se envíe
+      - name: Desplegar
+        run: |
+          ssh -i ~/.ssh/despliegue -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
+            azureuser@alertacuida.app desplegar
+
+      - name: Revisar que responda desde internet
+        run: |
+          curl --fail --silent --show-error --retry 5 --retry-delay 10 --retry-all-errors \
+            -o /dev/null -w "Dashboard: HTTP %{http_code}\n" https://alertacuida.app/
+          curl --silent --show-error --retry 5 --retry-delay 10 --retry-all-errors \
+            -X POST -H 'Content-Type: application/json' -d '{"token":"revision-del-despliegue"}' \
+            https://alertacuida.app/api/reloj/v1/emparejamientos/consulta | grep -q '"estado"'
+          echo "API: responde"
