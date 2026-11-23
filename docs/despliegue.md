@@ -34,11 +34,11 @@ Internet ──443──▶ Caddy (HTTPS automático)
 - En el computador, una llave SSH. Si no existe, crearla (PowerShell o Git Bash):
 
   ```bash
-  ssh-keygen -t ed25519 -f ~/.ssh/oracle_alertacuida
+  ssh-keygen -t ed25519 -f ~/.ssh/alertacuida_servidor
   ```
 
-  Crea dos archivos: `oracle_alertacuida` (privada, no se comparte nunca) y `oracle_alertacuida.pub` (pública).
-  El nombre viene de cuando el plan era Oracle Cloud; se mantuvo para no cambiar la llave ya creada.
+  Crea dos archivos: `alertacuida_servidor` (privada, no se comparte nunca) y `alertacuida_servidor.pub`
+  (pública).
 
 ## 1. Crear la máquina virtual
 
@@ -56,7 +56,7 @@ En <https://portal.azure.com>: **Virtual machines → Create → Azure virtual m
 6. **Size:** `Standard_B1ms` (1 vCPU, 2 GB de memoria, unos 15 USD al mes). Alcanza con el swap del paso 2.
    No elegir `B1s` (1 GB): queda corta para Spring y Postgres.
 7. **Authentication type:** SSH public key. **Username:** `azureuser`. **SSH public key source:**
-   *Use existing public key*, y pegar el contenido de `oracle_alertacuida.pub` (una sola línea).
+   *Use existing public key*, y pegar el contenido de `alertacuida_servidor.pub` (una sola línea).
 8. **Public inbound ports:** *Allow selected ports* y marcar **SSH (22), HTTP (80) y HTTPS (443)**.
    Azure avisará que el 22 queda abierto a internet: está bien, porque solo se entra con la llave.
 
@@ -116,8 +116,20 @@ la dirección sigue siendo la misma.
 ## 4. Entrar al servidor (desde cualquier computador)
 
 ```bash
-ssh -i ~/.ssh/oracle_alertacuida azureuser@alertacuida.app
+ssh -i ~/.ssh/alertacuida_servidor azureuser@alertacuida.app
 ```
+
+**Atajo recomendado:** crear (o completar) el archivo `~/.ssh/config` del computador con:
+
+```
+Host alertacuida
+  HostName alertacuida.app
+  User azureuser
+  IdentityFile ~/.ssh/alertacuida_servidor
+  IdentitiesOnly yes
+```
+
+Desde ahí basta con `ssh alertacuida`, y para copiar archivos, `scp alertacuida:ruta/en/el/servidor .`.
 
 **Desde otro computador:** crear ahí otra llave (paso 0) y, desde una sesión ya abierta en el servidor,
 agregar la pública del computador nuevo:
@@ -259,7 +271,7 @@ chmod +x ~/respaldar.sh
 Corre todos los días a las 3:30. De vez en cuando, bajar una copia al computador:
 
 ```bash
-scp -i ~/.ssh/oracle_alertacuida azureuser@alertacuida.app:respaldos/alertacuida-AAAA-MM-DD.dump .
+scp -i ~/.ssh/alertacuida_servidor azureuser@alertacuida.app:respaldos/alertacuida-AAAA-MM-DD.dump .
 ```
 
 **Restaurar** una copia (borra lo que haya en la base):
