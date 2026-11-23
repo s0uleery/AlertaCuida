@@ -4,11 +4,13 @@ import cl.ucn.alertacuida.adapters.seguridad.cifrado.CifradoCampos;
 import cl.ucn.alertacuida.adapters.seguridad.cifrado.ColumnaCifrada;
 import cl.ucn.alertacuida.application.alerta.modelo.AccionSeguimiento;
 import cl.ucn.alertacuida.application.alerta.modelo.AvisoRelojRegistrado;
+import cl.ucn.alertacuida.application.alerta.modelo.Discrepancia;
 import cl.ucn.alertacuida.application.alerta.modelo.FilaAlerta;
 import cl.ucn.alertacuida.application.alerta.modelo.HistorialAlerta;
 import cl.ucn.alertacuida.application.alerta.modelo.IntentoRegistrado;
 import cl.ucn.alertacuida.application.alerta.puerto.ConsultaAlertas;
 import cl.ucn.alertacuida.domain.alerta.ClasificacionAlerta;
+import cl.ucn.alertacuida.domain.alerta.CodigoDiscrepancia;
 import cl.ucn.alertacuida.domain.alerta.EstadoAtencion;
 import cl.ucn.alertacuida.domain.alerta.EstadoContacto;
 import cl.ucn.alertacuida.domain.alerta.Severidad;
@@ -24,10 +26,12 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Lectura de alertas para el dashboard. La línea de tiempo no se guarda: esta clase junta las fechas de
- * alerta, atencion_alerta, registro_intento, aviso_fcm y seguimiento. Los datos cifrados salen en claro.
+ * alerta, atencion_alerta, registro_intento, aviso_fcm y seguimiento. Además lee la evidencia y las
+ * discrepancias de la alerta. Los datos cifrados salen en claro.
  */
 @Repository
 public class ConsultaAlertasJdbc implements ConsultaAlertas {
@@ -61,14 +65,17 @@ public class ConsultaAlertasJdbc implements ConsultaAlertas {
 
 	private final JdbcClient jdbc;
 	private final CifradoCampos cifrado;
+	private final LectorEvidencia lectorEvidencia;
 
 	/**
 	 * @param jdbc    cliente de Spring sobre la conexión a PostgreSQL
 	 * @param cifrado descifra los datos personales
+	 * @param json    lee la evidencia, que se guarda como JSON
 	 */
-	public ConsultaAlertasJdbc(JdbcClient jdbc, CifradoCampos cifrado) {
+	public ConsultaAlertasJdbc(JdbcClient jdbc, CifradoCampos cifrado, ObjectMapper json) {
 		this.jdbc = jdbc;
 		this.cifrado = cifrado;
+		this.lectorEvidencia = new LectorEvidencia(json);
 	}
 
 	/** El folio desempata dos alertas recibidas a la misma hora, para que el orden sea siempre el mismo. */
@@ -89,7 +96,7 @@ public class ConsultaAlertasJdbc implements ConsultaAlertas {
 				,
 					a.fecha_hora_agravamiento, a.fecha_hora_cancelacion, a.fecha_hora_sin_respuesta, t.fecha_hora_toma,
 					t.fecha_hora_cierre, s.nombre_profesional AS resolutor, t.clasificacion, t.observaciones_cierre,
-					t.fecha_cierre_seguimiento
+					t.fecha_cierre_seguimiento, a.evidencia::text AS evidencia
 				""" + ORIGEN + """
 				LEFT JOIN usuario s ON s.id_usuario = t.id_usuario_resolutor
 				WHERE a.id_alerta = :id""")
@@ -107,7 +114,16 @@ public class ConsultaAlertasJdbc implements ConsultaAlertas {
 				fila.getString("resolutor"), clasificacion == null ? null : ClasificacionAlerta.valueOf(clasificacion),
 				cifrado.descifrar(fila.getString("observaciones_cierre"), ColumnaCifrada.ATENCION_OBSERVACIONES),
 				instante(fila, "fecha_cierre_seguimiento"), intentos(idAlerta), avisosReloj(idAlerta),
-				seguimientos(idAlerta));
+				seguimientos(idAlerta), lectorEvidencia.leer(fila.getString("evidencia")), discrepancias(idAlerta));
+	}
+
+	/** @return lo que no calzó con la configuración vigente, ordenado por código para que salga siempre igual */
+	private List<Discrepancia> discrepancias(UUID idAlerta) {
+		return jdbc.sql("SELECT codigo, detalle FROM discrepancia_alerta WHERE id_alerta = :id ORDER BY codigo")
+				.param("id", idAlerta)
+				.query((fila, n) -> new Discrepancia(CodigoDiscrepancia.valueOf(fila.getString("codigo")),
+						fila.getString("detalle")))
+				.list();
 	}
 
 	/** Un aviso va a una persona de la lista o a una cuenta del equipo: el nombre sale de donde corresponda. */

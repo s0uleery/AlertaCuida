@@ -16,6 +16,7 @@ import cl.ucn.alertacuida.application.comun.puerto.HashRun;
 import cl.ucn.alertacuida.application.comun.puerto.SecretosUnSoloUso;
 import cl.ucn.alertacuida.domain.comun.Run;
 import cl.ucn.alertacuida.domain.comun.ZonaHoraria;
+import cl.ucn.alertacuida.soporte.BaseDePrueba;
 import cl.ucn.alertacuida.soporte.PostgresDePrueba;
 import com.jayway.jsonpath.JsonPath;
 import java.sql.Timestamp;
@@ -71,6 +72,15 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * <li>R11 Cada fila dice si es de salud o técnica (pestañas Salud y Reloj, decisión del 13-11-2026) y si es
  * un simulacro, que se muestra con su etiqueta (decisión del 16-11-2026).</li>
  * <li>R12 Cada fila trae el contacto en curso: el último de la lista del paciente al que el reloj pidió avisar.</li>
+ * <li>R13 La ficha muestra la evidencia (decisión del 19-11-2026): del reloj, las lecturas con su hora, la
+ * batería, la inmovilidad y la ubicación, sin la celda de la matriz; de las técnicas del servidor, el exceso
+ * de alertas, desde cuándo no está puesto, la última sincronización y la batería. Sin evidencia, nada.</li>
+ * <li>R14 La ficha muestra las discrepancias con la configuración vigente, con su explicación.</li>
+ * <li>R15 El detalle trae los mismos campos de la lista (contrato de GET /api/alertas/{id}): categoría,
+ * simulacro y contacto en curso.</li>
+ * <li>R16 Acciones del caso (decisión del 19-11-2026): llamada, visita y nota exigen texto; la derivación exige
+ * un destino activo. Se registran sin asignar, en atención o en seguimiento; cerrada del todo o cancelada, 409.
+ * La nota va cifrada, sale en la línea de tiempo y la acción queda auditada.</li>
  * <li>R10 Ver exige ALERTAS:VER y actuar, ALERTAS:EDITAR. Lecturas y cambios quedan auditados.</li>
  * </ul>
  */
@@ -115,10 +125,7 @@ class RequisitosAtencionAlertasTest {
 	 */
 	@BeforeEach
 	void preparar() throws Exception {
-		for (String tabla : new String[] {"asignacion_reloj", "smartwatch", "paciente", "contacto",
-				"registro_auditoria", "usuario"}) {
-			jdbc.sql("DELETE FROM " + tabla).update();
-		}
+		BaseDePrueba.vaciar(jdbc);
 		jdbc.sql("DELETE FROM rol WHERE codigo IN ('SOLO_VER', 'SIN_ALERTAS')").update();
 		ahora = Instant.now().truncatedTo(ChronoUnit.SECONDS);
 		paciente = paciente("12345678-5", "hash-atencion-1", "María", "Soto Rojas", LocalDate.of(1940, 3, 15));
@@ -671,6 +678,161 @@ class RequisitosAtencionAlertasTest {
 						.value(contains(nullValue())));
 	}
 
+	// ---------- R13: evidencia ----------
+
+	/** R13: lo que mandó el reloj se ve en la ficha, ordenado por campo, sin la celda de la matriz. */
+	@Test
+	void laFichaMuestraLaEvidenciaDelReloj() throws Exception {
+		UUID eventId = UUID.randomUUID();
+		Instant medicion = ahora.minusSeconds(90);
+		alertaPorApi(eventId, "FC_SPO2", "GRAVE", """
+				{"lecturas": [{"tipo": "FC", "valor": 128, "fechaHoraMedicion": "%s"},
+					{"tipo": "SPO2", "valor": 88, "fechaHoraMedicion": "%s"}],
+				"nivelBateria": 54, "segundosInmovilidad": 60, "celdaMatriz": "FC_ALTA-SPO2_BAJA",
+				"ubicacion": {"latitud": -29.9533, "longitud": -71.3436, "precisionMetros": 15,
+					"fechaHoraMedicion": "%s"}}""".formatted(medicion, medicion, ahora.minusSeconds(45)));
+
+		detalle(tokenCoordinadora, idDe(eventId)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.evidencia.lecturas", hasSize(2)))
+				.andExpect(jsonPath("$.evidencia.lecturas[0].tipo").value("FC"))
+				.andExpect(jsonPath("$.evidencia.lecturas[0].valor").value(128.0))
+				.andExpect(jsonPath("$.evidencia.lecturas[0].fechaHoraMedicion").value(medicion.toString()))
+				.andExpect(jsonPath("$.evidencia.lecturas[1].tipo").value("SPO2"))
+				.andExpect(jsonPath("$.evidencia.lecturas[1].valor").value(88.0))
+				.andExpect(jsonPath("$.evidencia.nivelBateria").value(54))
+				.andExpect(jsonPath("$.evidencia.segundosInmovilidad").value(60))
+				.andExpect(jsonPath("$.evidencia.ubicacion.latitud").value(-29.9533))
+				.andExpect(jsonPath("$.evidencia.ubicacion.longitud").value(-71.3436))
+				.andExpect(jsonPath("$.evidencia.ubicacion.precisionMetros").value(15.0))
+				.andExpect(jsonPath("$.evidencia.ubicacion.fechaHoraMedicion")
+						.value(ahora.minusSeconds(45).toString()))
+				.andExpect(jsonPath("$.evidencia.celdaMatriz").doesNotExist());
+	}
+
+	/** R13: una alerta sin evidencia trae la lista de lecturas vacía y el resto vacío. */
+	@Test
+	void unaAlertaSinEvidenciaNoMuestraNada() throws Exception {
+		UUID alerta = alertaDelReloj("CAIDA", "MEDIA", ahora.minusSeconds(60));
+
+		detalle(tokenCoordinadora, alerta).andExpect(status().isOk())
+				.andExpect(jsonPath("$.evidencia.lecturas", hasSize(0)))
+				.andExpect(jsonPath("$.evidencia.nivelBateria").value(nullValue()))
+				.andExpect(jsonPath("$.evidencia.segundosInmovilidad").value(nullValue()))
+				.andExpect(jsonPath("$.evidencia.ubicacion").value(nullValue()));
+	}
+
+	/** R13: cada alerta técnica del servidor muestra el dato que la explica. */
+	@Test
+	void lasTecnicasDelServidorMuestranSuDato() throws Exception {
+		Instant desde = ahora.minus(2, ChronoUnit.HOURS);
+		UUID exceso = alertaTecnica("EXCESO_ALERTAS", "{\"alertas\": 12, \"ventanaMinutos\": 60}");
+		UUID noPuesto = alertaTecnica("RELOJ_NO_PUESTO", "{\"desde\": \"" + desde + "\"}");
+		UUID silencio = alertaTecnica("SILENCIO_DATOS", "{\"ultimaSincronizacion\": \"" + desde + "\"}");
+		UUID nunca = alertaTecnica("SILENCIO_DATOS", "{\"ultimaSincronizacion\": null}");
+		UUID bateria = alertaTecnica("BATERIA_BAJA", "{\"nivelBateria\": 12}");
+
+		detalle(tokenCoordinadora, exceso).andExpect(jsonPath("$.evidencia.alertasEnVentana").value(12))
+				.andExpect(jsonPath("$.evidencia.ventanaMinutos").value(60));
+		detalle(tokenCoordinadora, noPuesto).andExpect(jsonPath("$.evidencia.noPuestoDesde").value(desde.toString()));
+		detalle(tokenCoordinadora, silencio)
+				.andExpect(jsonPath("$.evidencia.ultimaSincronizacion").value(desde.toString()));
+		detalle(tokenCoordinadora, nunca).andExpect(status().isOk())
+				.andExpect(jsonPath("$.evidencia.ultimaSincronizacion").value(nullValue()));
+		detalle(tokenCoordinadora, bateria).andExpect(jsonPath("$.evidencia.nivelBateria").value(12));
+	}
+
+	// ---------- R14: discrepancias ----------
+
+	/** R14: cada discrepancia sale con su código y su explicación; sin discrepancias, lista vacía. */
+	@Test
+	void laFichaMuestraLasDiscrepancias() throws Exception {
+		UUID conDiscrepancias = alertaDelReloj("FC", "MEDIA", ahora.minusSeconds(60));
+		UUID sinDiscrepancias = alertaDelReloj("FC", "MEDIA", ahora.minusSeconds(30));
+		discrepancia(conDiscrepancias, "VERSION_DISTINTA", "El reloj usó la versión a1 y la vigente es b2");
+		discrepancia(conDiscrepancias, "LECTURAS_EN_RANGO", "FC 95 dentro del rango normal 50–110");
+
+		detalle(tokenCoordinadora, conDiscrepancias).andExpect(jsonPath("$.discrepancias", hasSize(2)))
+				.andExpect(jsonPath("$.discrepancias[?(@.codigo == 'LECTURAS_EN_RANGO')].detalle")
+						.value(contains("FC 95 dentro del rango normal 50–110")))
+				.andExpect(jsonPath("$.discrepancias[?(@.codigo == 'VERSION_DISTINTA')].detalle")
+						.value(contains("El reloj usó la versión a1 y la vigente es b2")));
+		detalle(tokenCoordinadora, sinDiscrepancias).andExpect(jsonPath("$.discrepancias", hasSize(0)));
+	}
+
+	// ---------- R15: los campos de la lista ----------
+
+	/** R15: el detalle dice si es de salud o técnica, si es simulacro y quién es el contacto en curso. */
+	@Test
+	void elDetalleTraeLosCamposDeLaLista() throws Exception {
+		Instant t0 = ahora.minus(10, ChronoUnit.MINUTES);
+		UUID salud = alertaDelReloj("CAIDA", "GRAVE", t0);
+		intento(salud, contactoDelPaciente("Hija", "hija@correo.cl", 1), "CORREO", 1, t0, 1);
+		UUID simulacro = alertaDelReloj("FC", "MEDIA", ahora.minusSeconds(30));
+		jdbc.sql("UPDATE alerta SET es_simulacro = true WHERE id_alerta = :a").param("a", simulacro).update();
+		UUID tecnica = alertaTecnica("BATERIA_BAJA");
+
+		detalle(tokenCoordinadora, salud).andExpect(jsonPath("$.categoria").value("SALUD"))
+				.andExpect(jsonPath("$.simulacro").value(false))
+				.andExpect(jsonPath("$.contactoEnCurso").value("Hija"));
+		detalle(tokenCoordinadora, simulacro).andExpect(jsonPath("$.simulacro").value(true))
+				.andExpect(jsonPath("$.contactoEnCurso").value(nullValue()));
+		detalle(tokenCoordinadora, tecnica).andExpect(jsonPath("$.categoria").value("TECNICA"));
+	}
+
+	// ---------- R16: acciones del caso ----------
+
+	/**
+	 * R16: una nota y una derivación sin texto se registran en una alerta abierta y salen en la línea de tiempo;
+	 * la nota queda cifrada en la base.
+	 */
+	@Test
+	void seRegistranNotasYDerivaciones() throws Exception {
+		UUID alerta = alertaDelReloj("CAIDA", "GRAVE", ahora.minusSeconds(60));
+
+		seguimiento(tokenPersonal, alerta, "\"NOTA\"", null, "\"Se llamó a la hija\"").andExpect(status().isCreated())
+				.andExpect(jsonPath("$.id").exists());
+		seguimiento(tokenPersonal, alerta, "\"DERIVACION\"", "\"CESFAM\"", null).andExpect(status().isCreated());
+
+		detalle(tokenCoordinadora, alerta)
+				.andExpect(jsonPath("$.lineaTiempo[?(@.tipo == 'SEGUIMIENTO')].detalle")
+						.value(contains("NOTA: Se llamó a la hija", "DERIVACION a CESFAM")))
+				.andExpect(jsonPath("$.lineaTiempo[?(@.tipo == 'SEGUIMIENTO')].usuario")
+						.value(contains("Diego", "Diego")));
+		assertThat(jdbc.sql("SELECT count(*) FROM seguimiento WHERE nota LIKE '%hija%'")
+				.query(Integer.class).single()).isZero();
+		assertThat(jdbc.sql("""
+				SELECT count(*) FROM registro_auditoria WHERE accion = 'CREAR' AND entidad = 'SEGUIMIENTO'""")
+				.query(Integer.class).single()).isEqualTo(2);
+	}
+
+	/** R16: en seguimiento sí; cerrada del todo o cancelada, 409; datos que faltan, 400; alerta inexistente, 404. */
+	@Test
+	void cuandoSePuedeRegistrar() throws Exception {
+		UUID positiva = alertaDelReloj("CAIDA", "GRAVE", ahora.minusSeconds(60));
+		resolver(tokenCoordinadora, positiva, "\"POSITIVA\"", OBSERVACION).andExpect(status().isNoContent());
+		UUID falsa = alertaDelReloj("FC", "MEDIA", ahora.minusSeconds(50));
+		resolver(tokenCoordinadora, falsa, "\"FALSA_ALARMA\"", OBSERVACION).andExpect(status().isNoContent());
+		UUID eventId = UUID.randomUUID();
+		cancelacion(eventId).andExpect(status().is2xxSuccessful());
+
+		seguimiento(tokenPersonal, positiva, "\"VISITA\"", null, "\"Fue al domicilio\"")
+				.andExpect(status().isCreated());
+		seguimiento(tokenPersonal, falsa, "\"NOTA\"", null, "\"x\"").andExpect(status().isConflict());
+		seguimiento(tokenPersonal, idDe(eventId), "\"NOTA\"", null, "\"x\"").andExpect(status().isConflict());
+		seguimiento(tokenPersonal, positiva, "\"NOTA\"", null, "\"  \"").andExpect(status().isBadRequest());
+		seguimiento(tokenPersonal, positiva, "\"DERIVACION\"", "\"NO_EXISTE\"", null)
+				.andExpect(status().isBadRequest());
+		seguimiento(tokenPersonal, UUID.randomUUID(), "\"NOTA\"", null, "\"x\"").andExpect(status().isNotFound());
+	}
+
+	/** R16: el catálogo de destinos activos, por nombre. */
+	@Test
+	void losDestinosDeDerivacion() throws Exception {
+		mvc.perform(get("/api/destinos-derivacion").header("Authorization", "Bearer " + tokenPersonal))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[*].codigo").value(contains("CESFAM", "HOSPITAL", "OTRO", "SAMU")));
+	}
+
 	// ---------- R10: permisos y auditoría ----------
 
 	/** R10: sin token, 401 en todo. */
@@ -760,6 +922,20 @@ class RequisitosAtencionAlertasTest {
 				.content("{\"clasificacion\": %s, \"observaciones\": \"%s\"}".formatted(clasificacion, observaciones)));
 	}
 
+	/**
+	 * Registra una acción del caso.
+	 *
+	 * @param tipo    valor JSON tal cual: con comillas
+	 * @param destino valor JSON tal cual, o null
+	 * @param nota    valor JSON tal cual, o null
+	 */
+	private ResultActions seguimiento(String token, UUID alerta, String tipo, String destino, String nota)
+			throws Exception {
+		return mvc.perform(post("/api/alertas/" + alerta + "/seguimiento").header("Authorization", "Bearer " + token)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"tipo\": %s, \"destino\": %s, \"nota\": %s}".formatted(tipo, destino, nota)));
+	}
+
 	/** Cierra el seguimiento de una alerta POSITIVA. */
 	private ResultActions cerrarSeguimiento(String token, UUID alerta) throws Exception {
 		return mvc.perform(post("/api/alertas/" + alerta + "/seguimiento/cerrar")
@@ -773,13 +949,24 @@ class RequisitosAtencionAlertasTest {
 				.content("{\"fechaHora\": \"" + fecha + "\"}"));
 	}
 
-	/** Envía una alerta con la API del reloj. */
+	/** Envía una alerta con la API del reloj, sin evidencia. */
 	private void alertaPorApi(UUID eventId, String tipo, String severidad) throws Exception {
+		alertaPorApi(eventId, tipo, severidad, null);
+	}
+
+	/**
+	 * Envía una alerta con la API del reloj.
+	 *
+	 * @param evidencia el objeto JSON de la evidencia, o null si no trae
+	 */
+	private void alertaPorApi(UUID eventId, String tipo, String severidad, String evidencia) throws Exception {
 		mvc.perform(post("/api/reloj/v1/alertas").header("Authorization", "Bearer " + TOKEN_RELOJ)
 				.contentType(MediaType.APPLICATION_JSON).content("""
 						{"eventId": "%s", "tipoEvento": "%s", "severidad": "%s", "versionConfiguracion": "v",
-						"fechaHoraDeteccion": "%s", "fechaHoraEnvio": "%s", "esperaDiaHabil": false}"""
-						.formatted(eventId, tipo, severidad, ahora.minusSeconds(40), ahora.minusSeconds(10))))
+						"fechaHoraDeteccion": "%s", "fechaHoraEnvio": "%s", "esperaDiaHabil": false,
+						"evidencia": %s}"""
+						.formatted(eventId, tipo, severidad, ahora.minusSeconds(40), ahora.minusSeconds(10),
+								evidencia)))
 				.andExpect(status().isCreated());
 	}
 
@@ -822,13 +1009,28 @@ class RequisitosAtencionAlertasTest {
 				.param("r", Timestamp.from(recepcion)).query(UUID.class).single();
 	}
 
-	/** @return una alerta técnica creada por el servidor hace un minuto */
+	/** @return una alerta técnica creada por el servidor hace un minuto, sin evidencia */
 	private UUID alertaTecnica(String tipo) {
+		return alertaTecnica(tipo, null);
+	}
+
+	/**
+	 * @param evidencia el JSON que guarda el servidor al crearla, o null
+	 * @return una alerta técnica creada por el servidor hace un minuto
+	 */
+	private UUID alertaTecnica(String tipo, String evidencia) {
 		return jdbc.sql("""
-				INSERT INTO alerta (event_id, id_asignacion, origen, tipo_evento, severidad, fecha_hora_recepcion)
-				VALUES (gen_random_uuid(), :a, 'SERVIDOR', :t, 'LEVE', :r) RETURNING id_alerta""")
-				.param("a", asignacion).param("t", tipo)
+				INSERT INTO alerta (event_id, id_asignacion, origen, tipo_evento, severidad, evidencia,
+					fecha_hora_recepcion)
+				VALUES (gen_random_uuid(), :a, 'SERVIDOR', :t, 'LEVE', CAST(:e AS jsonb), :r) RETURNING id_alerta""")
+				.param("a", asignacion).param("t", tipo).param("e", evidencia)
 				.param("r", Timestamp.from(ahora.minusSeconds(60))).query(UUID.class).single();
+	}
+
+	/** Guarda una discrepancia de la alerta, como la deja la recepción. */
+	private void discrepancia(UUID alerta, String codigo, String detalle) {
+		jdbc.sql("INSERT INTO discrepancia_alerta (id_alerta, codigo, detalle) VALUES (:a, :c, :d)")
+				.param("a", alerta).param("c", codigo).param("d", detalle).update();
 	}
 
 	/** Deja la alerta como si el reloj hubiera terminado la lista. */

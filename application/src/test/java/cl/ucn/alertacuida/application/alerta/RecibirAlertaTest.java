@@ -182,7 +182,7 @@ class RecibirAlertaTest {
 		recibir.recibir(relojDeMaria, alerta(calza, Severidad.MEDIA, false));
 		ResultadoAlerta resultado = recibir.recibir(relojDeMaria, new AlertaRecibida(noCalza, TipoEvento.FC,
 				Severidad.GRAVE, "vieja", AHORA.minusSeconds(40), AHORA.minusSeconds(10), false, null, null,
-				List.of(new LecturaEvidencia(TipoLectura.FC, 95))));
+				List.of(new LecturaEvidencia(TipoLectura.FC, 95, AHORA.minusSeconds(60)))));
 
 		assertThat(resultado.nueva()).isTrue();
 		assertThat(alertas.discrepancias.get(alertas.filas.get(calza).guardada().idAlerta())).isEmpty();

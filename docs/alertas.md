@@ -291,17 +291,26 @@ Los de `application.properties` requieren reiniciar el backend.
 | 16-11-2026 | En la lista de alertas, los simulacros aparecen con la etiqueta "Simulacro"; las canceladas no aparecen | | Confirmada |
 | 16-11-2026 | Cuando nadie responde (`SIN_RESPUESTA`), que el reloj vuelva a recorrer la lista | El escalamiento de salud lo decide el reloj | Por definir con quien desarrolla el reloj |
 | 13-11-2026 | "Medias y graves destacadas en el dashboard" (2.10.5) se hace con la lista de alertas (3.4.2) | | Confirmada |
+| 19-11-2026 | La ficha de la alerta muestra la evidencia del reloj: lecturas con su hora, batería, inmovilidad y ubicación; la celda de la matriz no | Lo que el equipo necesita para entender la alerta | Confirmada |
+| 19-11-2026 | Las lecturas de la ficha son solo las que mandó el reloj con la alerta; las de antes y después se ven en los gráficos de tendencias (3.5) | | Confirmada |
+| 19-11-2026 | La ubicación se muestra con coordenadas, precisión y un enlace "Ver en el mapa" (Google Maps): sale del sistema solo si alguien hace clic | No mandar la ubicación a un servicio externo al abrir la ficha | Confirmada |
+| 19-11-2026 | Las alertas técnicas del servidor muestran el dato que las disparó: exceso (cuántas en cuántos minutos), no puesto desde, última sincronización y batería | Sin eso, la ficha de una técnica queda sin evidencia | Confirmada |
+| 19-11-2026 | La ficha muestra las discrepancias con la configuración vigente | | Confirmada |
+| 19-11-2026 | Red de seguridad (2.7) en versión mínima: una lectura más allá del límite grave sin alerta del reloj de FC, SpO2, FC+SpO2 o tendencia a ± 30 minutos (también canceladas). No repite las reglas del reloj (dos seguidas, tendencia) | Las alertas las decide el reloj; el servidor solo lo audita | Confirmada |
+| 19-11-2026 | Red de seguridad: umbral vigente al medir; con el módulo apagado no cuenta; no se guarda ni avisa; lista en Reportes, pestaña "Posibles no alertadas", últimos 7 días por defecto | | Confirmada |
+| 19-11-2026 | La ficha tiene los tres botones: asumir, resolver (observaciones siempre, clasificación solo en salud) y cerrar el seguimiento; solo con `ALERTAS:EDITAR` | | Confirmada |
+| 19-11-2026 | Acciones del caso (llamada, visita, derivación, nota) mientras la alerta no esté cerrada del todo ni cancelada; nota obligatoria salvo en la derivación, que exige destino | | Confirmada |
+| 19-11-2026 | Los correos y WhatsApp fallidos se revisan en la ficha de cada alerta; no hay lista aparte por ahora | | Confirmada |
+| 19-11-2026 | Bandeja de día hábil (3.7): "marcar como revisada" es Resolver; muestra las abiertas `PENDIENTE_DIA_HABIL`, la más antigua primero | Sin estado nuevo que guardar | Confirmada |
+| 19-11-2026 | Panel de la portada: "alerta abierta" igual que la lista (en seguimiento cuenta; sin canceladas ni simulacros; salud y técnicas); lo ve `ALERTAS:VER` | | Confirmada |
 
 ## Qué falta
 
 **Por programar en el servidor** (tareas del [cronograma](cronograma.md)):
 
-- Mostrar en el dashboard los correos fallidos (hoy quedan en `registro_intento`).
-- Red de seguridad sobre las lecturas (2.7) y simulacro (2.8).
+- Simulacro (2.8).
 - Canal de WhatsApp (2.9), con los botones que confirman, también para los coordinadores; con eso, la confirmación por webhook de la 2.10.4. El simulador de contactos (0.9) ya está en `simulador-whatsapp/`.
-- Ficha de la alerta con su línea de tiempo y las acciones de asumir y resolver (3.4.3 y 3.4.4). La lista de alertas (3.4.2) ya está.
-- Registrar notas y derivaciones de un caso: la línea de tiempo ya las muestra, pero aún no hay endpoint para crearlas.
-- Editar el teléfono y el opt-in de una cuenta ya creada, y registrar la baja del opt-in de un coordinador por webhook.
+- Registrar por webhook la baja del opt-in de un coordinador (con la 2.9). El teléfono y el opt-in de una cuenta ya creada se editan con `PUT /api/personal/{id}/telefono` (19-11-2026).
 
 **Por definir:**
 

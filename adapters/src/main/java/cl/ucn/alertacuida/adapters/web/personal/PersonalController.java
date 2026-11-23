@@ -5,6 +5,7 @@ import cl.ucn.alertacuida.adapters.seguridad.TokenJwt;
 import cl.ucn.alertacuida.adapters.web.Permisos;
 import cl.ucn.alertacuida.application.personal.CambiarRecibeAvisos;
 import cl.ucn.alertacuida.application.personal.CambiarRolPersonal;
+import cl.ucn.alertacuida.application.personal.CambiarTelefonoPersonal;
 import cl.ucn.alertacuida.application.personal.ConsultarEquipo;
 import cl.ucn.alertacuida.application.personal.CrearCuentaPersonal;
 import cl.ucn.alertacuida.application.personal.NuevoEnlaceActivacion;
@@ -40,24 +41,27 @@ public class PersonalController {
 	private final ConsultarEquipo consultar;
 	private final CambiarRolPersonal cambiarRol;
 	private final CambiarRecibeAvisos cambiarAvisos;
+	private final CambiarTelefonoPersonal cambiarTelefono;
 	private final String urlActivacion;
 
 	/**
-	 * @param crearCuenta   caso de uso del alta
-	 * @param nuevoEnlace   caso de uso para reemplazar un enlace perdido o vencido
-	 * @param consultar     lista de las cuentas del equipo
-	 * @param cambiarRol    caso de uso del cambio de rol
-	 * @param cambiarAvisos caso de uso del aviso técnico por correo
-	 * @param propiedades   de ahí sale la dirección de la página de activación del dashboard
+	 * @param crearCuenta     caso de uso del alta
+	 * @param nuevoEnlace     caso de uso para reemplazar un enlace perdido o vencido
+	 * @param consultar       lista de las cuentas del equipo
+	 * @param cambiarRol      caso de uso del cambio de rol
+	 * @param cambiarAvisos   caso de uso del aviso técnico por correo
+	 * @param cambiarTelefono caso de uso del celular con WhatsApp y su opt-in
+	 * @param propiedades     de ahí sale la dirección de la página de activación del dashboard
 	 */
 	public PersonalController(CrearCuentaPersonal crearCuenta, NuevoEnlaceActivacion nuevoEnlace,
 			ConsultarEquipo consultar, CambiarRolPersonal cambiarRol, CambiarRecibeAvisos cambiarAvisos,
-			PropiedadesSeguridad propiedades) {
+			CambiarTelefonoPersonal cambiarTelefono, PropiedadesSeguridad propiedades) {
 		this.crearCuenta = crearCuenta;
 		this.nuevoEnlace = nuevoEnlace;
 		this.consultar = consultar;
 		this.cambiarRol = cambiarRol;
 		this.cambiarAvisos = cambiarAvisos;
+		this.cambiarTelefono = cambiarTelefono;
 		this.urlActivacion = propiedades.activacion().url();
 	}
 
@@ -96,6 +100,22 @@ public class PersonalController {
 	public void cambiarRecibeAvisos(@PathVariable UUID id, @Valid @RequestBody SolicitudRecibeAvisos solicitud,
 			@AuthenticationPrincipal Jwt jwt, HttpServletRequest peticion) {
 		cambiarAvisos.cambiar(id, solicitud.recibeAvisos(), TokenJwt.leer(jwt).id(), peticion.getRemoteAddr());
+	}
+
+	/**
+	 * Cambia o quita el celular con WhatsApp de una cuenta ya creada, y su opt-in.
+	 *
+	 * @param id cuenta que se cambia
+	 * @return 204. 400 si el número no sirve, un coordinador queda sin teléfono o se acepta WhatsApp sin teléfono;
+	 *         404 si la cuenta no existe
+	 */
+	@PutMapping("/{id}/telefono")
+	@PreAuthorize(Permisos.ADMINISTRACION_EDITAR)
+	@ResponseStatus(HttpStatus.NO_CONTENT)
+	public void cambiarTelefono(@PathVariable UUID id, @Valid @RequestBody SolicitudTelefono solicitud,
+			@AuthenticationPrincipal Jwt jwt, HttpServletRequest peticion) {
+		cambiarTelefono.cambiar(id, solicitud.telefono(), solicitud.aceptaWhatsapp(), TokenJwt.leer(jwt).id(),
+				peticion.getRemoteAddr());
 	}
 
 	/**

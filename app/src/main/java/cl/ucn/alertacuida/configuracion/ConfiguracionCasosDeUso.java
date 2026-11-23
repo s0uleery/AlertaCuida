@@ -11,7 +11,9 @@ import cl.ucn.alertacuida.application.comun.puerto.Transacciones;
 import cl.ucn.alertacuida.application.personal.ActivarCuenta;
 import cl.ucn.alertacuida.application.personal.CambiarRecibeAvisos;
 import cl.ucn.alertacuida.application.personal.CambiarRolPersonal;
+import cl.ucn.alertacuida.application.personal.CambiarTelefonoPersonal;
 import cl.ucn.alertacuida.application.personal.ConsultarEquipo;
+import cl.ucn.alertacuida.application.personal.CrearAdministradorInicial;
 import cl.ucn.alertacuida.application.personal.CrearCuentaPersonal;
 import cl.ucn.alertacuida.application.personal.EmisorEnlacesActivacion;
 import cl.ucn.alertacuida.application.personal.GuardarPermisosRol;
@@ -123,6 +125,12 @@ public class ConfiguracionCasosDeUso {
 		return new CrearCuentaPersonal(cuentas, hashRun, enlaces, auditoria, transacciones, reloj);
 	}
 
+	/** Primer administrador de un servidor sin datos de ejemplo; lo usa AdministradorInicialAlArrancar. */
+	@Bean
+	CrearAdministradorInicial crearAdministradorInicial(CuentasPersonal cuentas, CrearCuentaPersonal crear) {
+		return new CrearAdministradorInicial(cuentas, crear);
+	}
+
 	/** Reemplazo de un enlace de activación perdido o vencido. */
 	@Bean
 	NuevoEnlaceActivacion nuevoEnlaceActivacion(CuentasPersonal cuentas, EmisorEnlacesActivacion enlaces,
@@ -147,6 +155,13 @@ public class ConfiguracionCasosDeUso {
 	@Bean
 	CambiarRecibeAvisos cambiarRecibeAvisos(EquipoPersonal equipo, RegistroAuditoria auditoria, Clock reloj) {
 		return new CambiarRecibeAvisos(equipo, auditoria, reloj);
+	}
+
+	/** Celular con WhatsApp y opt-in de una cuenta ya creada. */
+	@Bean
+	CambiarTelefonoPersonal cambiarTelefonoPersonal(EquipoPersonal equipo, RegistroAuditoria auditoria,
+			Transacciones transacciones, Clock reloj) {
+		return new CambiarTelefonoPersonal(equipo, auditoria, transacciones, reloj);
 	}
 
 	/** Permisos de los roles. */

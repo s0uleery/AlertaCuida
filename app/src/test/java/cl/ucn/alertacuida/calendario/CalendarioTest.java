@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import cl.ucn.alertacuida.application.comun.puerto.HashRun;
 import cl.ucn.alertacuida.domain.comun.Run;
+import cl.ucn.alertacuida.soporte.BaseDePrueba;
 import cl.ucn.alertacuida.soporte.PostgresDePrueba;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
@@ -44,10 +45,7 @@ class CalendarioTest {
 	/** Base sin cuentas, salvo una del rol PERSONAL, el que tiene menos permisos. */
 	@BeforeEach
 	void preparar() {
-		for (String tabla : new String[] {"asignacion_reloj", "smartwatch", "paciente", "contacto",
-				"registro_auditoria", "usuario"}) {
-			jdbc.sql("DELETE FROM " + tabla).update();
-		}
+		BaseDePrueba.vaciar(jdbc);
 		jdbc.sql("""
 				INSERT INTO usuario (codigo_rol, rut, rut_hash, nombre_profesional, correo, hash_contrasena, activo)
 				VALUES ('PERSONAL', 'cifrado', :hash, 'Pers', 'pers@muni.cl', :clave, true)""")

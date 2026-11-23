@@ -1,4 +1,13 @@
-import type { EstadoAtencion, EstadoContacto, Severidad, TipoEvento } from './tipos';
+import type {
+  Canal,
+  ClasificacionAlerta,
+  CodigoDiscrepancia,
+  EstadoAtencion,
+  EstadoContacto,
+  ResumenAlerta,
+  Severidad,
+  TipoEvento,
+} from './tipos';
 
 /** Cómo se muestra cada tipo de evento (la "condición médica" del mockup). */
 export const CONDICION: Record<TipoEvento, string> = {
@@ -54,4 +63,32 @@ const GRAVEDAD: Record<Severidad, { texto: string; clase: string }> = {
 export function InsigniaGravedad({ severidad }: { severidad: Severidad }) {
   const { texto, clase } = GRAVEDAD[severidad];
   return <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${clase}`}>{texto}</span>;
+}
+
+/** Cómo se muestra la clasificación con que se cerró una alerta de salud. */
+export const CLASIFICACION: Record<ClasificacionAlerta, string> = {
+  POSITIVA: 'Positiva (emergencia real)',
+  FALSA_ALARMA: 'Falsa alarma',
+};
+
+/** Cómo se muestra cada canal de aviso. */
+export const CANAL: Record<Canal, string> = {
+  WHATSAPP: 'WhatsApp',
+  CORREO: 'Correo',
+};
+
+/** Cómo se muestra cada discrepancia con la configuración vigente. */
+export const DISCREPANCIA: Record<CodigoDiscrepancia, string> = {
+  VERSION_DISTINTA: 'El reloj usaba otra configuración',
+  MODULO_APAGADO: 'Llegó de un módulo apagado',
+  GRAVEDAD_DISTINTA: 'Gravedad distinta de la configurada',
+  LECTURAS_EN_RANGO: 'Las lecturas no superan los umbrales',
+};
+
+/** A quién está avisando el reloj, con el nombre del contacto cuando lo hay. */
+export function describirContacto(alerta: Pick<ResumenAlerta, 'estadoContacto' | 'contactoEnCurso'>): string {
+  if (alerta.estadoContacto === 'AVISANDO_CONTACTO' && alerta.contactoEnCurso) {
+    return `Avisando a ${alerta.contactoEnCurso}`;
+  }
+  return ESTADO_CONTACTO[alerta.estadoContacto];
 }

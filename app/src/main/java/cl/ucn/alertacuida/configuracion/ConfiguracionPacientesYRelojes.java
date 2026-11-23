@@ -14,6 +14,8 @@ import cl.ucn.alertacuida.application.paciente.DarDeBajaPaciente;
 import cl.ucn.alertacuida.application.paciente.EditarPaciente;
 import cl.ucn.alertacuida.application.paciente.RegistrarPaciente;
 import cl.ucn.alertacuida.application.paciente.puerto.Pacientes;
+import cl.ucn.alertacuida.application.panel.ConsultarPanel;
+import cl.ucn.alertacuida.application.panel.puerto.PanelUsuarios;
 import cl.ucn.alertacuida.application.reloj.ConsultarEstadoRelojes;
 import cl.ucn.alertacuida.application.reloj.ConsultarRelojes;
 import cl.ucn.alertacuida.application.reloj.EditarReloj;
@@ -79,6 +81,12 @@ public class ConfiguracionPacientesYRelojes {
 	ConsultarEstadoRelojes consultarEstadoRelojes(EstadosTecnicos estados, VersionVigente versiones,
 			PropiedadesRelojes relojes, PropiedadesVigilancia vigilancia, Clock reloj) {
 		return new ConsultarEstadoRelojes(estados, versiones, relojes.umbrales(vigilancia), reloj);
+	}
+
+	/** Panel general de la portada: usa el mismo semáforo que la lista de relojes. */
+	@Bean
+	ConsultarPanel consultarPanel(ConsultarEstadoRelojes estadoRelojes, PanelUsuarios usuarios) {
+		return new ConsultarPanel(estadoRelojes::consultar, usuarios);
 	}
 
 	/** Registro de relojes. */

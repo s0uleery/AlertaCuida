@@ -56,3 +56,111 @@ export interface ResumenAlerta {
   /** Último contacto del paciente al que el reloj pidió avisar; null si ninguno */
   contactoEnCurso: string | null;
 }
+
+/** Cómo cerró el equipo una alerta de salud. Las técnicas no se clasifican. */
+export type ClasificacionAlerta = 'POSITIVA' | 'FALSA_ALARMA';
+
+/** Por dónde se avisó a una persona. */
+export type Canal = 'WHATSAPP' | 'CORREO';
+
+/** Qué pasó en cada paso de la línea de tiempo. */
+export type TipoPaso =
+  | 'ALERTA_RECIBIDA'
+  | 'ALERTA_AGRAVADA'
+  | 'ALERTA_CANCELADA'
+  | 'SALTO_CONTACTO'
+  | 'AVISO_ENVIADO'
+  | 'AVISO_ENTREGADO'
+  | 'AVISO_LEIDO'
+  | 'AVISO_FALLIDO'
+  | 'RESPUESTA_CONTACTO'
+  | 'SIN_RESPUESTA'
+  | 'CASO_ASUMIDO'
+  | 'SEGUIMIENTO'
+  | 'ALERTA_RESUELTA'
+  | 'SEGUIMIENTO_CERRADO'
+  | 'FCM_PENDIENTE'
+  | 'FCM_ENVIADO'
+  | 'FCM_RECIBIDO'
+  | 'FCM_NO_CONFIRMADO';
+
+/** Un paso de la línea de tiempo. Los campos que no corresponden a ese paso vienen en null. */
+export interface PasoAlerta {
+  /** Instante ISO en UTC. Lo que informa el reloj usa la hora del reloj */
+  fechaHora: string;
+  tipo: TipoPaso;
+  /** A quién se avisó: una persona de la lista o una cuenta del equipo */
+  contacto: string | null;
+  canal: Canal | null;
+  /** Vuelta de la lista (1 o 2); null en los avisos al equipo */
+  ronda: number | null;
+  /** Motivo del fallo, respuesta del contacto, tipo de aviso al reloj, clasificación o nota de seguimiento */
+  detalle: string | null;
+  /** Profesional que hizo el paso */
+  usuario: string | null;
+}
+
+/** Cómo se cerró la alerta. */
+export interface CierreAlerta {
+  fechaHora: string;
+  /** Nombre de quien la resolvió; null si la cerró el sistema */
+  resolutor: string | null;
+  /** null en las técnicas */
+  clasificacion: ClasificacionAlerta | null;
+  observaciones: string | null;
+}
+
+/** Una lectura que llevó al reloj a alertar. */
+export interface LecturaEvidencia {
+  tipo: 'FC' | 'SPO2';
+  /** En latidos por minuto o en % */
+  valor: number;
+  /** Instante ISO en UTC, en la hora del reloj */
+  fechaHoraMedicion: string;
+}
+
+/** Posición GPS que mandó el reloj con la alerta. */
+export interface UbicacionAlerta {
+  latitud: number;
+  longitud: number;
+  /** Radio de error; null si el reloj no lo informó */
+  precisionMetros: number | null;
+  fechaHoraMedicion: string;
+}
+
+/** Lo que explica la alerta. Cada campo es null si esa alerta no lo trae. */
+export interface EvidenciaAlerta {
+  /** Vacía si no trae */
+  lecturas: LecturaEvidencia[];
+  /** En % */
+  nivelBateria: number | null;
+  /** En las caídas */
+  segundosInmovilidad: number | null;
+  ubicacion: UbicacionAlerta | null;
+  /** Exceso de alertas: cuántas llegaron en la ventana */
+  alertasEnVentana: number | null;
+  ventanaMinutos: number | null;
+  /** Reloj no puesto: desde cuándo */
+  noPuestoDesde: string | null;
+  /** Silencio de datos: la última sincronización; null también si nunca sincronizó */
+  ultimaSincronizacion: string | null;
+}
+
+/** Qué no calzó entre la alerta y la configuración vigente al recibirla. */
+export type CodigoDiscrepancia = 'VERSION_DISTINTA' | 'MODULO_APAGADO' | 'GRAVEDAD_DISTINTA' | 'LECTURAS_EN_RANGO';
+
+/** Una discrepancia, con la explicación que guardó el servidor. */
+export interface Discrepancia {
+  codigo: CodigoDiscrepancia;
+  detalle: string;
+}
+
+/** Ficha de una alerta: los campos de la lista más su cierre, su línea de tiempo, su evidencia y sus discrepancias. */
+export interface DetalleAlerta extends ResumenAlerta {
+  /** null mientras siga abierta */
+  atencion: CierreAlerta | null;
+  /** Del paso más antiguo al más reciente */
+  lineaTiempo: PasoAlerta[];
+  evidencia: EvidenciaAlerta;
+  discrepancias: Discrepancia[];
+}

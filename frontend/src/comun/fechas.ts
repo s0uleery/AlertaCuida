@@ -7,6 +7,11 @@ export function formatearFechaHora(iso: string): string {
   return new Date(iso).toLocaleString('es-CL', { timeZone: ZONA, dateStyle: 'short', timeStyle: 'short' });
 }
 
+/** Fecha y hora con segundos, por ejemplo "24-10-2026, 09:30:15": para pasos que ocurren en el mismo minuto. */
+export function formatearFechaHoraExacta(iso: string): string {
+  return new Date(iso).toLocaleString('es-CL', { timeZone: ZONA, dateStyle: 'short', timeStyle: 'medium' });
+}
+
 /** Hora corta para listas: "08:42" si es de hoy, "Ayer, 19:30" si es de ayer y fecha y hora si es anterior. */
 export function formatearHoraReciente(iso: string): string {
   const instante = new Date(iso);

@@ -162,6 +162,7 @@ Depende de: 0.3. Listo cuando: un integrante nuevo levanta base de datos y backe
 | [x] | 0.6.2 | `docker-compose` con PostgreSQL (versión objetivo, volumen, credenciales por `.env`) | 2 |
 | [ ] | 0.6.3 | Perfiles de Spring (local, prueba y piloto) y configuración por variables de entorno | 2 |
 | [x] | 0.6.4 | `.env` de ejemplo sin secretos, `.gitignore` y README de arranque | 2 |
+Nota (19-11-2026): ya cubierta en la práctica: local = perfil `dev`, pruebas = `app/src/test/resources/config/application.properties`, servidor = sin perfil con variables de entorno (`docker-compose.servidor.yml`). Documentado en backend.md, sección "Entornos y configuración". Falta que ella la marque.
 
 ### 0.7 Trámites de WhatsApp Business Platform (8 h). Nueva.
 Abrir la cuenta de Meta Business, registrar el número y conseguir la aprobación de las plantillas. Tiene días de espera ajenos al equipo: empezar en el sprint 1.
@@ -447,6 +448,8 @@ Depende de: 1.4, 1.5. Listo cuando: tras cada sincronización, el servidor lista
 | [ ] | 2.7.3 | Informe de hallazgos para el coordinador | 1 |
 | [ ] | 2.7.4 | Pruebas | 2 |
 
+Nota (19-11-2026): 2.7 programada en versión mínima, sin marcar hasta correr las pruebas con Docker. Las alertas las decide el reloj, así que el servidor no repite sus reglas: un hallazgo es una lectura más allá del límite grave (vigente al medir, con el módulo encendido) sin alerta del reloj de FC, SpO2, FC+SpO2 o tendencia a ± 30 minutos. No se guarda ni avisa a nadie. `GET /api/hallazgos` (`REPORTES:VER`) y pestaña "Posibles no alertadas" en Reportes.
+
 ### 2.8 Simulacro de alerta (6 h). Cambia.
 Lanzar desde el dashboard una alerta de prueba marcada "PRUEBA" para verificar que toda la cadena de aviso funciona.
 
@@ -496,7 +499,7 @@ Nota (16-11-2026): 2.10.1 y 2.10.3 revisadas y marcadas. Los siete estados los c
 Nota (16-11-2026): 2.10.7 hecha con pruebas de punta a punta (recorrido completo, reloj sin señal y reinicio real del servidor), por correo. Falta la 2.10.4, que espera el webhook de WhatsApp (2.9). Además, una alerta que llega fuera de horario y se agrava en horario ahora sí se avisa a los coordinadores.
 Nota (16-11-2026, revisión del flujo): el aviso a la oficina (2.10.5) ahora es solo por alertas de salud, por correo con enlace de respuesta y además WhatsApp a cada coordinador; la confirmación de un coordinador detiene al reloj (V14). Las técnicas van solo por correo a `recibe_avisos`. Queda para quien desarrolla el reloj si repite la lista al quedar sin respuesta (pregunta 12 de api-reloj.md).
 
-Notas (05-11-2026): la 2.10.5 depende del canal de WhatsApp (2.9). Falta poder editar el teléfono y el opt-in de una cuenta ya creada (hoy solo se piden al crearla) y que el webhook de Meta registre la baja del opt-in de un coordinador.
+Notas (05-11-2026): la 2.10.5 depende del canal de WhatsApp (2.9). El teléfono y el opt-in de una cuenta ya creada se editan desde el 19-11-2026 (`PUT /api/personal/{id}/telefono`); falta que el webhook de Meta registre la baja del opt-in de un coordinador.
  
 ---
 
@@ -556,7 +559,10 @@ Depende de: 2.5, 2.10. Listo cuando: el personal ve de un vistazo qué pacientes
 | [ ] | 3.4.4 | Botón "Resolver alerta" con observaciones y clasificación: avisa al reloj para que detenga el escalamiento | 3 |
 | [ ] | 3.4.5 | Actualización automática por consulta periódica | 2 |
 | [ ] | 3.4.6 | Pruebas | 3 |
+
+Nota (19-11-2026): backend de 3.4.1 programado, sin marcar hasta correr las pruebas con Docker. `GET /api/panel` (`ALERTAS:VER`): totales de alertas abiertas, sin respuesta y en seguimiento, relojes en rojo y amarillo, y una fila por usuario activo con su reloj, su semáforo y sus alertas abiertas. Falta la vista en la portada.
 Nota (16-11-2026): 3.4.2 hecha. Sección Alertas con pestañas Salud y Reloj, filtro de abiertas, cerradas o todas, búsqueda por nombre o folio, antigüedad, contacto en curso, simulacros con etiqueta y medias y graves destacadas. `GET /api/alertas` suma `categoria`, `simulacro` y `contactoEnCurso`. La portada ya usa las alertas reales. La ficha de la alerta (3.4.3) queda pendiente.
+Nota (19-11-2026): 3.4.3 y 3.4.4 programadas, sin marcar hasta correr las pruebas con Docker y revisarlas en el navegador. Ficha `/alertas/:id` con estado, evidencia (lecturas, batería, inmovilidad, ubicación con enlace al mapa, el dato de las técnicas del servidor y las discrepancias) y línea de tiempo; botones Asumir, Resolver (con observaciones y clasificación en las de salud; el reloj deja de avisar) y Cerrar seguimiento. `GET /api/alertas/{id}` suma `evidencia`, `discrepancias`, `categoria`, `simulacro` y `contactoEnCurso`. El folio de la lista enlaza a la ficha.
 
 ### 3.5 Historial y gráficos de tendencias (28 h). Cambia.
 Gráficos de la evolución de FC y SpO2 de cada paciente, con la hora real de cada medición y los eventos marcados.
@@ -573,6 +579,8 @@ Depende de: 1.4. Listo cuando: se pueden ver las tendencias de FC y SpO2 con sus
 | [ ] | 3.5.6 | Ubicaciones si el paciente tiene GPS activo | 3 |
 | [ ] | 3.5.7 | Pruebas | 3 |
 
+Nota (19-11-2026): 3.5.1 programada, sin marcar hasta correr las pruebas con Docker. `GET /api/pacientes/{id}/tendencias`, con `REPORTES:VER` (se muestra en Reportes, no en la ficha). Agrupa según el rango: hasta 2 días cada lectura, hasta 31 por hora y hasta 90 por día, en hora de Chile, con las alertas del rango para marcarlas. Las ubicaciones (3.5.6) vienen en la misma respuesta, con la misma agrupación (la última de cada hora o día). Faltan los gráficos y el mapa en el front (3.5.2 a 3.5.6).
+
 ### 3.6 Reportes diarios y semanales (28 h)
 Reportes automáticos por paciente (promedios, máximos y mínimos) para el seguimiento preventivo. Son apoyo para el profesional, no diagnóstico.
 
@@ -587,6 +595,8 @@ Depende de: 3.5. Listo cuando: cada día y cada semana se genera solo un reporte
 | [ ] | 3.6.5 | Comparación con semanas anteriores | 4 |
 | [ ] | 3.6.6 | Pruebas y revisión con el PRLAC | 5 |
 
+Nota (19-11-2026): los reportes se calculan al pedirlos, sin tabla ni tarea programada, como dice el modelo de datos (reemplaza lo que decían 3.6.2 y 3.6.3). Indicadores decididos el 19-11-2026: FC y SpO2 (promedio, mínimo, máximo y lecturas), uso del reloj (minutos puesto y sincronizaciones), batería mínima y alertas por tipo y gravedad (sin simulacros; canceladas aparte). Semanal de lunes a domingo, comparado con la semana anterior. Backend programado (`GET /api/pacientes/{id}/reportes/diario` y `/semanal`), sin marcar hasta correr las pruebas con Docker; falta la vista (3.6.4) y revisarlo con el PRLAC.
+
 ### 3.7 Bandeja de alertas pendientes de día hábil (4 h)
 Reúne las alertas leves llegadas fuera de horario para revisarlas a primera hora del siguiente día hábil.
 
@@ -596,6 +606,8 @@ Depende de: 1.9, 3.4. Listo cuando: las alertas leves fuera de horario aparecen 
 |---|---|---|---|
 | [ ] | 3.7.1 | Vista de la bandeja con filtros por paciente y tipo | 2 |
 | [ ] | 3.7.2 | Marcar como revisada con observaciones, y pruebas | 2 |
+
+Nota (19-11-2026): "marcar como revisada" es Resolver, que ya existe. La bandeja no necesita backend nuevo: lista las alertas abiertas con estado `PENDIENTE_DIA_HABIL`, la más antigua primero. Falta la pantalla.
 
 ### 3.8 Inventario de equipos (8 h). Cambia en v7.
 Estado de todos los relojes y de su SIM LTE con el vencimiento del plan.

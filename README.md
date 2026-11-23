@@ -32,6 +32,10 @@ docker compose up -d --build
 
 Dashboard en `http://localhost:5173` y backend en `http://localhost:8080`, con el perfil `dev` (claves de desarrollo y datos de ejemplo, nunca datos reales). Después de cambiar código, hay que volver a correr el mismo comando. Para detener: `docker compose down`. Si los puertos están ocupados, cambiar `BACK_PUERTO` y `FRONT_PUERTO` en `.env`.
 
+### En el servidor público
+
+Para dejarlo en internet con su propia dirección y HTTPS (Azure for Students), sin datos de ejemplo y con claves propias: [`docs/despliegue.md`](docs/despliegue.md).
+
 ### Para programar
 
 Con recarga en vivo del dashboard. Si los contenedores del backend o del dashboard están corriendo, detenerlos antes, porque usan los mismos puertos.

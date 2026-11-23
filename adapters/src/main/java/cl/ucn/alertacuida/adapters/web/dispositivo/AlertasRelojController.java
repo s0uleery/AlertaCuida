@@ -103,7 +103,8 @@ public class AlertasRelojController {
 		if (evidencia == null || evidencia.lecturas() == null) {
 			return List.of();
 		}
-		return evidencia.lecturas().stream().map(lectura -> new LecturaEvidencia(lectura.tipo(), lectura.valor()))
+		return evidencia.lecturas().stream().map(lectura -> new LecturaEvidencia(lectura.tipo(), lectura.valor(),
+				lectura.fechaHoraMedicion()))
 				.toList();
 	}
 

@@ -4,11 +4,12 @@ import { CLASE_CAMPO, CLASE_ERROR, CLASE_TARJETA } from '../../comun/estilos';
 import { useDatos } from '../../comun/useDatos';
 import { coincide } from '../pacientes/busqueda';
 import { pacientesApi } from '../pacientes/pacientesApi';
+import { HallazgosRedSeguridad } from './HallazgosRedSeguridad';
 import { PERIODOS } from './periodos';
 
-type Pestana = 'usuarios' | 'gestion';
+type Pestana = 'usuarios' | 'gestion' | 'redSeguridad';
 
-/** Lista de reportes con sus dos pestañas: por usuario y gestión de alertas. */
+/** Lista de reportes con sus pestañas: por usuario, gestión de alertas y posibles eventos no alertados. */
 export function ListaReportes() {
   const [pestana, setPestana] = useState<Pestana>('usuarios');
 
@@ -24,6 +25,7 @@ export function ListaReportes() {
           [
             ['usuarios', 'Reporte por usuario'],
             ['gestion', 'Gestión de alertas'],
+            ['redSeguridad', 'Posibles no alertadas'],
           ] as const
         ).map(([valor, etiqueta]) => (
           <button
@@ -40,11 +42,9 @@ export function ListaReportes() {
         ))}
       </div>
 
-      {pestana === 'usuarios' ? (
-        <ReportesPorUsuario />
-      ) : (
-        <p className="text-slate-500">Esta pestaña todavía no está construida.</p>
-      )}
+      {pestana === 'usuarios' && <ReportesPorUsuario />}
+      {pestana === 'gestion' && <p className="text-slate-500">Esta pestaña todavía no está construida.</p>}
+      {pestana === 'redSeguridad' && <HallazgosRedSeguridad />}
     </section>
   );
 }

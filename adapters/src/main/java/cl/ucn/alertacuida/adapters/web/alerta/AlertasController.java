@@ -5,8 +5,10 @@ import cl.ucn.alertacuida.adapters.web.Permisos;
 import cl.ucn.alertacuida.adapters.web.auditoria.LecturaAuditada;
 import cl.ucn.alertacuida.application.alerta.AtenderAlerta;
 import cl.ucn.alertacuida.application.alerta.ConsultarAlertas;
+import cl.ucn.alertacuida.application.alerta.RegistrarSeguimiento;
 import cl.ucn.alertacuida.application.alerta.modelo.DetalleAlerta;
 import cl.ucn.alertacuida.application.alerta.modelo.ResumenAlerta;
+import cl.ucn.alertacuida.application.alerta.modelo.TipoSeguimiento;
 import cl.ucn.alertacuida.domain.alerta.ClasificacionAlerta;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
@@ -23,7 +25,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Alertas en el dashboard. Ver exige ALERTAS:VER; asumir, resolver y cerrar el seguimiento, ALERTAS:EDITAR. */
+/**
+ * Alertas en el dashboard. Ver exige ALERTAS:VER; asumir, resolver, registrar acciones del caso y cerrar el
+ * seguimiento, ALERTAS:EDITAR.
+ */
 @RestController
 @RequestMapping("/api/alertas")
 public class AlertasController {
@@ -32,14 +37,34 @@ public class AlertasController {
 
 	private final ConsultarAlertas consultar;
 	private final AtenderAlerta atender;
+	private final RegistrarSeguimiento seguimiento;
 
 	/**
-	 * @param consultar caso de uso de la lista y el detalle
-	 * @param atender   caso de uso de lo que hace el equipo con una alerta
+	 * @param consultar   caso de uso de la lista y el detalle
+	 * @param atender     caso de uso de lo que hace el equipo con una alerta
+	 * @param seguimiento caso de uso de las llamadas, visitas, derivaciones y notas
 	 */
-	public AlertasController(ConsultarAlertas consultar, AtenderAlerta atender) {
+	public AlertasController(ConsultarAlertas consultar, AtenderAlerta atender, RegistrarSeguimiento seguimiento) {
 		this.consultar = consultar;
 		this.atender = atender;
+		this.seguimiento = seguimiento;
+	}
+
+	/**
+	 * Cuerpo de {@code POST /api/alertas/{id}/seguimiento}.
+	 *
+	 * @param destino código del destino; obligatorio en DERIVACION y vacío en las demás
+	 * @param nota    obligatoria salvo en DERIVACION
+	 */
+	public record SolicitudSeguimiento(TipoSeguimiento tipo, String destino, String nota) {
+	}
+
+	/**
+	 * Respuesta de {@code POST /api/alertas/{id}/seguimiento}.
+	 *
+	 * @param id de la acción registrada
+	 */
+	public record SeguimientoCreado(UUID id) {
 	}
 
 	/**
@@ -92,6 +117,19 @@ public class AlertasController {
 	public void cerrarSeguimiento(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt,
 			HttpServletRequest peticion) {
 		atender.cerrarSeguimiento(id, TokenJwt.leer(jwt).id(), peticion.getRemoteAddr());
+	}
+
+	/**
+	 * Registra una llamada, visita, derivación o nota. 201 con el id; 400 si falta un dato o el destino no está
+	 * disponible; 404 si la alerta no existe; 409 si está cerrada del todo o el usuario la canceló.
+	 */
+	@PostMapping("/{id}/seguimiento")
+	@PreAuthorize(Permisos.ALERTAS_EDITAR)
+	@ResponseStatus(HttpStatus.CREATED)
+	public SeguimientoCreado registrarSeguimiento(@PathVariable UUID id, @RequestBody SolicitudSeguimiento solicitud,
+			@AuthenticationPrincipal Jwt jwt, HttpServletRequest peticion) {
+		return new SeguimientoCreado(seguimiento.registrar(id, solicitud.tipo(), solicitud.destino(), solicitud.nota(),
+				TokenJwt.leer(jwt).id(), peticion.getRemoteAddr()));
 	}
 
 }
