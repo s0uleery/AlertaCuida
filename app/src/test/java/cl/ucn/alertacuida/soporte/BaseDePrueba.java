@@ -14,15 +14,15 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 public final class BaseDePrueba {
 
 	/** Tablas en el orden en que se pueden borrar sin chocar con una clave foránea. */
-	private static final String[] TABLAS = {"asignacion_reloj", "smartwatch", "paciente", "contacto",
-			"registro_auditoria", "usuario"};
+	private static final String[] TABLAS = {"emparejamiento_reloj", "asignacion_reloj", "smartwatch", "paciente",
+			"contacto", "registro_auditoria", "usuario"};
 
 	private BaseDePrueba() {
 	}
 
 	/**
-	 * Borra relojes, pacientes, contactos, auditoría y cuentas del equipo. Los catálogos de las migraciones
-	 * (roles, permisos, tipos) quedan como están.
+	 * Borra los códigos de emparejamiento, relojes, pacientes, contactos, auditoría y cuentas del equipo. Los
+	 * catálogos de las migraciones (roles, permisos, tipos) quedan como están.
 	 *
 	 * @param jdbc cliente sobre la base de pruebas
 	 */

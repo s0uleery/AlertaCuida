@@ -12,7 +12,7 @@ import type {
   ResumenPaciente,
   TipoCondicion,
   TipoContacto,
-  TokenReloj,
+  RespuestaVinculo,
   Umbral,
   VariableUmbral,
   ZonaSegura,
@@ -109,12 +109,9 @@ export const pacientesApi = {
   reordenarContactos: (id: string, orden: string[]) =>
     pedir<void>(`/pacientes/${id}/contactos/orden`, { method: 'PUT', body: JSON.stringify({ orden }) }),
 
-  /**
-   * Entrega un reloj a un paciente que no tiene. Con el código que muestra el reloj no se entrega token;
-   * sin código (null) la respuesta trae uno para cargarlo a mano.
-   */
-  vincular: (id: string, idDispositivo: string, codigoEmparejamiento: string | null) =>
-    pedir<TokenReloj>(`/pacientes/${id}/reloj`, {
+  /** Entrega un reloj a un paciente que no tiene, con el código de emparejamiento que muestra el reloj. */
+  vincular: (id: string, idDispositivo: string, codigoEmparejamiento: string) =>
+    pedir<RespuestaVinculo>(`/pacientes/${id}/reloj`, {
       method: 'POST',
       body: JSON.stringify({ idDispositivo, codigoEmparejamiento }),
     }),
@@ -124,25 +121,22 @@ export const pacientesApi = {
     id: string,
     idDispositivo: string,
     estadoRelojAnterior: EstadoReloj | null,
-    codigoEmparejamiento: string | null,
+    codigoEmparejamiento: string,
   ) =>
-    pedir<TokenReloj>(`/pacientes/${id}/reloj/reemplazo`, {
+    pedir<RespuestaVinculo>(`/pacientes/${id}/reloj/reemplazo`, {
       method: 'POST',
       body: JSON.stringify({ idDispositivo, estadoRelojAnterior, codigoEmparejamiento }),
     }),
 
   /** Empareja de nuevo el mismo reloj (ej. tras restaurarlo) con el código que muestra. */
   emparejar: (id: string, codigoEmparejamiento: string) =>
-    pedir<TokenReloj>(`/pacientes/${id}/reloj/emparejamiento`, {
+    pedir<RespuestaVinculo>(`/pacientes/${id}/reloj/emparejamiento`, {
       method: 'POST',
       body: JSON.stringify({ codigoEmparejamiento }),
     }),
 
   /** Le retira el reloj; su token deja de servir. */
   desvincular: (id: string) => pedir<void>(`/pacientes/${id}/reloj`, { method: 'DELETE' }),
-
-  /** Otro token para el mismo reloj; el anterior deja de servir. */
-  nuevoToken: (id: string) => pedir<TokenReloj>(`/pacientes/${id}/reloj/token`, { method: 'POST' }),
 
   /** Si el reloj ya aplica la configuración vigente (contactos, umbrales, calendario). */
   configuracionReloj: (id: string) => pedir<ConfiguracionAplicada>(`/pacientes/${id}/reloj/configuracion`),

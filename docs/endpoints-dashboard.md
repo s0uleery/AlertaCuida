@@ -86,10 +86,10 @@ Los tipos de TypeScript de cada respuesta ya están en `frontend/src/features/*/
 | `POST /api/pacientes/{id}/contactos/{idContacto}/reactivar` | `USUARIOS:EDITAR` | 204 |
 | `PUT /api/pacientes/{id}/contactos/orden` | `USUARIOS:EDITAR` | 204 |
 | **Reloj de un paciente** | | |
-| `POST /api/pacientes/{id}/reloj` | `USUARIOS:EDITAR` | 201 `TokenReloj` |
-| `POST /api/pacientes/{id}/reloj/reemplazo` | `USUARIOS:EDITAR` | 200 `TokenReloj` |
+| `POST /api/pacientes/{id}/reloj` | `USUARIOS:EDITAR` | 201 `{idAsignacion}` |
+| `POST /api/pacientes/{id}/reloj/reemplazo` | `USUARIOS:EDITAR` | 200 `{idAsignacion}` |
+| `POST /api/pacientes/{id}/reloj/emparejamiento` | `USUARIOS:EDITAR` | 200 `{idAsignacion}` |
 | `DELETE /api/pacientes/{id}/reloj` | `USUARIOS:EDITAR` | 204 |
-| `POST /api/pacientes/{id}/reloj/token` | `USUARIOS:EDITAR` | 200 `TokenReloj` |
 | `GET /api/pacientes/{id}/reloj/configuracion` | `USUARIOS:VER` | 200 `ConfiguracionAplicada` |
 | **Inventario de relojes** | | |
 | `GET /api/relojes` | `USUARIOS:VER` | 200 `RelojConPaciente[]` |
@@ -356,28 +356,24 @@ Debe traer **todos** los activos, cada uno una vez.
 { "idDispositivo": "…", "estadoRelojAnterior": "EN_REPARACION", "codigoEmparejamiento": "K7PM-42QX" }
 ```
 - `estadoRelojAnterior` solo se usa en el reemplazo (`OPERATIVO`, `EN_REPARACION` o `RETIRADO`).
-- `codigoEmparejamiento`: el que muestra el reloj (da lo mismo con o sin guion, en minúsculas o con espacios). **Es lo normal:** el reloj ya tiene su token y la respuesta no lo trae:
+- `codigoEmparejamiento` (**obligatorio**): el que muestra el reloj (da lo mismo con o sin guion, en minúsculas o con espacios). El reloj ya tiene su token: la respuesta nunca lo trae.
   ```json
-  { "idAsignacion": "…", "token": null }
+  { "idAsignacion": "…" }
   ```
-- Sin `codigoEmparejamiento` (desarrollo y simulador), la respuesta trae un token nuevo: **se muestra una sola vez**, para cargarlo a mano, porque no se puede volver a consultar.
 
 Errores:
-- Vincular: 400 si el paciente no tiene fecha de consentimiento, o si el código no existe o venció; 409 si ya tiene reloj, está de baja, o el reloj no está operativo o lo usa otro paciente.
-- Reemplazar: 400 si el reloj nuevo es el mismo, o si el código no existe o venció; 409 si el paciente no tiene reloj o si el nuevo no está disponible.
+- Vincular: 400 si el paciente no tiene fecha de consentimiento, o si el código falta, no existe o venció; 409 si ya tiene reloj, está de baja, o el reloj no está operativo o lo usa otro paciente.
+- Reemplazar: 400 si el reloj nuevo es el mismo, o si el código falta, no existe o venció; 409 si el paciente no tiene reloj o si el nuevo no está disponible.
 - Si el vínculo falla, el código no se gasta: se puede volver a usar mientras no venza.
 
 ### `POST /api/pacientes/{id}/reloj/emparejamiento`
 ```json
 { "codigoEmparejamiento": "K7PM-42QX" }
 ```
-Empareja de nuevo el mismo reloj (por ejemplo, tras restaurarlo de fábrica). El token anterior deja de servir y el vínculo sigue igual. Responde 200 con `{ "idAsignacion": "…", "token": null }`; 400 si el código no existe o venció; 409 si el paciente no tiene reloj.
+Empareja de nuevo el mismo reloj (por ejemplo, tras restaurarlo de fábrica o si su token se filtró). El token anterior deja de servir y el vínculo sigue igual. Responde 200 con `{ "idAsignacion": "…" }`; 400 si el código no existe o venció; 409 si el paciente no tiene reloj.
 
 ### `DELETE /api/pacientes/{id}/reloj`
 Retira el reloj y su token deja de servir. 409 si el paciente no tenía reloj.
-
-### `POST /api/pacientes/{id}/reloj/token`
-Emite otro token para el mismo reloj (por ejemplo, si se perdió). El anterior deja de servir.
 
 ### `GET /api/pacientes/{id}/reloj/configuracion`
 Si el reloj ya aplica la configuración vigente (contactos, umbrales, calendario), según la versión que informó en su último lote.

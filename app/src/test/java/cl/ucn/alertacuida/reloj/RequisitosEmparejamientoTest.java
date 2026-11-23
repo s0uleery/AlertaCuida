@@ -2,7 +2,6 @@ package cl.ucn.alertacuida.reloj;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.matchesPattern;
-import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -100,7 +99,7 @@ class RequisitosEmparejamientoTest {
 
 		vincular(codigo.toLowerCase().replace("-", " "))
 				.andExpect(status().isCreated())
-				.andExpect(jsonPath("$.token").value(nullValue()));
+				.andExpect(jsonPath("$.token").doesNotExist());
 
 		consultar(token).andExpect(jsonPath("$.estado").value("VINCULADO"));
 		registrarFcm(token).andExpect(status().isNoContent());
@@ -109,9 +108,16 @@ class RequisitosEmparejamientoTest {
 		assertThat(jdbc.sql("SELECT count(*) FROM emparejamiento_reloj").query(Integer.class).single()).isZero();
 	}
 
-	/** Un código inventado, ya usado o vencido responde 400 y no vincula; el vencido se informa al reloj. */
+	/**
+	 * Sin código, o con uno inventado, ya usado o vencido, responde 400 y no vincula: no hay forma de vincular
+	 * entregando un token a mano. El vencido se informa al reloj.
+	 */
 	@Test
-	void codigoInventadoUsadoOVencidoNoVincula() throws Exception {
+	void sinCodigoOConUnoInventadoUsadoOVencidoNoVincula() throws Exception {
+		delCoordinador(post("/api/pacientes/" + paciente + "/reloj"), "{\"idDispositivo\": \"" + reloj + "\"}")
+				.andExpect(status().isBadRequest());
+		delCoordinador(post("/api/pacientes/" + paciente + "/reloj/token"), "{}")
+				.andExpect(result -> assertThat(result.getResponse().getStatus()).isIn(404, 405));
 		vincular("ZZZZ-ZZZZ").andExpect(status().isBadRequest());
 
 		String respuesta = mvc.perform(post(EMPAREJAMIENTOS)).andReturn().getResponse().getContentAsString();
@@ -139,14 +145,15 @@ class RequisitosEmparejamientoTest {
 	/** Emparejar de nuevo el mismo reloj: el token anterior deja de servir y el nuevo sirve. */
 	@Test
 	void emparejarDeNuevoCambiaElTokenDelMismoVinculo() throws Exception {
-		String anterior = JsonPath.read(vincular(null).andExpect(status().isCreated())
-				.andReturn().getResponse().getContentAsString(), "$.token");
+		String primero = mvc.perform(post(EMPAREJAMIENTOS)).andReturn().getResponse().getContentAsString();
+		vincular(JsonPath.read(primero, "$.codigo")).andExpect(status().isCreated());
+		String anterior = JsonPath.read(primero, "$.token");
 		String respuesta = mvc.perform(post(EMPAREJAMIENTOS)).andReturn().getResponse().getContentAsString();
 
 		delCoordinador(post("/api/pacientes/" + paciente + "/reloj/emparejamiento"),
 				"{\"codigoEmparejamiento\": \"" + JsonPath.read(respuesta, "$.codigo") + "\"}")
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.token").value(nullValue()));
+				.andExpect(jsonPath("$.token").doesNotExist());
 
 		registrarFcm(anterior).andExpect(status().isUnauthorized());
 		registrarFcm(JsonPath.read(respuesta, "$.token")).andExpect(status().isNoContent());
@@ -180,11 +187,10 @@ class RequisitosEmparejamientoTest {
 				.contentType(MediaType.APPLICATION_JSON).content("{\"token\": \"fcm-de-prueba\"}"));
 	}
 
-	/** El coordinador vincula el reloj al paciente con ese código (null = sin código). */
+	/** El coordinador vincula el reloj al paciente con ese código. */
 	private ResultActions vincular(String codigo) throws Exception {
-		String cuerpo = codigo == null ? "{\"idDispositivo\": \"" + reloj + "\"}"
-				: "{\"idDispositivo\": \"" + reloj + "\", \"codigoEmparejamiento\": \"" + codigo + "\"}";
-		return delCoordinador(post("/api/pacientes/" + paciente + "/reloj"), cuerpo);
+		return delCoordinador(post("/api/pacientes/" + paciente + "/reloj"),
+				"{\"idDispositivo\": \"" + reloj + "\", \"codigoEmparejamiento\": \"" + codigo + "\"}");
 	}
 
 	/** Petición del coordinador con cuerpo JSON. */
