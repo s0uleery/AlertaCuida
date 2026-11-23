@@ -21,10 +21,10 @@ jobs:
 
     steps:
       - name: Descargar el código
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Instalar JDK 21 (Temurin)
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
@@ -32,7 +32,7 @@ jobs:
 
       # El wrapper descarga Maven en ~/.m2/wrapper; "cache: maven" no lo guarda. Así no se baja en cada ejecución
       - name: Reusar Maven ya descargado
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.m2/wrapper
           key: maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
@@ -59,11 +59,11 @@ jobs:
 
     steps:
       - name: Descargar el código
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Misma versión mayor de Node que frontend/Dockerfile y Versiones.md
       - name: Instalar Node 26
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '26'
           cache: npm
