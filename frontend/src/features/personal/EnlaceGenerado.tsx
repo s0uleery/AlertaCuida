@@ -16,18 +16,21 @@ interface Props {
 }
 
 /**
- * Muestra el enlace de activación para que el administrador lo copie y se lo pase a la persona.
- * Mientras no exista el correo es la única forma de entregarlo: el enlace no se puede volver
- * a ver, porque el backend solo guarda su hash. Si se pierde, se genera otro.
+ * Resultado del alta. Lo normal es que el enlace de activación le llegue por correo a la persona: entonces no
+ * se muestra aquí, así solo ella lo conoce. Si el correo no salió (falló, o está en modo simulado en
+ * desarrollo), se muestra para que el administrador lo copie y se lo pase. El enlace no se puede volver a ver,
+ * porque el backend solo guarda su hash: si se pierde, se envía otro.
  */
 export function EnlaceGenerado({ enlace: inicial, nombre, alTerminar }: Props) {
   const [enlace, setEnlace] = useState(inicial);
   const [copiado, setCopiado] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [generando, setGenerando] = useState(false);
+  const [reenviado, setReenviado] = useState(false);
 
   /** Copia el enlace al portapapeles. */
   async function copiar() {
+    if (!enlace.enlaceActivacion) return;
     try {
       await navigator.clipboard.writeText(enlace.enlaceActivacion);
       setCopiado(true);
@@ -37,13 +40,14 @@ export function EnlaceGenerado({ enlace: inicial, nombre, alTerminar }: Props) {
     }
   }
 
-  /** Pide otro enlace al backend; el anterior deja de servir. */
+  /** Pide otro enlace al backend, que lo vuelve a enviar por correo; el anterior deja de servir. */
   async function generarOtro() {
     setGenerando(true);
     setError(null);
     try {
       setEnlace(await personalApi.nuevoEnlace(enlace.idUsuario));
       setCopiado(false);
+      setReenviado(true);
     } catch (e) {
       setError(e instanceof ErrorApi ? e.message : 'No se pudo conectar con el servidor.');
     } finally {
@@ -53,25 +57,40 @@ export function EnlaceGenerado({ enlace: inicial, nombre, alTerminar }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-md bg-emerald-50 px-4 py-3 text-emerald-900">
-        <p className="font-medium">Cuenta creada para {nombre}.</p>
-        <p className="text-sm">
-          Envíale este enlace para que elija su contraseña. Sirve una sola vez y vence el{' '}
-          <strong>{formatearFechaHora(enlace.expiraEn)}</strong>.
-        </p>
-      </div>
+      {enlace.correoEnviado ? (
+        <div role="status" className="rounded-md bg-emerald-50 px-4 py-3 text-emerald-900">
+          <p className="font-medium">Cuenta creada para {nombre}.</p>
+          <p className="text-sm">
+            {reenviado ? 'Le enviamos un enlace nuevo' : 'Le enviamos un correo'} para que elija su contraseña. El
+            enlace sirve una sola vez y vence el <strong>{formatearFechaHora(enlace.expiraEn)}</strong>.
+          </p>
+          <p className="mt-1 text-sm">
+            Si no le llega (revisa también la carpeta de spam) o vence, envía otro: el anterior deja de servir.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div role="alert" className="rounded-md bg-amber-50 px-4 py-3 text-amber-900">
+            <p className="font-medium">Cuenta creada para {nombre}, pero no se pudo enviar el correo.</p>
+            <p className="text-sm">
+              Pásale este enlace por otra vía para que elija su contraseña. Sirve una sola vez y vence el{' '}
+              <strong>{formatearFechaHora(enlace.expiraEn)}</strong>.
+            </p>
+          </div>
 
-      <input
-        readOnly
-        value={enlace.enlaceActivacion}
-        onFocus={(e) => e.target.select()}
-        aria-label="Enlace de activación"
-        className={`${CLASE_CAMPO} font-mono text-sm`}
-      />
+          <input
+            readOnly
+            value={enlace.enlaceActivacion ?? ''}
+            onFocus={(e) => e.target.select()}
+            aria-label="Enlace de activación"
+            className={`${CLASE_CAMPO} font-mono text-sm`}
+          />
 
-      <p className="text-sm text-slate-500">
-        Este enlace no se vuelve a mostrar. Si se pierde o vence, genera otro: el anterior deja de servir.
-      </p>
+          <p className="text-sm text-slate-500">
+            Este enlace no se vuelve a mostrar. Si se pierde o vence, genera otro: el anterior deja de servir.
+          </p>
+        </>
+      )}
 
       {error && (
         <p role="alert" className={CLASE_ERROR}>
@@ -80,11 +99,13 @@ export function EnlaceGenerado({ enlace: inicial, nombre, alTerminar }: Props) {
       )}
 
       <div className="flex flex-wrap gap-2">
-        <button onClick={copiar} className={CLASE_BOTON_PRINCIPAL}>
-          {copiado ? 'Copiado ✓' : 'Copiar enlace'}
-        </button>
+        {!enlace.correoEnviado && (
+          <button onClick={copiar} className={CLASE_BOTON_PRINCIPAL}>
+            {copiado ? 'Copiado ✓' : 'Copiar enlace'}
+          </button>
+        )}
         <button onClick={generarOtro} disabled={generando} className={CLASE_BOTON_SECUNDARIO}>
-          {generando ? 'Generando…' : 'Generar otro enlace'}
+          {generando ? 'Enviando…' : enlace.correoEnviado ? 'Enviar otro enlace' : 'Intentar enviar de nuevo'}
         </button>
         <button onClick={alTerminar} className={CLASE_BOTON_SECUNDARIO}>
           Crear otra cuenta

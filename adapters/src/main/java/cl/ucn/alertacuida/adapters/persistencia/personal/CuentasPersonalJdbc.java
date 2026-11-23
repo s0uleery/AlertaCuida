@@ -98,10 +98,12 @@ public class CuentasPersonalJdbc implements CuentasPersonal {
 
 	@Override
 	public Optional<CuentaPendiente> buscarPendiente(UUID id) {
-		return jdbc.sql("SELECT id_usuario, rut_hash FROM usuario WHERE id_usuario = :id AND hash_contrasena IS NULL")
+		return jdbc.sql("""
+				SELECT id_usuario, rut_hash, nombre_profesional, correo FROM usuario
+				WHERE id_usuario = :id AND hash_contrasena IS NULL""")
 				.param("id", id)
 				.query((fila, n) -> new CuentaPendiente(fila.getObject("id_usuario", UUID.class),
-						fila.getString("rut_hash")))
+						fila.getString("rut_hash"), fila.getString("nombre_profesional"), fila.getString("correo")))
 				.optional();
 	}
 

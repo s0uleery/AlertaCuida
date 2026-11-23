@@ -6,7 +6,10 @@ import cl.ucn.alertacuida.application.aviso.modelo.TextosCorreo;
 import cl.ucn.alertacuida.application.respuesta.puerto.FirmaRespuesta;
 import cl.ucn.alertacuida.domain.alerta.Severidad;
 import cl.ucn.alertacuida.domain.alerta.TipoEvento;
+import cl.ucn.alertacuida.domain.comun.ZonaHoraria;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.format.DateTimeFormatter;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Map;
@@ -27,6 +30,8 @@ import java.util.regex.Pattern;
  * Lleva un solo enlace a la página /responder del dashboard, donde elige "Confirmo que voy" o "No puedo
  * asistir", con el token firmado del aviso después de "#"; sin ese marcador en su cuerpo, el backend no
  * arranca.</li>
+ * <li>Activación de una cuenta del equipo, a la persona: el enlace para elegir su contraseña. Sin el
+ * marcador {enlace} en su cuerpo, el backend no arranca.</li>
  * </ul>
  * Las graves van marcadas como importantes. Los textos se revisan al crear las plantillas: un marcador
  * desconocido o un texto que falta impide arrancar el backend, para que nunca salga un correo a medias.
@@ -41,6 +46,10 @@ public class PlantillasCorreo {
 
 	/** El marcador del enlace de respuesta, obligatorio en el contacto, el aviso a la oficina y el agravamiento. */
 	private static final Set<String> ENLACE = Set.of("responder");
+
+	/** Cómo se escribe el vencimiento del enlace de activación ({vence}), en hora de Chile. */
+	private static final DateTimeFormatter VENCE = DateTimeFormatter.ofPattern("dd-MM-yyyy 'a las' HH:mm")
+			.withZone(ZonaHoraria.CHILE);
 
 	private final String urlDashboard;
 	private final TextosCorreo textos;
@@ -74,6 +83,23 @@ public class PlantillasCorreo {
 			case AGRAVAMIENTO -> alertaAgravada(correo);
 			case AVISO -> avisoAlEquipo(correo);
 		};
+	}
+
+	/**
+	 * Correo de activación a una persona del equipo a la que se le creó una cuenta.
+	 *
+	 * @param destinatario su correo
+	 * @param nombre       su nombre, para saludarla
+	 * @param enlace       la página de activación con el token después de "#"
+	 * @param expiraEn     hasta cuándo sirve el enlace
+	 * @return el mensaje, no marcado como importante
+	 */
+	public Mensaje activacion(String destinatario, String nombre, String enlace, Instant expiraEn) {
+		TextosCorreo.Activacion t = textos.activacion();
+		Map<String, String> valores = Map.of("nombre", nombre.strip(), "enlace", enlace,
+				"vence", VENCE.format(expiraEn), "pie", textos.pieEquipo());
+		return new Mensaje(destinatario, limpiar(rellenar(t.asunto(), valores)),
+				limpiar(rellenar(t.cuerpo(), valores)), false);
 	}
 
 	/**
@@ -237,6 +263,10 @@ public class PlantillasCorreo {
 		revisar("aviso-oficina.cuerpo", oficina.cuerpo(),
 				Set.of("alerta", "deQuien", "folio", "dashboard", "pie", "responder"));
 		exigir("aviso-oficina.cuerpo", oficina.cuerpo(), ENLACE);
+		TextosCorreo.Activacion activacion = requerido("activacion", textos.activacion());
+		revisar("activacion.asunto", activacion.asunto(), Set.of("nombre"));
+		revisar("activacion.cuerpo", activacion.cuerpo(), Set.of("nombre", "enlace", "vence", "pie"));
+		exigir("activacion.cuerpo", activacion.cuerpo(), Set.of("enlace"));
 		for (Severidad severidad : Severidad.values()) {
 			if (textos.gravedades() == null || vacio(textos.gravedades().get(severidad))) {
 				throw new IllegalArgumentException("correos.yml: falta el nombre de la gravedad " + severidad

@@ -171,6 +171,26 @@ alertacuida:
 
           {pie}
 
+      # A la persona del equipo a la que se le crea una cuenta (o se le emite un enlace nuevo), para que elija su
+      # contraseña. Nadie más conoce el enlace: no se muestra en el dashboard si este correo salió bien.
+      #   {nombre} nombre de la persona, como se registró
+      #   {enlace} página para elegir la contraseña (obligatorio en el cuerpo)
+      #   {vence}  fecha y hora de Chile en que vence el enlace, ej. 25-11-2026 a las 15:30
+      #   {pie}    pie-equipo (solo en el cuerpo)
+      activacion:
+        asunto: "AlertaCuida: active su cuenta, {nombre}"
+        cuerpo: |
+          Hola, {nombre}:
+
+          Se creó su cuenta en AlertaCuida, el sistema de teleasistencia del Programa Red Local de Apoyos y Cuidados. Para activarla, abra este enlace y elija su contraseña:
+          {enlace}
+
+          El enlace sirve una sola vez y vence el {vence}. Si vence, pida uno nuevo a quien administra AlertaCuida.
+
+          Si no esperaba este correo, ignórelo: sin elegir una contraseña, nadie puede entrar con su cuenta.
+
+          {pie}
+
       # Cómo se nombra cada gravedad ({gravedad}). Deben estar las tres.
       gravedades:
         LEVE: "leve"

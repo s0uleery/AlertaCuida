@@ -108,7 +108,7 @@ class PlantillasCorreoTest {
 				base.alertaEquipo(), base.contacto(), base.vigilante(),
 				new TextosCorreo.Agravamiento(base.agravamiento().asunto(),
 						base.agravamiento().cuerpo() + "{minutos}"),
-				base.avisoOficina(), base.gravedades(), base.tecnicas());
+				base.avisoOficina(), base.gravedades(), base.tecnicas(), base.activacion());
 
 		assertThatThrownBy(() -> plantillas(malo)).isInstanceOf(IllegalArgumentException.class)
 				.hasMessageContaining("agravamiento.cuerpo").hasMessageContaining("{minutos}");
@@ -121,7 +121,7 @@ class PlantillasCorreoTest {
 		TextosCorreo malo = new TextosCorreo(base.pieEquipo(), base.pieContacto(), base.silencioDatos(),
 				base.alertaEquipo(), base.contacto(),
 				new TextosCorreo.Vigilante(base.vigilante().asunto(), base.vigilante().cuerpo() + "{responder}"),
-				base.agravamiento(), base.avisoOficina(), base.gravedades(), base.tecnicas());
+				base.agravamiento(), base.avisoOficina(), base.gravedades(), base.tecnicas(), base.activacion());
 
 		assertThatThrownBy(() -> plantillas(malo)).isInstanceOf(IllegalArgumentException.class)
 				.hasMessageContaining("vigilante.cuerpo");
@@ -196,7 +196,7 @@ class PlantillasCorreoTest {
 				new TextosCorreo.AlertaEquipo(a.asunto(), a.cuerpo() + "{responder}", a.alertaSalud(),
 						a.alertaTecnica(), a.deQuienConAlias()),
 				base.contacto(), base.vigilante(), base.agravamiento(), base.avisoOficina(), base.gravedades(),
-				base.tecnicas());
+				base.tecnicas(), base.activacion());
 
 		assertThatThrownBy(() -> plantillas(malo))
 				.isInstanceOf(IllegalArgumentException.class)
@@ -210,11 +210,11 @@ class PlantillasCorreoTest {
 		TextosCorreo sinEnlaceEnOficina = new TextosCorreo(base.pieEquipo(), base.pieContacto(),
 				base.silencioDatos(), base.alertaEquipo(), base.contacto(), base.vigilante(), base.agravamiento(),
 				new TextosCorreo.AvisoOficina("Oficina: {alerta}", "Hay una {alerta}.\n{pie}"), base.gravedades(),
-				base.tecnicas());
+				base.tecnicas(), base.activacion());
 		TextosCorreo sinEnlaceEnAgravamiento = new TextosCorreo(base.pieEquipo(), base.pieContacto(),
 				base.silencioDatos(), base.alertaEquipo(), base.contacto(), base.vigilante(),
 				new TextosCorreo.Agravamiento("Agravada {folio}", "Pasó a grave.\n{pie}"), base.avisoOficina(),
-				base.gravedades(), base.tecnicas());
+				base.gravedades(), base.tecnicas(), base.activacion());
 
 		assertThatThrownBy(() -> plantillas(sinEnlaceEnOficina)).isInstanceOf(IllegalArgumentException.class)
 				.hasMessageContaining("aviso-oficina.cuerpo").hasMessageContaining("{responder}");
@@ -292,7 +292,7 @@ class PlantillasCorreoTest {
 		gravedades.remove(Severidad.MEDIA);
 		TextosCorreo malo = new TextosCorreo(base.pieEquipo(), base.pieContacto(), base.silencioDatos(),
 				base.alertaEquipo(), base.contacto(), base.vigilante(), base.agravamiento(), base.avisoOficina(),
-				gravedades, base.tecnicas());
+				gravedades, base.tecnicas(), base.activacion());
 
 		assertThatThrownBy(() -> plantillas(malo))
 				.isInstanceOf(IllegalArgumentException.class)
@@ -307,11 +307,28 @@ class PlantillasCorreoTest {
 		tecnicas.remove(TipoEvento.EXCESO_ALERTAS);
 		TextosCorreo malo = new TextosCorreo(base.pieEquipo(), base.pieContacto(), base.silencioDatos(),
 				base.alertaEquipo(), base.contacto(), base.vigilante(), base.agravamiento(), base.avisoOficina(),
-				base.gravedades(), tecnicas);
+				base.gravedades(), tecnicas, base.activacion());
 
 		assertThatThrownBy(() -> plantillas(malo))
 				.isInstanceOf(IllegalArgumentException.class)
 				.hasMessageContaining("EXCESO_ALERTAS");
+	}
+
+	/** La activación sin {enlace} impide arrancar, y no admite marcadores de las alertas como {folio}. */
+	@Test
+	void laActivacionExigeElEnlaceYNoAdmiteMarcadoresDeAlertas() {
+		TextosCorreo base = textos();
+		TextosCorreo sinEnlace = new TextosCorreo(base.pieEquipo(), base.pieContacto(), base.silencioDatos(),
+				base.alertaEquipo(), base.contacto(), base.vigilante(), base.agravamiento(), base.avisoOficina(),
+				base.gravedades(), base.tecnicas(), new TextosCorreo.Activacion("Hola {nombre}", "Hola, {nombre}."));
+		TextosCorreo conFolio = new TextosCorreo(base.pieEquipo(), base.pieContacto(), base.silencioDatos(),
+				base.alertaEquipo(), base.contacto(), base.vigilante(), base.agravamiento(), base.avisoOficina(),
+				base.gravedades(), base.tecnicas(), new TextosCorreo.Activacion("Hola {folio}", "{enlace}"));
+
+		assertThatThrownBy(() -> plantillas(sinEnlace)).isInstanceOf(IllegalArgumentException.class)
+				.hasMessageContaining("activacion.cuerpo").hasMessageContaining("{enlace}");
+		assertThatThrownBy(() -> plantillas(conFolio)).isInstanceOf(IllegalArgumentException.class)
+				.hasMessageContaining("activacion.asunto");
 	}
 
 	/** @return las plantillas con esos textos, el dashboard de prueba y una firma que antepone "firmado-" */
@@ -335,7 +352,7 @@ class PlantillasCorreoTest {
 		TextosCorreo base = textos();
 		return new TextosCorreo(base.pieEquipo(), base.pieContacto(), base.silencioDatos(), base.alertaEquipo(),
 				contacto, base.vigilante(), base.agravamiento(), base.avisoOficina(), base.gravedades(),
-				base.tecnicas());
+				base.tecnicas(), base.activacion());
 	}
 
 	/** @return un correo pendiente a una cuenta del equipo por la alerta #142 */

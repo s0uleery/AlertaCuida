@@ -1,6 +1,5 @@
 package cl.ucn.alertacuida.adapters.web.personal;
 
-import cl.ucn.alertacuida.adapters.seguridad.PropiedadesSeguridad;
 import cl.ucn.alertacuida.adapters.seguridad.TokenJwt;
 import cl.ucn.alertacuida.adapters.web.Permisos;
 import cl.ucn.alertacuida.application.personal.CambiarRecibeAvisos;
@@ -8,8 +7,10 @@ import cl.ucn.alertacuida.application.personal.CambiarRolPersonal;
 import cl.ucn.alertacuida.application.personal.CambiarTelefonoPersonal;
 import cl.ucn.alertacuida.application.personal.ConsultarEquipo;
 import cl.ucn.alertacuida.application.personal.CrearCuentaPersonal;
+import cl.ucn.alertacuida.application.personal.EnviarEnlaceActivacion;
 import cl.ucn.alertacuida.application.personal.NuevoEnlaceActivacion;
 import cl.ucn.alertacuida.application.personal.modelo.EnlaceActivacion;
+import cl.ucn.alertacuida.application.personal.modelo.EnvioEnlace;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -42,7 +43,7 @@ public class PersonalController {
 	private final CambiarRolPersonal cambiarRol;
 	private final CambiarRecibeAvisos cambiarAvisos;
 	private final CambiarTelefonoPersonal cambiarTelefono;
-	private final String urlActivacion;
+	private final EnviarEnlaceActivacion enviarEnlace;
 
 	/**
 	 * @param crearCuenta     caso de uso del alta
@@ -51,18 +52,18 @@ public class PersonalController {
 	 * @param cambiarRol      caso de uso del cambio de rol
 	 * @param cambiarAvisos   caso de uso del aviso técnico por correo
 	 * @param cambiarTelefono caso de uso del celular con WhatsApp y su opt-in
-	 * @param propiedades     de ahí sale la dirección de la página de activación del dashboard
+	 * @param enviarEnlace    envía el enlace de activación por correo a la persona
 	 */
 	public PersonalController(CrearCuentaPersonal crearCuenta, NuevoEnlaceActivacion nuevoEnlace,
 			ConsultarEquipo consultar, CambiarRolPersonal cambiarRol, CambiarRecibeAvisos cambiarAvisos,
-			CambiarTelefonoPersonal cambiarTelefono, PropiedadesSeguridad propiedades) {
+			CambiarTelefonoPersonal cambiarTelefono, EnviarEnlaceActivacion enviarEnlace) {
 		this.crearCuenta = crearCuenta;
 		this.nuevoEnlace = nuevoEnlace;
 		this.consultar = consultar;
 		this.cambiarRol = cambiarRol;
 		this.cambiarAvisos = cambiarAvisos;
 		this.cambiarTelefono = cambiarTelefono;
-		this.urlActivacion = propiedades.activacion().url();
+		this.enviarEnlace = enviarEnlace;
 	}
 
 	/** @return las cuentas del equipo por nombre, con su estado, último acceso y aviso técnico por correo */
@@ -119,11 +120,13 @@ public class PersonalController {
 	}
 
 	/**
-	 * Crea la cuenta de una persona del equipo, inactiva hasta que use su enlace.
+	 * Crea la cuenta de una persona del equipo, inactiva hasta que use su enlace, y le envía el enlace por
+	 * correo. Se envía después de guardar la cuenta: si el correo falla, la cuenta queda creada igual.
 	 *
 	 * @param solicitud datos de la persona y su rol
 	 * @param jwt       token del administrador, para la auditoría
-	 * @return 201 con el enlace de activación. 400 si un dato no sirve, 409 si el RUN o el correo ya existen
+	 * @return 201 con si salió el correo (y el enlace solo si no salió). 400 si un dato no sirve, 409 si el RUN
+	 *         o el correo ya existen
 	 */
 	@PostMapping
 	@PreAuthorize(Permisos.ADMINISTRACION_CREAR)
@@ -134,10 +137,10 @@ public class PersonalController {
 	}
 
 	/**
-	 * Emite otro enlace para una cuenta pendiente. El anterior deja de servir.
+	 * Emite otro enlace para una cuenta pendiente y lo envía por correo. El anterior deja de servir.
 	 *
 	 * @param id cuenta pendiente
-	 * @return el enlace nuevo. 404 si la cuenta no existe o ya está activa
+	 * @return si salió el correo (y el enlace solo si no salió). 404 si la cuenta no existe o ya está activa
 	 */
 	@PostMapping("/{id}/enlace-activacion")
 	@PreAuthorize(Permisos.ADMINISTRACION_CREAR)
@@ -146,9 +149,15 @@ public class PersonalController {
 		return respuesta(nuevoEnlace.emitir(id, TokenJwt.leer(jwt).id(), peticion.getRemoteAddr()));
 	}
 
-	/** El token va después de "#": esa parte no se envía al servidor, así no queda en ningún log. */
+	/**
+	 * Envía el enlace por correo. Si salió, la respuesta no lo trae: solo la persona lo conoce. Si no salió
+	 * (falla o canal simulado), lo trae para que quien administra se lo pase por otra vía. El token va después
+	 * de "#": esa parte no se envía al servidor, así no queda en ningún log.
+	 */
 	private RespuestaEnlace respuesta(EnlaceActivacion enlace) {
-		return new RespuestaEnlace(enlace.idUsuario(), urlActivacion + "#" + enlace.token(), enlace.expiraEn());
+		EnvioEnlace envio = enviarEnlace.enviar(enlace);
+		return new RespuestaEnlace(envio.idUsuario(), envio.correoEnviado() ? null : envio.enlace(), envio.expiraEn(),
+				envio.correoEnviado());
 	}
 
 }

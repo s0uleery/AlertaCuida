@@ -135,8 +135,8 @@ Endpoints:
 
 | Endpoint | Permiso | Qué hace |
 |---|---|---|
-| `POST /api/personal` | `ADMINISTRACION:CREAR` | Crea la cuenta y devuelve el enlace de activación (201). |
-| `POST /api/personal/{id}/enlace-activacion` | `ADMINISTRACION:CREAR` | Emite otro enlace si el anterior se perdió o venció; el anterior deja de servir. |
+| `POST /api/personal` | `ADMINISTRACION:CREAR` | Crea la cuenta y le envía el enlace de activación por correo (201); el enlace solo viene en la respuesta si el correo no salió. |
+| `POST /api/personal/{id}/enlace-activacion` | `ADMINISTRACION:CREAR` | Emite otro enlace si el anterior se perdió o venció, y lo envía por correo; el anterior deja de servir. |
 | `POST /api/auth/activar` | Público | Recibe `{token, contrasena}`, guarda la contraseña y activa la cuenta (204). |
 | `GET /api/personal` | `ADMINISTRACION:VER` | Lista las cuentas por nombre, con estado, último acceso, `recibeAvisos` y `tieneTelefono`. Sin el RUN ni el teléfono. |
 | `PUT /api/personal/{id}/rol` | `ADMINISTRACION:EDITAR` | Cambia el rol de otra cuenta (204). Ver "Equipo y permisos". |
@@ -156,7 +156,10 @@ Recorrido:
    - lo registra en la auditoría.
 
    Todo en una transacción.
-2. El enlace es `http://…/activar#<token>` y vence en 48 h. Mientras no exista el correo, el administrador lo copia y se lo pasa a la persona.
+2. El enlace es `http://…/activar#<token>` y vence en 48 h. Después de guardar la cuenta, `EnviarEnlaceActivacion` se lo envía a la persona por correo con la plantilla `activacion` de `correos.yml` (su nombre, el enlace y cuándo vence, en hora de Chile):
+   - si el correo sale, la respuesta **no trae el enlace**: solo la persona lo conoce;
+   - si falla, o el canal es el simulado de desarrollo (`CanalNotificacion.entregaDeVerdad()` es false), la respuesta trae el enlace para que el administrador se lo pase por otra vía. La cuenta queda creada igual;
+   - el envío no se reintenta solo: "Enviar otro enlace" emite uno nuevo y lo vuelve a enviar (el anterior deja de servir).
 3. La persona abre el enlace y elige su contraseña. `ActivarCuenta`:
    - revisa que el token exista, no esté usado ni vencido;
    - valida la contraseña con `PoliticaContrasena`;

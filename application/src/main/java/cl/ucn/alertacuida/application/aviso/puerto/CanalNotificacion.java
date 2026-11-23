@@ -16,4 +16,13 @@ public interface CanalNotificacion {
 	 */
 	String enviar(Mensaje mensaje);
 
+	/**
+	 * @return si el mensaje llega de verdad a su destino; false en el canal simulado de desarrollo, que solo lo
+	 *         registra. Así, por ejemplo, el enlace de activación se muestra en el dashboard cuando nadie lo
+	 *         recibirá por correo
+	 */
+	default boolean entregaDeVerdad() {
+		return true;
+	}
+
 }

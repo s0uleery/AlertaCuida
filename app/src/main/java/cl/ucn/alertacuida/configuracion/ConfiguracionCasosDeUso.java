@@ -5,6 +5,8 @@ import cl.ucn.alertacuida.application.auditoria.ConsultarAuditoria;
 import cl.ucn.alertacuida.application.auditoria.RegistrarLectura;
 import cl.ucn.alertacuida.application.auditoria.puerto.ConsultaAuditoria;
 import cl.ucn.alertacuida.application.auditoria.puerto.RegistroAuditoria;
+import cl.ucn.alertacuida.application.aviso.PlantillasCorreo;
+import cl.ucn.alertacuida.application.aviso.puerto.CanalNotificacion;
 import cl.ucn.alertacuida.application.comun.puerto.HashRun;
 import cl.ucn.alertacuida.application.comun.puerto.SecretosUnSoloUso;
 import cl.ucn.alertacuida.application.comun.puerto.Transacciones;
@@ -16,6 +18,7 @@ import cl.ucn.alertacuida.application.personal.ConsultarEquipo;
 import cl.ucn.alertacuida.application.personal.CrearAdministradorInicial;
 import cl.ucn.alertacuida.application.personal.CrearCuentaPersonal;
 import cl.ucn.alertacuida.application.personal.EmisorEnlacesActivacion;
+import cl.ucn.alertacuida.application.personal.EnviarEnlaceActivacion;
 import cl.ucn.alertacuida.application.personal.GuardarPermisosRol;
 import cl.ucn.alertacuida.application.personal.NuevoEnlaceActivacion;
 import cl.ucn.alertacuida.application.personal.puerto.CuentasPersonal;
@@ -136,6 +139,13 @@ public class ConfiguracionCasosDeUso {
 	NuevoEnlaceActivacion nuevoEnlaceActivacion(CuentasPersonal cuentas, EmisorEnlacesActivacion enlaces,
 			RegistroAuditoria auditoria, Transacciones transacciones, Clock reloj) {
 		return new NuevoEnlaceActivacion(cuentas, enlaces, auditoria, transacciones, reloj);
+	}
+
+	/** Envío por correo del enlace de activación, con la plantilla "activacion" de correos.yml. */
+	@Bean
+	EnviarEnlaceActivacion enviarEnlaceActivacion(CuentasPersonal cuentas, PlantillasCorreo plantillas,
+			CanalNotificacion canalCorreo, PropiedadesSeguridad propiedades) {
+		return new EnviarEnlaceActivacion(cuentas, plantillas, canalCorreo, propiedades.activacion().url());
 	}
 
 	/** Lista de las cuentas del equipo y de los roles con sus permisos. */

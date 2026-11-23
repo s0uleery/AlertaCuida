@@ -12,6 +12,7 @@ import cl.ucn.alertacuida.domain.alerta.Severidad;
 import cl.ucn.alertacuida.domain.alerta.TipoEvento;
 import java.io.IOException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeAll;
@@ -179,6 +180,18 @@ class TextosCorreoRealesTest {
 	private static String texto(CorreoPendiente correo) {
 		Mensaje mensaje = plantillas.redactar(correo);
 		return mensaje.asunto() + "\n" + mensaje.texto();
+	}
+
+	/** El correo de activación real saluda a la persona, trae su enlace y dice cuándo vence, en hora de Chile. */
+	@Test
+	void activacionDeCuenta() {
+		Mensaje mensaje = plantillas.activacion("ana@muni.cl", "Ana Pérez", DASHBOARD + "/activar#tok",
+				Instant.parse("2026-11-25T18:30:00Z"));
+
+		assertThat(mensaje.asunto()).contains("Ana Pérez");
+		assertThat(mensaje.texto()).contains("Ana Pérez", DASHBOARD + "/activar#tok", "25-11-2026 a las 15:30")
+				.doesNotContain("{");
+		assertThat(mensaje.importante()).isFalse();
 	}
 
 	/** @return un correo pendiente a una cuenta del equipo por la alerta #142 */

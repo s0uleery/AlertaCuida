@@ -19,11 +19,23 @@ import java.util.Map;
  * @param avisoOficina  a cada coordinador, por una alerta de salud
  * @param gravedades    cómo se nombra cada gravedad ({gravedad})
  * @param tecnicas      cómo se nombra cada alerta técnica ({tecnica}), menos el silencio de datos
+ * @param activacion    a la persona del equipo a la que se le crea una cuenta, con su enlace de activación
  */
 public record TextosCorreo(String pieEquipo, String pieContacto, SilencioDatos silencioDatos,
 		AlertaEquipo alertaEquipo, Contacto contacto, Vigilante vigilante, Agravamiento agravamiento,
 		AvisoOficina avisoOficina,
-		Map<Severidad, String> gravedades, Map<TipoEvento, String> tecnicas) {
+		Map<Severidad, String> gravedades, Map<TipoEvento, String> tecnicas, Activacion activacion) {
+
+	/**
+	 * A la persona a la que se le crea una cuenta del equipo (o se le emite un enlace nuevo), para que elija
+	 * su contraseña. No habla de pacientes ni alertas.
+	 *
+	 * @param asunto admite {nombre}
+	 * @param cuerpo admite {nombre}, {vence} (fecha y hora de Chile en que vence el enlace) y {pie}; exige
+	 *               {enlace}, la página del dashboard donde elige su contraseña
+	 */
+	public record Activacion(String asunto, String cuerpo) {
+	}
 
 	/**
 	 * @param asunto        admite {reloj}, {folio} y {dashboard}
