@@ -30,6 +30,23 @@ jobs:
           java-version: '21'
           cache: maven
 
+      # El wrapper descarga Maven en ~/.m2/wrapper; "cache: maven" no lo guarda. Así no se baja en cada ejecución
+      - name: Reusar Maven ya descargado
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/wrapper
+          key: maven-wrapper-${{ hashFiles('.mvn/wrapper/maven-wrapper.properties') }}
+
+      # Si Maven Central falla un momento (wget: Failed to fetch), reintenta antes de rendirse
+      - name: Descargar Maven
+        run: |
+          for intento in 1 2 3; do
+            ./mvnw -B -q --version && exit 0
+            echo "No se pudo descargar Maven (intento $intento de 3); se reintenta en 20 s"
+            sleep 20
+          done
+          exit 1
+
       - name: Compilar y correr pruebas
         run: ./mvnw -B verify
 
