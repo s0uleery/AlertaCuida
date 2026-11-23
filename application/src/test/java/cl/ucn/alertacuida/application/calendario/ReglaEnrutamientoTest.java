@@ -6,6 +6,7 @@ import cl.ucn.alertacuida.application.contacto.modelo.ContactoDelPaciente;
 import cl.ucn.alertacuida.application.contacto.modelo.Persona;
 import cl.ucn.alertacuida.application.contacto.modelo.Vinculo;
 import cl.ucn.alertacuida.domain.alerta.Severidad;
+import cl.ucn.alertacuida.domain.alerta.TipoEvento;
 import cl.ucn.alertacuida.domain.calendario.CalendarioHabil;
 import cl.ucn.alertacuida.domain.calendario.DiaSemana;
 import cl.ucn.alertacuida.domain.calendario.Feriado;
@@ -53,7 +54,7 @@ class ReglaEnrutamientoTest {
 	void laLeveFueraDeHorarioEspera() {
 		assertThat(regla.esperaDiaHabil(Severidad.LEVE, NOCHE)).isTrue();
 		assertThat(regla.esperaDiaHabil(Severidad.LEVE, FERIADO)).isTrue();
-		assertThat(regla.contactosAAvisar(Severidad.LEVE, NOCHE, todos)).isEmpty();
+		assertThat(regla.contactosAAvisar(TipoEvento.CAIDA, Severidad.LEVE, NOCHE, todos)).isEmpty();
 		assertThat(regla.esperaDiaHabil(Severidad.LEVE, HABIL)).isFalse();
 	}
 
@@ -69,19 +70,42 @@ class ReglaEnrutamientoTest {
 	/** En horario hábil se respeta el horario de cada contacto: el vecino nocturno no recibe el aviso de las 10:00. */
 	@Test
 	void enHorarioHabilSeRespetaElHorarioDeCadaContacto() {
-		assertThat(regla.contactosAAvisar(Severidad.LEVE, HABIL, todos)).containsExactly(hija, sobrinoDiurno);
+		assertThat(regla.contactosAAvisar(TipoEvento.CAIDA, Severidad.LEVE, HABIL, todos))
+				.containsExactly(hija, sobrinoDiurno);
 	}
 
 	/** De noche, una grave avisa solo a los disponibles a esa hora, por prioridad. */
 	@Test
 	void deNocheSeAvisaALosDisponiblesPorPrioridad() {
-		assertThat(regla.contactosAAvisar(Severidad.GRAVE, NOCHE, todos)).containsExactly(hija, vecinoNocturno);
+		assertThat(regla.contactosAAvisar(TipoEvento.CAIDA, Severidad.GRAVE, NOCHE, todos))
+				.containsExactly(hija, vecinoNocturno);
 	}
 
 	/** Nunca se avisa a un contacto desactivado ni a uno sin canal usable (sin opt-in ni correo). */
 	@Test
 	void nuncaSeAvisaADesactivadosNiSinCanal() {
-		assertThat(regla.contactosAAvisar(Severidad.MEDIA, HABIL, List.of(desactivado, sinCanal))).isEmpty();
+		assertThat(regla.contactosAAvisar(TipoEvento.CAIDA, Severidad.MEDIA, HABIL, List.of(desactivado, sinCanal)))
+				.isEmpty();
+	}
+
+	/** Con el botón de ayuda avisan primero los vecinos y después el resto, cada grupo por prioridad. */
+	@Test
+	void elBotonDeAyudaAvisaPrimeroALosVecinos() {
+		ContactoDelPaciente vecina = contacto(4, "VECINO");
+		ContactoDelPaciente vecino = contacto(6, "VECINO");
+		List<ContactoDelPaciente> lista = List.of(hija, vecino, sobrinoDiurno, vecina);
+
+		assertThat(regla.contactosAAvisar(TipoEvento.BOTON_AYUDA, Severidad.LEVE, HABIL, lista))
+				.containsExactly(vecina, vecino, hija, sobrinoDiurno);
+		assertThat(regla.contactosAAvisar(TipoEvento.CAIDA, Severidad.LEVE, HABIL, lista))
+				.containsExactly(hija, sobrinoDiurno, vecina, vecino);
+	}
+
+	/** El botón de ayuda es leve: de noche espera al día hábil, como cualquier leve. */
+	@Test
+	void elBotonDeAyudaDeNocheEspera() {
+		assertThat(regla.contactosAAvisar(TipoEvento.BOTON_AYUDA, Severidad.LEVE, NOCHE,
+				List.of(contacto(4, "VECINO"), hija))).isEmpty();
 	}
 
 	private static TramoHabil semana() {
@@ -99,6 +123,14 @@ class ReglaEnrutamientoTest {
 				: new Persona(UUID.randomUUID(), "Contacto " + prioridad, null, null, null, null);
 		return new ContactoDelPaciente(UUID.randomUUID(), persona, new Vinculo("FAMILIA", null, false, horario),
 				prioridad, activo, 0);
+	}
+
+	/** @return un contacto activo de ese tipo, sin horario y con WhatsApp */
+	private static ContactoDelPaciente contacto(int prioridad, String tipo) {
+		Persona persona = new Persona(UUID.randomUUID(), "Contacto " + prioridad, "+56912345678", null,
+				Instant.parse("2026-10-01T12:00:00Z"), null);
+		return new ContactoDelPaciente(UUID.randomUUID(), persona, new Vinculo(tipo, null, false, null), prioridad,
+				true, 0);
 	}
 
 	private static LocalTime hora(String texto) {

@@ -1,0 +1,16 @@
+# Caddy del servidor público (docker-compose.servidor.yml). Saca el certificado HTTPS para DOMINIO y
+# redirige http a https solo. Guía: docs/despliegue.md.
+{$DOMINIO} {
+	encode gzip
+
+	# La API va directo al backend: así Caddy le entrega la IP real del navegador en X-Forwarded-For
+	# (descarta la que traiga el navegador) y la auditoría registra la IP correcta.
+	handle /api/* {
+		reverse_proxy backend:8080
+	}
+
+	# Todo lo demás es el dashboard (React), servido por el nginx del frontend
+	handle {
+		reverse_proxy frontend:80
+	}
+}

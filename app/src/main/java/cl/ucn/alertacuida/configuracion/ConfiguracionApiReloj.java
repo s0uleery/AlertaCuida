@@ -1,9 +1,14 @@
 package cl.ucn.alertacuida.configuracion;
 
 import cl.ucn.alertacuida.application.alerta.RecibirAlerta;
+import cl.ucn.alertacuida.application.alerta.RevisionDiscrepancias;
 import cl.ucn.alertacuida.application.alerta.puerto.Alertas;
 import cl.ucn.alertacuida.application.asignacion.AutenticarReloj;
+import cl.ucn.alertacuida.application.asignacion.EmparejarReloj;
 import cl.ucn.alertacuida.application.asignacion.puerto.Asignaciones;
+import cl.ucn.alertacuida.application.asignacion.puerto.CodigosCortos;
+import cl.ucn.alertacuida.application.asignacion.puerto.Emparejamientos;
+import cl.ucn.alertacuida.application.calendario.ReglaEnrutamiento;
 import cl.ucn.alertacuida.application.clinica.PerfilClinicoPaciente;
 import cl.ucn.alertacuida.application.comun.puerto.SecretosUnSoloUso;
 import cl.ucn.alertacuida.application.comun.puerto.Transacciones;
@@ -16,6 +21,7 @@ import cl.ucn.alertacuida.application.telemetria.RecibirSincronizacion;
 import cl.ucn.alertacuida.application.telemetria.puerto.Sincronizaciones;
 import cl.ucn.alertacuida.domain.calendario.CalendarioHabil;
 import java.time.Clock;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -24,12 +30,21 @@ import org.springframework.context.annotation.Configuration;
  * {@link ConfiguracionPacientesYRelojes}, que tiene los del dashboard.
  */
 @Configuration
+@EnableConfigurationProperties({PropiedadesAlertas.class, PropiedadesEmparejamiento.class})
 public class ConfiguracionApiReloj {
 
 	/** Reconoce al reloj por su token en cada petición. */
 	@Bean
 	AutenticarReloj autenticarReloj(Asignaciones asignaciones, SecretosUnSoloUso secretos) {
 		return new AutenticarReloj(asignaciones, secretos);
+	}
+
+	/** El reloj pide su código de emparejamiento y pregunta si ya lo vincularon. */
+	@Bean
+	EmparejarReloj emparejarReloj(Emparejamientos emparejamientos, Asignaciones asignaciones, CodigosCortos codigos,
+			SecretosUnSoloUso secretos, PropiedadesEmparejamiento propiedades, Clock reloj) {
+		return new EmparejarReloj(emparejamientos, asignaciones, codigos, secretos, propiedades.vigencia(),
+				propiedades.maximoPendientes(), propiedades.segundosConsulta(), reloj);
 	}
 
 	/**
@@ -39,7 +54,8 @@ public class ConfiguracionApiReloj {
 	@Bean
 	ConfiguracionDelReloj configuracionDelReloj(PerfilClinicoPaciente perfiles, ContactosPaciente contactos,
 			CalendarioHabil calendario, PropiedadesClinicas propiedades, Clock reloj) {
-		return new ConfiguracionDelReloj(perfiles, contactos, calendario, propiedades.versionMatriz(), reloj);
+		return new ConfiguracionDelReloj(perfiles, contactos, calendario, propiedades.versionMatriz(),
+				propiedades.minutosTendencia(), propiedades.severidadTendencia(), reloj);
 	}
 
 	/** Lotes de estado y lecturas que el reloj envía cada 2 horas. */
@@ -49,10 +65,18 @@ public class ConfiguracionApiReloj {
 		return new RecibirSincronizacion(sincronizaciones, configuraciones, transacciones, reloj);
 	}
 
-	/** Alertas del reloj, cancelaciones del paciente y estado de cada alerta. */
+	/** Compara cada alerta nueva con la configuración vigente del paciente. */
 	@Bean
-	RecibirAlerta recibirAlerta(Alertas alertas, Clock reloj) {
-		return new RecibirAlerta(alertas, reloj);
+	RevisionDiscrepancias revisionDiscrepancias(ConfiguracionDelReloj configuraciones, PerfilClinicoPaciente perfiles,
+			PropiedadesClinicas propiedades) {
+		return new RevisionDiscrepancias(configuraciones, perfiles, propiedades.severidadTendencia());
+	}
+
+	/** Alertas del reloj, cancelaciones del paciente, agravamiento y estado de cada alerta. */
+	@Bean
+	RecibirAlerta recibirAlerta(Alertas alertas, RevisionDiscrepancias revision, PropiedadesAlertas propiedades,
+			ReglaEnrutamiento enrutamiento, Transacciones transacciones, Clock reloj) {
+		return new RecibirAlerta(alertas, revision, propiedades.limite(), enrutamiento, transacciones, reloj);
 	}
 
 	/** Token de Firebase de cada reloj, para enviarle avisos. */

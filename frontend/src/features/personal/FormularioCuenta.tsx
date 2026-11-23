@@ -7,7 +7,19 @@ import { ROLES } from './roles';
 import type { RespuestaEnlace, SolicitudCuenta } from './tipos';
 
 /** Formulario vacío; el rol por defecto es el de menos permisos. */
-const VACIA: SolicitudCuenta = { run: '', nombre: '', cargo: '', correo: '', rol: 'PERSONAL' };
+const VACIA: SolicitudCuenta = {
+  run: '',
+  nombre: '',
+  cargo: '',
+  correo: '',
+  rol: 'PERSONAL',
+  telefono: '',
+  aceptaWhatsapp: false,
+  recibeAvisos: false,
+};
+
+/** Rol que recibe por WhatsApp los avisos de la oficina PRLAC: necesita teléfono. */
+const ROL_AVISOS_OFICINA = 'COORDINADOR';
 
 /**
  * Formulario de alta de una persona del equipo. Revisa el RUN antes de enviar; el resto de las
@@ -45,7 +57,9 @@ export function FormularioCuenta({ alCrear }: { alCrear: (enlace: RespuestaEnlac
     }
   }
 
-  const completo = datos.run && datos.nombre.trim() && datos.correo.trim();
+  const pideTelefono = datos.rol === ROL_AVISOS_OFICINA;
+  const completo =
+    datos.run && datos.nombre.trim() && datos.correo.trim() && (!pideTelefono || datos.telefono.trim());
 
   return (
     <form onSubmit={enviar} className="grid gap-4 sm:grid-cols-2" noValidate>
@@ -120,6 +134,64 @@ export function FormularioCuenta({ alCrear }: { alCrear: (enlace: RespuestaEnlac
           ))}
         </div>
       </fieldset>
+
+      <label className="block">
+        <span className={CLASE_ETIQUETA}>
+          Teléfono con WhatsApp{' '}
+          {!pideTelefono && <span className="font-normal text-slate-400">(opcional)</span>}
+        </span>
+        <input
+          type="tel"
+          value={datos.telefono}
+          onChange={(e) =>
+            setDatos((anteriores) => ({
+              ...anteriores,
+              telefono: e.target.value,
+              // Sin teléfono no hay a dónde enviar WhatsApp
+              aceptaWhatsapp: e.target.value.trim() ? anteriores.aceptaWhatsapp : false,
+            }))
+          }
+          placeholder="+56 9 1234 5678"
+          maxLength={30}
+          required={pideTelefono}
+          className={CLASE_CAMPO}
+        />
+        {pideTelefono && (
+          <span className="mt-1 block text-xs text-slate-500">
+            Los coordinadores reciben por WhatsApp los avisos de la oficina PRLAC en horario laboral.
+          </span>
+        )}
+      </label>
+
+      <label className="flex items-start gap-2 self-end text-sm">
+        <input
+          type="checkbox"
+          checked={datos.aceptaWhatsapp}
+          disabled={!datos.telefono.trim()}
+          onChange={(e) => cambiar('aceptaWhatsapp', e.target.checked)}
+          className="mt-1"
+        />
+        <span>
+          La persona aceptó recibir avisos por WhatsApp
+          <span className="block text-xs text-slate-500">Sin esta aceptación, Meta no permite enviarle mensajes.</span>
+        </span>
+      </label>
+
+      <label className="flex items-start gap-2 text-sm sm:col-span-2">
+        <input
+          type="checkbox"
+          checked={datos.recibeAvisos}
+          onChange={(e) => cambiar('recibeAvisos', e.target.checked)}
+          className="mt-1"
+        />
+        <span>
+          Recibe avisos técnicos por correo
+          <span className="block text-xs text-slate-500">
+            Cuando un reloj deja de enviar datos, tiene la batería baja, no se lo ponen o envía demasiadas alertas. Solo
+            en horario laboral. Se puede cambiar después en la lista de perfiles.
+          </span>
+        </span>
+      </label>
 
       {error && (
         <p role="alert" className={`${CLASE_ERROR} sm:col-span-2`}>

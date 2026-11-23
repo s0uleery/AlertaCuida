@@ -3,6 +3,7 @@ package cl.ucn.alertacuida.adapters.web.paciente;
 import cl.ucn.alertacuida.adapters.seguridad.TokenJwt;
 import cl.ucn.alertacuida.adapters.web.Permisos;
 import cl.ucn.alertacuida.adapters.web.RespuestaId;
+import cl.ucn.alertacuida.adapters.web.auditoria.LecturaAuditada;
 import cl.ucn.alertacuida.application.paciente.ConsultarPacientes;
 import cl.ucn.alertacuida.application.paciente.DarDeBajaPaciente;
 import cl.ucn.alertacuida.application.paciente.EditarPaciente;
@@ -36,6 +37,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/pacientes")
 public class PacientesController {
 
+	private static final String ENTIDAD = "PACIENTE";
+
 	private final ConsultarPacientes consultar;
 	private final RegistrarPaciente registrar;
 	private final EditarPaciente editar;
@@ -56,6 +59,7 @@ public class PacientesController {
 	 */
 	@GetMapping
 	@PreAuthorize(Permisos.USUARIOS_VER)
+	@LecturaAuditada(entidad = ENTIDAD)
 	public List<ResumenPaciente> listar(@RequestParam(defaultValue = "false") boolean incluirBajas) {
 		return consultar.listar(incluirBajas);
 	}
@@ -63,6 +67,7 @@ public class PacientesController {
 	/** @return la ficha del paciente con su historial de relojes. 404 si no existe */
 	@GetMapping("/{id}")
 	@PreAuthorize(Permisos.USUARIOS_VER)
+	@LecturaAuditada(entidad = ENTIDAD, idVariable = "id")
 	public DetallePaciente detalle(@PathVariable UUID id) {
 		return consultar.detalle(id);
 	}

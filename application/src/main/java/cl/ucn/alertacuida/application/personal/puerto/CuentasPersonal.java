@@ -22,6 +22,12 @@ public interface CuentasPersonal {
 	boolean existeCorreo(String correo);
 
 	/**
+	 * @return si hay alguna cuenta con rol ADMINISTRADOR, activa, pendiente o desactivada; sirve para
+	 *         crear el administrador inicial solo en un servidor recién instalado
+	 */
+	boolean existeAdministrador();
+
+	/**
 	 * @param codigoRol por ejemplo, PERSONAL
 	 * @return si el rol existe y no está desactivado
 	 */

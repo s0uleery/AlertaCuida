@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react';
+import { PaginaAlertas } from '../features/alertas/PaginaAlertas';
 import { PaginaCalendario } from '../features/calendario/PaginaCalendario';
 import { PaginaUsuarios } from '../features/pacientes/PaginaUsuarios';
 import { PaginaAdministracion } from '../features/personal/PaginaAdministracion';
@@ -21,7 +22,7 @@ export interface Seccion {
 
 /** Secciones en el orden en que aparecen en el menú. */
 export const SECCIONES: Seccion[] = [
-  { ruta: '/alertas', etiqueta: 'Alertas', permiso: 'ALERTAS:VER' },
+  { ruta: '/alertas', etiqueta: 'Alertas', permiso: 'ALERTAS:VER', pagina: PaginaAlertas },
   // "Usuarios" son los usuarios del programa (pacientes), como se les llama en el PRLAC
   { ruta: '/usuarios', etiqueta: 'Usuarios', permiso: 'USUARIOS:VER', pagina: PaginaUsuarios },
   // Los relojes usan los permisos de USUARIOS: quien inscribe al usuario le entrega el reloj

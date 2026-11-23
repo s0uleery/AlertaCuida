@@ -27,3 +27,56 @@ export interface RelojConPaciente {
   idPaciente: string | null;
   nombrePaciente: string | null;
 }
+
+/** Color del semáforo de un reloj (GET /api/relojes/estado). */
+export type ColorSemaforo = 'VERDE' | 'AMARILLO' | 'ROJO' | 'GRIS';
+
+/** Por qué el semáforo no está verde. */
+export type MotivoSemaforo =
+  | 'SIN_VINCULAR'
+  | 'SIN_SENAL'
+  | 'PLAN_VENCIDO'
+  | 'BATERIA_BAJA'
+  | 'NO_PUESTO'
+  | 'CONFIGURACION_PENDIENTE'
+  | 'ALERTA_TECNICA_ABIERTA'
+  | 'ATRASO'
+  | 'VERSION_ANTIGUA'
+  | 'PLAN_POR_VENCER';
+
+/** Estado técnico de un reloj: su semáforo y lo que informó en su última sincronización. */
+export interface EstadoTecnicoReloj {
+  idDispositivo: string;
+  semaforo: ColorSemaforo;
+  /** Vacío si está verde */
+  motivos: MotivoSemaforo[];
+  /** Instante ISO en UTC; null si no ha sincronizado en su vínculo vigente */
+  ultimaSincronizacion: string | null;
+  nivelBateria: number | null;
+  relojPuesto: boolean | null;
+  tipoConexion: 'LTE' | 'WIFI' | null;
+  versionApp: string | null;
+  configuracionPendiente: boolean;
+}
+
+/** Cómo se nombra cada color. */
+export const NOMBRE_SEMAFORO: Record<ColorSemaforo, string> = {
+  VERDE: 'Funcionando',
+  AMARILLO: 'Atención',
+  ROJO: 'Sin señal',
+  GRIS: 'Sin vincular',
+};
+
+/** Cómo se explica cada motivo. */
+export const MOTIVO_SEMAFORO: Record<MotivoSemaforo, string> = {
+  SIN_VINCULAR: 'Nadie lo usa',
+  SIN_SENAL: 'Lleva 4 horas o más sin sincronizar',
+  PLAN_VENCIDO: 'El plan de datos de la SIM venció',
+  BATERIA_BAJA: 'Batería bajo 20 %',
+  NO_PUESTO: 'No está puesto',
+  CONFIGURACION_PENDIENTE: 'Aún no aplica la configuración vigente',
+  ALERTA_TECNICA_ABIERTA: 'Tiene una alerta técnica abierta',
+  ATRASO: 'Se atrasó en sincronizar',
+  VERSION_ANTIGUA: 'Su app es más antigua que la de otros relojes',
+  PLAN_POR_VENCER: 'El plan de datos vence en 30 días o menos',
+};

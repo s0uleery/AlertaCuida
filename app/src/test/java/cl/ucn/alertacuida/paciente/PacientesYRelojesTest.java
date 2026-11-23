@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import cl.ucn.alertacuida.application.comun.puerto.HashRun;
 import cl.ucn.alertacuida.domain.comun.Run;
 import cl.ucn.alertacuida.domain.comun.ZonaHoraria;
+import cl.ucn.alertacuida.soporte.BaseDePrueba;
 import cl.ucn.alertacuida.soporte.PostgresDePrueba;
 import com.jayway.jsonpath.JsonPath;
 import java.time.Clock;
@@ -58,10 +59,7 @@ class PacientesYRelojesTest {
 	/** Base vacía con un coordinador y una persona del rol PERSONAL. */
 	@BeforeEach
 	void preparar() throws Exception {
-		for (String tabla : new String[] {"asignacion_reloj", "smartwatch", "paciente", "registro_auditoria",
-				"usuario"}) {
-			jdbc.sql("DELETE FROM " + tabla).update();
-		}
+		BaseDePrueba.vaciar(jdbc);
 		crearUsuario("11.111.111-1", "COORDINADOR", "Coord");
 		crearUsuario("22.222.222-2", "PERSONAL", "Pers");
 		coordinador = token("11.111.111-1", "Clave-de-Coord1");
@@ -229,7 +227,9 @@ class PacientesYRelojesTest {
 		mvc.perform(conToken(delete(ruta + "/" + epoc), coordinador)).andExpect(status().isNoContent());
 		mvc.perform(conToken(delete(ruta + "/" + epoc), coordinador)).andExpect(status().isNotFound());
 		mvc.perform(conToken(get(ruta), coordinador)).andExpect(jsonPath("$", hasSize(1)));
-		Long cambios = jdbc.sql("SELECT count(*) FROM registro_auditoria WHERE entidad = 'CONDICION_PACIENTE'")
+		Long cambios = jdbc.sql("""
+				SELECT count(*) FROM registro_auditoria
+				WHERE entidad = 'CONDICION_PACIENTE' AND accion <> 'LEER'""")
 				.query(Long.class).single();
 		assertThat(cambios).isEqualTo(3);
 	}

@@ -6,7 +6,7 @@ import java.util.Objects;
  * Lo que se guarda en una fila de la tabla configuracion: los módulos y opciones del paciente.
  *
  * @param modulos         qué vigila el reloj
- * @param gpsActivo       si el reloj envía la ubicación (solo para ubicar a la persona; no genera alertas)
+ * @param gpsActivo       si el reloj usa el GPS: envía la ubicación y, con el módulo zonaSegura, revisa la zona
  * @param modoConservador si el reloj alerta antes, con menos evidencia
  * @param minutosEspera   antes de pasar al siguiente contacto; vacío = el valor base
  * @param motivo          por qué se cambió (opcional); se guarda cifrado
@@ -14,7 +14,7 @@ import java.util.Objects;
 public record AjustesClinicos(Modulos modulos, boolean gpsActivo, boolean modoConservador, Integer minutosEspera,
 		String motivo) {
 
-	/** Los que rigen mientras el paciente no tiene configuración (valores por defecto de V3). */
+	/** Los que rigen mientras el paciente no tiene configuración (valores por defecto de V3, V8 y V9). */
 	public static final AjustesClinicos POR_DEFECTO = new AjustesClinicos(Modulos.POR_DEFECTO, false, false, null,
 			null);
 

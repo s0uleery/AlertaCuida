@@ -46,12 +46,13 @@ public class CrearCuentaPersonal {
 	 * @param idAdministrador quien crea la cuenta, para la auditoría
 	 * @param ip              desde dónde llegó la petición, para la auditoría
 	 * @return el enlace que el administrador le pasa a la persona
-	 * @throws SolicitudRechazada si el RUN no es válido o el rol no existe
+	 * @throws SolicitudRechazada si el RUN o el teléfono no son válidos, el rol no existe, un
+	 *                            coordinador no tiene teléfono o se acepta WhatsApp sin teléfono
 	 * @throws CuentaDuplicada    si ya hay una cuenta con ese RUN o correo
 	 */
 	public EnlaceActivacion crear(DatosCuenta datos, UUID idAdministrador, String ip) {
-		NuevaCuenta cuenta = validar(datos);
 		Instant ahora = reloj.instant();
+		NuevaCuenta cuenta = validar(datos, ahora);
 		return transacciones.ejecutar(() -> {
 			UUID id = cuentas.crear(cuenta);
 			auditoria.registrar(idAdministrador, "CREAR", "USUARIO", id.toString(), ip, ahora);
@@ -59,8 +60,13 @@ public class CrearCuentaPersonal {
 		});
 	}
 
-	/** Revisa las reglas y normaliza: RUN sin puntos, correo en minúsculas, sin espacios sobrantes. */
-	private NuevaCuenta validar(DatosCuenta datos) {
+	/**
+	 * Revisa las reglas y normaliza: RUN sin puntos, correo en minúsculas, teléfono en formato
+	 * internacional, sin espacios sobrantes.
+	 *
+	 * @param ahora fecha del opt-in, si la persona aceptó WhatsApp
+	 */
+	private NuevaCuenta validar(DatosCuenta datos, Instant ahora) {
 		Run run;
 		try {
 			run = Run.de(datos.run());
@@ -79,7 +85,9 @@ public class CrearCuentaPersonal {
 			throw new CuentaDuplicada("Ya existe una cuenta con ese correo");
 		}
 		String cargo = datos.cargo() == null || datos.cargo().isBlank() ? null : datos.cargo().strip();
-		return new NuevaCuenta(run.valor(), runHash, datos.nombre().strip(), cargo, correo, datos.codigoRol());
+		String telefono = TelefonoAvisos.validar(datos.codigoRol(), datos.telefono(), datos.aceptaWhatsapp(), false);
+		return new NuevaCuenta(run.valor(), runHash, datos.nombre().strip(), cargo, correo, datos.codigoRol(),
+				telefono, datos.aceptaWhatsapp() ? ahora : null, datos.recibeAvisos());
 	}
 
 }

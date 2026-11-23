@@ -1,9 +1,11 @@
 package cl.ucn.alertacuida.application.configuracion.modelo;
 
 import cl.ucn.alertacuida.application.clinica.modelo.Modulos;
+import cl.ucn.alertacuida.domain.alerta.Severidad;
 import cl.ucn.alertacuida.domain.calendario.DiaSemana;
 import cl.ucn.alertacuida.domain.calendario.TramoHabil;
 import cl.ucn.alertacuida.domain.clinica.Umbral;
+import cl.ucn.alertacuida.domain.clinica.ZonaSegura;
 import cl.ucn.alertacuida.domain.contacto.Canal;
 import cl.ucn.alertacuida.domain.contacto.Horario;
 import java.math.BigDecimal;
@@ -23,11 +25,14 @@ import java.util.stream.Collectors;
  * docs/api-reloj.yaml), sin la versión, que se calcula de este contenido con {@link #huella()}.
  *
  * @param modulos         qué vigila el reloj
- * @param gpsActivo       si envía su ubicación (solo para ubicar a la persona)
+ * @param gpsActivo       si envía su ubicación (y revisa la zona segura, si el módulo está activo)
  * @param modoConservador si el reloj alerta con criterios más estrictos
  * @param fc              umbral de la frecuencia cardíaca (propio o base)
  * @param spo2            umbral de la saturación de oxígeno (propio o base)
+ * @param zonaSegura      círculo que revisa el reloj; vacío si el módulo está apagado
  * @param versionMatriz   versión de la matriz FC × SpO2 del Anexo B
+ * @param minutosTendencia minutos seguidos fuera del rango normal, sin llegar al límite grave, para alertar
+ * @param severidadTendencia gravedad con que el reloj envía esa alerta
  * @param minutosEspera   antes de pasar al siguiente contacto
  * @param rondas          veces que el reloj recorre la lista de contactos
  * @param contactos       activos y con algún canal usable, por prioridad
@@ -35,8 +40,9 @@ import java.util.stream.Collectors;
  * @param feriados        del año en curso y el siguiente, ordenados
  */
 public record ContenidoConfiguracion(Modulos modulos, boolean gpsActivo, boolean modoConservador, Umbral fc,
-		Umbral spo2, String versionMatriz, int minutosEspera, int rondas, List<ContactoConfigurado> contactos,
-		Map<DiaSemana, TramoHabil> horarioHabil, List<LocalDate> feriados) {
+		Umbral spo2, ZonaSegura zonaSegura, String versionMatriz, int minutosTendencia, Severidad severidadTendencia,
+		int minutosEspera, int rondas, List<ContactoConfigurado> contactos, Map<DiaSemana, TramoHabil> horarioHabil,
+		List<LocalDate> feriados) {
 
 	/** Largo de la versión: 16 caracteres hexadecimales del SHA-256 (64 bits). */
 	static final int LARGO_VERSION = 16;
@@ -71,18 +77,21 @@ public record ContenidoConfiguracion(Modulos modulos, boolean gpsActivo, boolean
 		StringBuilder texto = new StringBuilder()
 				.append("modulos=").append(modulos.caidas()).append(',').append(modulos.fc()).append(',')
 				.append(modulos.spo2()).append(',').append(modulos.inactividad()).append(',')
-				.append(modulos.tendencia()).append('\n')
+				.append(modulos.tendencia()).append(',').append(modulos.zonaSegura()).append(',')
+				.append(modulos.botonAyuda()).append('\n')
 				.append("gps=").append(gpsActivo).append('\n')
 				.append("conservador=").append(modoConservador).append('\n')
 				.append("fc=").append(limites(fc)).append('\n')
 				.append("spo2=").append(limites(spo2)).append('\n')
+				.append("zona=").append(zona(zonaSegura)).append('\n')
 				.append("matriz=").append(versionMatriz).append('\n')
+				.append("tendencia=").append(minutosTendencia).append('|').append(severidadTendencia).append('\n')
 				.append("espera=").append(minutosEspera).append('\n')
 				.append("rondas=").append(rondas).append('\n');
 		for (ContactoConfigurado contacto : contactos) {
 			Horario horario = contacto.horario();
 			texto.append("contacto=").append(contacto.idContacto()).append('|').append(contacto.nombre()).append('|')
-					.append(contacto.prioridad()).append('|')
+					.append(contacto.tipo()).append('|').append(contacto.prioridad()).append('|')
 					.append(horario == null ? "" : horario.inicio() + "-" + horario.fin()).append('|')
 					.append(contacto.canales().stream().map(Canal::name).collect(Collectors.joining(",")))
 					.append('\n');
@@ -97,6 +106,12 @@ public record ContenidoConfiguracion(Modulos modulos, boolean gpsActivo, boolean
 	private static String limites(Umbral umbral) {
 		return String.join("|", plano(umbral.graveBajo()), plano(umbral.normalMin()), plano(umbral.normalMax()),
 				plano(umbral.graveAlto()));
+	}
+
+	/** @return "latitud|longitud|radio|severidad", o "" si no viaja zona */
+	private static String zona(ZonaSegura zona) {
+		return zona == null ? "" : String.join("|", plano(zona.latitud()), plano(zona.longitud()),
+				String.valueOf(zona.radioMetros()), zona.severidad().name());
 	}
 
 	private static String plano(BigDecimal valor) {

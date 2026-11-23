@@ -1,10 +1,17 @@
 import { useState } from 'react';
 import { ErrorApi } from '../../api/cliente';
 import { useConfirmar } from '../../comun/Confirmacion';
-import { CLASE_BOTON_PRINCIPAL, CLASE_BOTON_SECUNDARIO, CLASE_CAMPO, CLASE_ERROR, CLASE_ETIQUETA } from '../../comun/estilos';
+import {
+  CLASE_BOTON_PRINCIPAL,
+  CLASE_BOTON_SECUNDARIO,
+  CLASE_CAMPO,
+  CLASE_ERROR,
+  CLASE_ETIQUETA,
+} from '../../comun/estilos';
 import { formatearFechaHora } from '../../comun/fechas';
 import { useDatos } from '../../comun/useDatos';
 import { relojesApi } from '../relojes/relojesApi';
+import { SemaforoReloj } from '../relojes/SemaforoReloj';
 import { NOMBRE_ESTADO, type EstadoReloj } from '../relojes/tipos';
 import { useSesion } from '../sesion/SesionContext';
 import { ConfiguracionDelReloj } from './ConfiguracionDelReloj';
@@ -20,12 +27,18 @@ interface Props {
 }
 
 /** Qué está haciendo el usuario en esta sección. */
-type Modo = 'ver' | 'vincular' | 'reemplazar';
+type Modo = 'ver' | 'vincular' | 'reemplazar' | 'emparejar';
+
+/** Texto de ayuda junto al campo del código. */
+const AYUDA_CODIGO =
+  'Aparece en la pantalla del reloj al abrir la app de AlertaCuida (ej. K7PM-42QX). Vence en 10 minutos.';
 
 /**
- * El reloj del usuario: vincular uno si no tiene; si tiene, reemplazarlo, retirarlo o
- * generar otro token. Las reglas (consentimiento, reloj operativo y libre) las revisa el backend;
- * aquí solo se ofrecen los relojes que pueden servir.
+ * El reloj del usuario: vincular uno si no tiene; si tiene, reemplazarlo, emparejarlo de nuevo, retirarlo o
+ * generar otro token. Lo normal es vincular con el código que muestra el reloj: así nadie ve ni escribe su
+ * token. Sin código, el backend entrega un token para cargarlo a mano (desarrollo y simulador).
+ * Las reglas (consentimiento, reloj operativo y libre) las revisa el backend; aquí solo se ofrecen los
+ * relojes que pueden servir.
  */
 export function RelojDelUsuario({ detalle, alCambiar }: Props) {
   const { puede } = useSesion();
@@ -34,16 +47,19 @@ export function RelojDelUsuario({ detalle, alCambiar }: Props) {
   const vigente = historial.find((asignacion) => asignacion.fin === null) ?? null;
   const [modo, setModo] = useState<Modo>('ver');
   const [token, setToken] = useState<TokenReloj | null>(null);
+  const [emparejado, setEmparejado] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [trabajando, setTrabajando] = useState(false);
 
-  /** Ejecuta una acción del backend, muestra el token si lo hay y recarga la ficha. */
+  /** Ejecuta una acción del backend, muestra el token o el aviso de emparejado y recarga la ficha. */
   async function hacer(accion: () => Promise<TokenReloj | void>) {
     setTrabajando(true);
     setError(null);
+    setEmparejado(false);
     try {
       const resultado = await accion();
-      if (resultado) setToken(resultado);
+      if (resultado?.token) setToken(resultado);
+      else if (resultado) setEmparejado(true);
       setModo('ver');
       alCambiar();
     } catch (e) {
@@ -58,6 +74,11 @@ export function RelojDelUsuario({ detalle, alCambiar }: Props) {
   return (
     <div className="space-y-4">
       {token && <TokenRelojMostrado token={token} alCerrar={() => setToken(null)} />}
+      {emparejado && (
+        <p role="status" className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+          Reloj emparejado. En unos segundos el reloj mostrará que quedó listo y descargará su configuración.
+        </p>
+      )}
 
       {vigente ? (
         <>
@@ -65,6 +86,7 @@ export function RelojDelUsuario({ detalle, alCambiar }: Props) {
             Usa el reloj <strong className="font-mono">{vigente.identificadorReloj}</strong> desde el{' '}
             {formatearFechaHora(vigente.inicio)}.
           </p>
+          <EstadoDelReloj idDispositivo={vigente.idDispositivo} />
           <ConfiguracionDelReloj idPaciente={paciente.id} idAsignacion={vigente.idAsignacion} />
         </>
       ) : (
@@ -95,6 +117,9 @@ export function RelojDelUsuario({ detalle, alCambiar }: Props) {
               <button onClick={() => setModo('reemplazar')} className={CLASE_BOTON_SECUNDARIO}>
                 Reemplazar reloj
               </button>
+              <button onClick={() => setModo('emparejar')} className={CLASE_BOTON_SECUNDARIO}>
+                Emparejar de nuevo
+              </button>
               <button
                 disabled={trabajando}
                 onClick={() => hacer(() => pacientesApi.nuevoToken(paciente.id))}
@@ -122,21 +147,91 @@ export function RelojDelUsuario({ detalle, alCambiar }: Props) {
         </div>
       )}
 
-      {editable && modo !== 'ver' && (
+      {editable && modo === 'emparejar' && (
+        <EmparejarDeNuevo
+          trabajando={trabajando}
+          alCancelar={() => setModo('ver')}
+          alEmparejar={(codigo) => hacer(() => pacientesApi.emparejar(paciente.id, codigo))}
+        />
+      )}
+
+      {editable && (modo === 'vincular' || modo === 'reemplazar') && (
         <ElegirReloj
           reemplazo={modo === 'reemplazar'}
           trabajando={trabajando}
           alCancelar={() => setModo('ver')}
-          alElegir={(idDispositivo, estadoAnterior) =>
+          alElegir={(idDispositivo, estadoAnterior, codigo) =>
             hacer(() =>
               modo === 'vincular'
-                ? pacientesApi.vincular(paciente.id, idDispositivo)
-                : pacientesApi.reemplazar(paciente.id, idDispositivo, estadoAnterior),
+                ? pacientesApi.vincular(paciente.id, idDispositivo, codigo)
+                : pacientesApi.reemplazar(paciente.id, idDispositivo, estadoAnterior, codigo),
             )
           }
         />
       )}
     </div>
+  );
+}
+
+/** Propiedades de EmparejarDeNuevo. */
+interface PropsEmparejar {
+  trabajando: boolean;
+  alCancelar: () => void;
+  alEmparejar: (codigo: string) => void;
+}
+
+/** Pide el código que muestra el reloj, para emparejarlo de nuevo (por ejemplo, tras restaurarlo). */
+function EmparejarDeNuevo({ trabajando, alCancelar, alEmparejar }: PropsEmparejar) {
+  const [codigo, setCodigo] = useState('');
+  return (
+    <div className="space-y-3 rounded-md border border-slate-200 p-4">
+      <p className="text-sm text-slate-600">
+        Úsalo si el reloj se restauró o perdió su vínculo: el token anterior deja de servir.
+      </p>
+      <CampoCodigo valor={codigo} alCambiar={setCodigo} />
+      <div className="flex gap-2">
+        <button
+          disabled={!codigo.trim() || trabajando}
+          onClick={() => alEmparejar(codigo.trim())}
+          className={CLASE_BOTON_PRINCIPAL}
+        >
+          {trabajando ? 'Guardando…' : 'Emparejar'}
+        </button>
+        <button onClick={alCancelar} className={CLASE_BOTON_SECUNDARIO}>
+          Cancelar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Campo para escribir el código de emparejamiento que muestra el reloj. */
+function CampoCodigo({
+  valor,
+  alCambiar,
+  opcional = false,
+}: {
+  valor: string;
+  alCambiar: (valor: string) => void;
+  opcional?: boolean;
+}) {
+  return (
+    <label className="block">
+      <span className={CLASE_ETIQUETA}>Código que muestra el reloj</span>
+      <input
+        value={valor}
+        onChange={(e) => alCambiar(e.target.value.toUpperCase())}
+        placeholder="K7PM-42QX"
+        maxLength={20}
+        autoComplete="off"
+        spellCheck={false}
+        className={`${CLASE_CAMPO} font-mono tracking-widest`}
+      />
+      <span className="mt-1 block text-xs text-slate-500">
+        {AYUDA_CODIGO}
+        {opcional && ' Déjalo vacío solo para cargar el token a mano (desarrollo o simulador).'}
+      </span>
+    </label>
   );
 }
 
@@ -146,14 +241,16 @@ interface PropsElegir {
   reemplazo: boolean;
   trabajando: boolean;
   alCancelar: () => void;
-  alElegir: (idDispositivo: string, estadoAnterior: EstadoReloj | null) => void;
+  /** codigo: el que muestra el reloj, o null para recibir un token y cargarlo a mano */
+  alElegir: (idDispositivo: string, estadoAnterior: EstadoReloj | null, codigo: string | null) => void;
 }
 
-/** Lista de relojes operativos y libres para elegir uno. */
+/** Lista de relojes operativos y libres para elegir uno, y el código que muestra el reloj elegido. */
 function ElegirReloj({ reemplazo, trabajando, alCancelar, alElegir }: PropsElegir) {
   const { datos: relojes, error } = useDatos(relojesApi.listar);
   const libres = (relojes ?? []).filter((fila) => fila.reloj.datos.estado === 'OPERATIVO' && !fila.idPaciente);
   const [elegido, setElegido] = useState('');
+  const [codigo, setCodigo] = useState('');
   const [estadoAnterior, setEstadoAnterior] = useState<EstadoReloj | ''>('EN_REPARACION');
 
   return (
@@ -171,6 +268,7 @@ function ElegirReloj({ reemplazo, trabajando, alCancelar, alElegir }: PropsElegi
           ))}
         </select>
       </label>
+      <CampoCodigo valor={codigo} alCambiar={setCodigo} opcional />
       {reemplazo && (
         <label className="block">
           <span className={CLASE_ETIQUETA}>El reloj anterior queda</span>
@@ -191,7 +289,7 @@ function ElegirReloj({ reemplazo, trabajando, alCancelar, alElegir }: PropsElegi
       <div className="flex gap-2">
         <button
           disabled={!elegido || trabajando}
-          onClick={() => alElegir(elegido, estadoAnterior || null)}
+          onClick={() => alElegir(elegido, estadoAnterior || null, codigo.trim() || null)}
           className={CLASE_BOTON_PRINCIPAL}
         >
           {trabajando ? 'Guardando…' : reemplazo ? 'Reemplazar' : 'Entregar'}
@@ -200,6 +298,17 @@ function ElegirReloj({ reemplazo, trabajando, alCancelar, alElegir }: PropsElegi
           Cancelar
         </button>
       </div>
+    </div>
+  );
+}
+
+/** Semáforo del reloj que usa el usuario, con su última sincronización y por qué no está verde. */
+function EstadoDelReloj({ idDispositivo }: { idDispositivo: string }) {
+  const { datos, error } = useDatos(relojesApi.estado, idDispositivo);
+  if (error) return null;
+  return (
+    <div className="rounded-md border border-slate-200 px-3 py-2">
+      <SemaforoReloj estado={datos?.find((estado) => estado.idDispositivo === idDispositivo)} detalle />
     </div>
   );
 }

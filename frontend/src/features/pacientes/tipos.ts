@@ -74,10 +74,13 @@ export interface ConfiguracionAplicada {
   ultimaSincronizacion: string | null;
 }
 
-/** Llave del reloj: se muestra una sola vez para ingresarla en la app del reloj. */
+/**
+ * Resultado de vincular un reloj. Con código de emparejamiento el reloj ya tiene su token y `token` es null;
+ * sin código (desarrollo) trae la llave, que se muestra una sola vez para cargarla a mano en el reloj.
+ */
 export interface TokenReloj {
   idAsignacion: string;
-  token: string;
+  token: string | null;
 }
 
 /** Enfermedad (EPOC, hipertensión…) o situación (movilidad reducida, vive sola…). */
@@ -98,12 +101,16 @@ export interface Modulos {
   spo2: boolean;
   inactividad: boolean;
   tendencia: boolean;
+  /** Alerta al salir de la zona segura; exige GPS y una zona definida */
+  zonaSegura: boolean;
+  /** Botón del reloj para pedir ayuda: alerta leve que avisa primero a los vecinos */
+  botonAyuda: boolean;
 }
 
 /** Módulos y opciones del usuario (una fila del historial de configuración). */
 export interface AjustesClinicos {
   modulos: Modulos;
-  /** Solo para ubicar a la persona; no genera alertas */
+  /** Ubica a la persona y, con el módulo zonaSegura, revisa la zona */
   gpsActivo: boolean;
   modoConservador: boolean;
   /** Antes de pasar al siguiente contacto; null = valor base */
@@ -138,6 +145,22 @@ export interface PerfilClinico {
   minutosEspera: number;
   fc: UmbralVigente;
   spo2: UmbralVigente;
+  /** La zona guardada (aunque el módulo esté apagado); null si nunca se definió */
+  zonaSegura: { zona: ZonaSegura; vigenteDesde: string } | null;
+}
+
+/** Gravedad de una alerta. */
+export type SeveridadZona = 'LEVE' | 'MEDIA' | 'GRAVE';
+
+/** Círculo de la zona segura: al salir, el reloj envía una alerta con esta gravedad. */
+export interface ZonaSegura {
+  /** Grados, -90 a 90 */
+  latitud: number;
+  /** Grados, -180 a 180 */
+  longitud: number;
+  /** De 50 a 5000 metros */
+  radioMetros: number;
+  severidad: SeveridadZona;
 }
 
 /** Variable de un umbral. */

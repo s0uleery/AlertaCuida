@@ -38,6 +38,7 @@ const MOTIVOS = {
   nulo: { texto: 'NOT NULL', patron: /violates not-null constraint/ },
   exclusion: { texto: 'superposición (EXCLUDE)', patron: /violates exclusion constraint/ },
   enum: { texto: 'valor fuera del enum', patron: /invalid input value for enum/ },
+  disparador: { texto: 'disparador (como un CHECK)', patron: /contacto interno|de interno a externo/ },
 };
 
 // Debe guardarse sin error
@@ -103,6 +104,7 @@ const id = (n) => '00000000-0000-0000-0000-' + String(n).padStart(12, '0');
 const ANA = id(1), LUIS = id(2), ADMIN = id(3), NUEVA = id(4);      // profesionales
 const MARIA = id(11), PEDRO = id(12), ROSA = id(13);                // pacientes
 const HIJA = id(21), SEG_CIUDADANA = id(22), VECINO = id(23), CUIDADORA = id(24); // personas
+const INTERNO_ANA = id(25); // contacto interno: la cuenta de Ana
 const M1 = id(31), M2 = id(32), P1 = id(33), P2 = id(34), P3 = id(35), R1 = id(36), R2 = id(37); // vínculos
 const W1 = id(41), W2 = id(42), W3 = id(43), W4 = id(44), W5 = id(45); // relojes
 const A_MARIA = id(51), A_PEDRO = id(52), A_ROSA_VIEJA = id(53), A_ROSA = id(54); // asignaciones
@@ -121,6 +123,10 @@ const alertaServidor = (idA, asig, tipo, extraCols = '', extraVals = '') =>
 const aviso = (alerta, vinculo, ronda = 1, extraCols = '', extraVals = '', canal = 'WHATSAPP') =>
   `INSERT INTO "REGISTRO_INTENTO"(id_intento, event_id, id_alerta, id_contacto_paciente, canal, ronda, fecha_hora_envio${extraCols})
    VALUES (gen_random_uuid(), gen_random_uuid(), '${alerta}', '${vinculo}', '${canal}', ${ronda}, now()${extraVals})`;
+// Correo del servidor a una cuenta del equipo (contacto interno), sin ronda
+const avisoInterno = (alerta, contacto, extraCols = '', extraVals = '') =>
+  `INSERT INTO "REGISTRO_INTENTO"(id_intento, event_id, id_alerta, id_contacto_interno, canal${extraCols})
+   VALUES (gen_random_uuid(), gen_random_uuid(), '${alerta}', '${contacto}', 'CORREO'${extraVals})`;
 const asumir = (alerta, usuario, hora, condicion = `"ATENCION_ALERTA".fecha_hora_toma IS NULL AND "ATENCION_ALERTA".fecha_hora_cierre IS NULL`) =>
   `INSERT INTO "ATENCION_ALERTA"(id_alerta, id_usuario_responsable, fecha_hora_toma) VALUES ('${alerta}', '${usuario}', '${hora}')
    ON CONFLICT (id_alerta) DO UPDATE SET id_usuario_responsable = EXCLUDED.id_usuario_responsable, fecha_hora_toma = EXCLUDED.fecha_hora_toma
@@ -153,15 +159,15 @@ await vale('Borrar la ficha no borra al paciente', `SELECT count(*) n FROM "PACI
 db = dbPrincipal;
 
 nuevoGrupo('1. Estructura de la base');
-await vale('Cantidad de tablas', `SELECT count(*) n FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'`, 28);
+await vale('Cantidad de tablas', `SELECT count(*) n FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'`, 30);
 await vale('Tablas sueltas (sin ninguna relación)', `SELECT count(*) n FROM information_schema.tables t
   WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
   AND NOT EXISTS (SELECT 1 FROM information_schema.table_constraints c WHERE c.constraint_type = 'FOREIGN KEY' AND c.table_name = t.table_name)
   AND NOT EXISTS (SELECT 1 FROM information_schema.constraint_column_usage u
                   JOIN information_schema.table_constraints c ON c.constraint_name = u.constraint_name AND c.constraint_type = 'FOREIGN KEY'
                   WHERE u.table_name = t.table_name)`, 0);
-await vale('Cantidad de relaciones (claves foráneas)', `SELECT count(*) n FROM information_schema.table_constraints WHERE constraint_type = 'FOREIGN KEY'`, 31);
-await vale('Cantidad de tipos (Enum)', `SELECT count(*) n FROM pg_type t JOIN pg_namespace s ON s.oid = t.typnamespace WHERE s.nspname = 'public' AND t.typtype = 'e'`, 20);
+await vale('Cantidad de relaciones (claves foráneas)', `SELECT count(*) n FROM information_schema.table_constraints WHERE constraint_type = 'FOREIGN KEY'`, 35);
+await vale('Cantidad de tipos (Enum)', `SELECT count(*) n FROM pg_type t JOIN pg_namespace s ON s.oid = t.typnamespace WHERE s.nspname = 'public' AND t.typtype = 'e'`, 22);
 await vale('Vistas de datos calculados', `SELECT count(*) n FROM information_schema.views WHERE table_schema = 'public'`, 1);
 await vale('Ninguna columna jsonb en la configuración clínica', `SELECT count(*) n FROM information_schema.columns
   WHERE table_name IN ('CONFIGURACION', 'UMBRAL') AND data_type = 'jsonb'`, 0);
@@ -202,6 +208,13 @@ await backend('Desactivar a una usuaria con un enlace de activación pendiente',
   INSERT INTO "TOKEN_ACCION"(id_token, id_usuario, tipo, hash_token, fecha_emision, fecha_expiracion) VALUES (gen_random_uuid(), '${LUIS}', 'ACTIVACION', 'act-luis', now(), now() + interval '2 days')`,
   'Nota de USUARIO: "al desactivar, marca como usados sus TOKEN_ACCION pendientes y revoca sus TOKEN_SESION".');
 await rechaza('Dos profesionales con el mismo RUN', usuario(gen(), 'PERSONAL','Otra', 'otra@muni.cl', 'rut-ana'), 'unico');
+await acepta('Coordinadora con teléfono y opt-in de WhatsApp (se deshace)', 'BEGIN; '
+  + usuario(gen(), 'COORDINADOR', 'Rosa', 'rosa@muni.cl', 'rut-rosa', ', telefono, fecha_opt_in', ", 'tel-cifrado', now()") + '; ROLLBACK');
+await rechaza('Opt-in de WhatsApp sin teléfono', usuario(gen(), 'COORDINADOR', 'Rosa', 'rosa@muni.cl', 'rut-rosa', ', fecha_opt_in', ', now()'), 'check');
+await rechaza('Revocación del opt-in sin haberlo aceptado', usuario(gen(), 'PERSONAL', 'Otra', 'otra@muni.cl', 'rut-otra',
+  ', telefono, fecha_revocacion_opt_in', ", 'tel-cifrado', now()"), 'check');
+await backend('Coordinadora sin teléfono (no recibiría los avisos de la oficina)', usuario(gen(), 'COORDINADOR', 'Sin', 'sin@muni.cl', 'rut-sin'),
+  'Nota de USUARIO: el teléfono es obligatorio para el rol COORDINADOR (lo valida el backend al crear la cuenta).');
 await rechaza('Profesional sin RUN', `INSERT INTO "USUARIO"(id_usuario, codigo_rol, rut_hash, nombre_profesional, correo) VALUES (gen_random_uuid(), 'PERSONAL','r', 'X', 'x@muni.cl')`, 'nulo');
 await rechaza('Enlace con un tipo que no existe', `INSERT INTO "TOKEN_ACCION"(id_token, id_usuario, tipo, hash_token, fecha_emision, fecha_expiracion) VALUES (gen_random_uuid(), '${ANA}', 'INVITACION', 'x', now(), now() + interval '30 minutes')`, 'enum');
 await rechaza('Enlace repetido', `INSERT INTO "TOKEN_ACCION"(id_token, id_usuario, tipo, hash_token, fecha_emision, fecha_expiracion) VALUES (gen_random_uuid(), '${ANA}', 'RECUPERACION', 'act-1', now(), now() + interval '30 minutes')`, 'unico');
@@ -314,8 +327,18 @@ await acepta('María: configuración inicial y un cambio posterior (activa el GP
   INSERT INTO "CONFIGURACION"(id_paciente, vigente_desde, gps_activo, minutos_espera, motivo_cambio) VALUES ('${MARIA}', '${T2}', true, 5, 'Sale sola a caminar')`);
 await acepta('Pedro con valores por defecto; Rosa en modo conservador', `INSERT INTO "CONFIGURACION"(id_paciente, vigente_desde) VALUES ('${PEDRO}', '${T1}');
   INSERT INTO "CONFIGURACION"(id_paciente, vigente_desde, modo_conservador) VALUES ('${ROSA}', '${T1}', true)`);
-await vale('Módulos por defecto (caídas, FC, SpO2, inactividad sí; tendencia y GPS no)', `SELECT concat_ws(',', caidas_activa::text, fc_activa::text, spo2_activa::text, inactividad_activa::text, tendencia_activa::text, gps_activo::text) n
-  FROM "CONFIGURACION" WHERE id_paciente = '${PEDRO}'`, 'true,true,true,true,false,false');
+await vale('Módulos por defecto (caídas, FC, SpO2, inactividad, tendencia y botón sí; GPS y zona no)', `SELECT concat_ws(',', caidas_activa::text, fc_activa::text, spo2_activa::text, inactividad_activa::text, tendencia_activa::text, gps_activo::text, zona_segura_activa::text, boton_ayuda_activo::text) n
+  FROM "CONFIGURACION" WHERE id_paciente = '${PEDRO}'`, 'true,true,true,true,true,false,false,true');
+await rechaza('Zona segura activa sin GPS', `INSERT INTO "CONFIGURACION"(id_paciente, vigente_desde, zona_segura_activa) VALUES ('${PEDRO}', now(), true)`, 'check');
+await acepta('Zona segura de Pedro: 200 m, media por defecto, coordenadas cifradas como texto', `INSERT INTO "ZONA_SEGURA"(id_paciente, vigente_desde, latitud, longitud, radio_metros)
+  VALUES ('${PEDRO}', '${T1}', 'c-lat', 'c-lon', 200)`);
+await vale('La zona sin severidad elegida es media', `SELECT severidad n FROM "ZONA_SEGURA" WHERE id_paciente = '${PEDRO}'`, 'MEDIA');
+await acepta('Pedro activa la zona con el GPS (se deshace)', `BEGIN; INSERT INTO "CONFIGURACION"(id_paciente, vigente_desde, gps_activo, zona_segura_activa)
+  VALUES ('${PEDRO}', now(), true, true); ROLLBACK`);
+await rechaza('Zona segura con radio cero', `INSERT INTO "ZONA_SEGURA"(id_paciente, vigente_desde, latitud, longitud, radio_metros) VALUES ('${PEDRO}', now(), 'c-lat', 'c-lon', 0)`, 'check');
+await rechaza('Zona segura con una severidad que no existe', `INSERT INTO "ZONA_SEGURA"(id_paciente, vigente_desde, latitud, longitud, radio_metros, severidad)
+  VALUES ('${PEDRO}', now(), 'c-lat', 'c-lon', 200, 'CRITICA')`, 'enum');
+await rechaza('Dos zonas de Pedro con la misma fecha', `INSERT INTO "ZONA_SEGURA"(id_paciente, vigente_desde, latitud, longitud, radio_metros) VALUES ('${PEDRO}', '${T1}', 'c-lat', 'c-lon', 300)`, 'unico');
 await vale('Configuración vigente de María (la más reciente): GPS activo', `SELECT gps_activo n FROM "CONFIGURACION" WHERE id_paciente = '${MARIA}' ORDER BY vigente_desde DESC LIMIT 1`, true);
 await acepta('Umbrales de María: FC (dos versiones) y SpO2 sin límite alto', `INSERT INTO "UMBRAL" VALUES
   ('${MARIA}', 'FC', '${T1}', 40, 50, 110, 130), ('${MARIA}', 'FC', '${T2}', 45, 55, 110, 130), ('${MARIA}', 'SPO2', '${T1}', 85, 90, null, null)`);
@@ -432,7 +455,13 @@ await vale('Estado de entrega calculado desde las fechas', `SELECT CASE WHEN fec
   WHEN fecha_hora_entrega IS NOT NULL THEN 'ENTREGADO' ELSE 'ENVIADO' END n FROM "REGISTRO_INTENTO" WHERE id_externo = 'wamid.1'`, 'LEIDO');
 await acepta('La hija responde "No puedo"', `UPDATE "REGISTRO_INTENTO" SET respuesta = 'NO_PUEDO', fecha_hora_respuesta = now() WHERE id_externo = 'wamid.1'`);
 await estado('Sigue avisando', CAIDA_MARIA, 'AVISANDO_CONTACTO', 'SIN_ASIGNAR');
-await acepta('La caída se agrava por inmovilidad', `UPDATE "ALERTA" SET fecha_hora_agravamiento = now() WHERE id_alerta = '${CAIDA_MARIA}'`);
+await rechaza('Segundos de inmovilidad sin agravamiento', `UPDATE "ALERTA" SET segundos_inmovilidad_agravamiento = 90 WHERE id_alerta = '${CAIDA_MARIA}'`, 'check');
+await acepta('La caída se agrava por inmovilidad (90 s sin moverse)', `UPDATE "ALERTA" SET fecha_hora_agravamiento = now(), segundos_inmovilidad_agravamiento = 90 WHERE id_alerta = '${CAIDA_MARIA}'`);
+await rechaza('Segundos de inmovilidad negativos', `UPDATE "ALERTA" SET segundos_inmovilidad_agravamiento = -1 WHERE id_alerta = '${CAIDA_MARIA}'`, 'check');
+await acepta('La caída llegó con una discrepancia: el reloj usaba otra versión de la configuración', `INSERT INTO "DISCREPANCIA_ALERTA"(id_alerta, codigo, detalle) VALUES ('${CAIDA_MARIA}', 'VERSION_DISTINTA', 'El reloj usó la versión h0; la vigente es h1')`);
+await rechaza('La misma discrepancia dos veces en la alerta', `INSERT INTO "DISCREPANCIA_ALERTA"(id_alerta, codigo, detalle) VALUES ('${CAIDA_MARIA}', 'VERSION_DISTINTA', 'otra vez')`, 'unico');
+await rechaza('Discrepancia con un código que no existe', `INSERT INTO "DISCREPANCIA_ALERTA"(id_alerta, codigo, detalle) VALUES ('${CAIDA_MARIA}', 'HORA_RARA', 'x')`, 'enum');
+await rechaza('Discrepancia de una alerta que no existe', `INSERT INTO "DISCREPANCIA_ALERTA"(id_alerta, codigo, detalle) VALUES ('${id(98)}', 'MODULO_APAGADO', 'x')`, 'foranea');
 await vale('Conserva la gravedad con que llegó', `SELECT severidad n FROM "ALERTA" WHERE id_alerta = '${CAIDA_MARIA}'`, 'MEDIA');
 await vale('Gravedad actual calculada', `SELECT severidad_actual n FROM "ALERTA_ESTADO" WHERE id_alerta = '${CAIDA_MARIA}'`, 'GRAVE');
 await acepta('El reloj pasa a Seguridad Ciudadana (prioridad 2), que responde "Voy en camino"', aviso(CAIDA_MARIA, M2, 1, ', id_externo, respuesta, fecha_hora_respuesta', `, 'wamid.2', 'VOY_EN_CAMINO', now()`));
@@ -500,6 +529,9 @@ await estado('Estado de la grave sin respuesta', GRAVE_ROSA, 'SIN_RESPUESTA', 'S
 await rechaza('Una media marcada para esperar el día hábil', alertaReloj(id(90), A_ROSA, 'FC', 'MEDIA', ', espera_dia_habil', ', true'), 'check');
 await rechaza('Una grave marcada para esperar el día hábil', alertaReloj(id(91), A_ROSA, 'FC', 'GRAVE', ', espera_dia_habil', ', true'), 'check');
 await rechaza('Gravedad que no existe (MODERADA)', alertaReloj(id(92), A_ROSA, 'FC', 'MODERADA'), 'enum');
+await rechaza('Un botón de ayuda que no es leve', alertaReloj(id(93), A_ROSA, 'BOTON_AYUDA', 'MEDIA'), 'check');
+await acepta('Botón de ayuda de madrugada: leve, espera el día hábil (se deshace)', 'BEGIN; ' + alertaReloj(id(93), A_ROSA, 'BOTON_AYUDA', 'LEVE', ', espera_dia_habil', ', true') + '; ROLLBACK');
+await acepta('Salida de la zona segura con la gravedad de la zona (se deshace)', 'BEGIN; ' + alertaReloj(id(93), A_ROSA, 'ZONA_SEGURA', 'GRAVE') + '; ROLLBACK');
 await rechaza('Agravar una alerta que llegó grave', `UPDATE "ALERTA" SET fecha_hora_agravamiento = now() WHERE id_alerta = '${GRAVE_ROSA}'`, 'check');
 await rechaza('Agravar una alerta que no es caída', `UPDATE "ALERTA" SET fecha_hora_agravamiento = now() WHERE id_alerta = '${MEDIA_ROSA}'`, 'check');
 await rechaza('Tercera ronda de avisos', aviso(GRAVE_ROSA, R1, 3), 'check');
@@ -540,6 +572,7 @@ await rechaza('Alerta del reloj sin el hash de su configuración', `INSERT INTO 
 await rechaza('El servidor crea una alerta clínica (CAIDA)', alertaServidor(id(96), A_PEDRO, 'CAIDA'), 'check');
 await acepta('El servidor crea una alerta de batería baja (técnica, se deshace)', `BEGIN; ${alertaServidor(id(96), A_PEDRO, 'BATERIA_BAJA')}; ROLLBACK`);
 await rechaza('El reloj informa un silencio de datos (solo lo puede detectar el servidor)', alertaReloj(id(97), A_PEDRO, 'SILENCIO_DATOS', 'LEVE'), 'check');
+await acepta('El servidor crea una alerta por exceso de alertas del reloj (técnica, se deshace)', 'BEGIN; ' + alertaServidor(id(96), A_PEDRO, 'EXCESO_ALERTAS') + '; ROLLBACK');await rechaza('El reloj informa un exceso de alertas (solo lo puede detectar el servidor)', alertaReloj(id(97), A_PEDRO, 'EXCESO_ALERTAS', 'LEVE'), 'check');await vale('Una cuenta nueva no recibe avisos por correo hasta que se encienda', `SELECT column_default n FROM information_schema.columns WHERE table_name = 'USUARIO' AND column_name = 'recibe_avisos'`, 'false');
 
 // =====================================================================
 nuevoGrupo('15. Reintentos y mensajes duplicados (idempotencia)');
@@ -568,6 +601,61 @@ await backend('Aviso por WhatsApp a una persona que solo tiene correo (el vecino
   'Nota de REGISTRO_INTENTO: "la persona tiene el canal pedido".');
 await backend('Aviso por WhatsApp a una persona que revocó el opt-in (la cuidadora de Pedro)', aviso(LEVE_PEDRO, P1),
   'Nota de REGISTRO_INTENTO: "en WhatsApp, opt-in vigente".');
+await acepta('Ana como contacto interno: solo el enlace a su cuenta, sin copiar sus datos',
+  `INSERT INTO "CONTACTO"(id_contacto, id_usuario) VALUES ('${INTERNO_ANA}', '${ANA}')`);
+await rechaza('Segundo contacto interno para la misma cuenta',
+  `INSERT INTO "CONTACTO"(id_contacto, id_usuario) VALUES (gen_random_uuid(), '${ANA}')`, 'unico');
+await rechaza('Contacto interno con nombre propio (se lee de la cuenta)',
+  `INSERT INTO "CONTACTO"(id_contacto, id_usuario, nombre) VALUES (gen_random_uuid(), '${LUIS}', 'Luis')`, 'check');
+await rechaza('Contacto interno con correo propio (se lee de la cuenta)',
+  `INSERT INTO "CONTACTO"(id_contacto, id_usuario, correo, correo_hash) VALUES (gen_random_uuid(), '${LUIS}', 'x', 'c-interno')`, 'check');
+await rechaza('Contacto externo sin nombre',
+  `INSERT INTO "CONTACTO"(id_contacto, correo, correo_hash) VALUES (gen_random_uuid(), 'x', 'c-sin-nombre')`, 'check');
+await rechaza('Contacto interno de una cuenta que no existe',
+  `INSERT INTO "CONTACTO"(id_contacto, id_usuario) VALUES (gen_random_uuid(), '${id(99)}')`, 'foranea');
+await rechaza('El contacto interno en la lista de un paciente (el reloj no recorre al equipo)',
+  `INSERT INTO "CONTACTO_PACIENTE"(id_contacto_paciente, id_paciente, id_contacto, codigo_tipo_contacto, orden_prioridad)
+   VALUES (gen_random_uuid(), '${ROSA}', '${INTERNO_ANA}', 'OTRO', 9)`, 'disparador');
+await rechaza('Cambiar un vínculo de la lista para que apunte al contacto interno',
+  `UPDATE "CONTACTO_PACIENTE" SET id_contacto = '${INTERNO_ANA}' WHERE id_contacto_paciente = '${R2}'`, 'disparador');
+await rechaza('Convertir en interno a una persona de la lista',
+  `UPDATE "CONTACTO" SET id_usuario = '${LUIS}', nombre = NULL, whatsapp = NULL, whatsapp_hash = NULL, correo = NULL,
+   correo_hash = NULL, fecha_opt_in = NULL, fecha_revocacion_opt_in = NULL WHERE id_contacto = '${VECINO}'`, 'disparador');
+await acepta('Correo del servidor a Ana por un silencio de datos, pendiente de envío',
+  avisoInterno(SILENCIO_2, INTERNO_ANA, ', fecha_hora_proximo_envio', ', now()'));
+await estado('Un aviso al equipo no cambia el estado de contacto (no es el recorrido del reloj)', SILENCIO_2, 'RECIBIDA', 'SIN_ASIGNAR');
+await rechaza('Segundo correo a la misma cuenta por la misma alerta', avisoInterno(SILENCIO_2, INTERNO_ANA), 'unico');
+await vale('El aviso guarda cuándo se pidió (por defecto, ahora)',
+  `SELECT count(*) n FROM "REGISTRO_INTENTO" WHERE id_alerta = '${SILENCIO_2}' AND fecha_hora_solicitud IS NOT NULL`, 1);
+await acepta('Correo del vigilante del escalamiento a la misma cuenta por la misma alerta (otro propósito)',
+  avisoInterno(SILENCIO_2, INTERNO_ANA, ', proposito', `, 'VIGILANTE'`));
+await rechaza('Segundo correo del vigilante a la misma cuenta por la misma alerta (una vez por alerta)',
+  avisoInterno(SILENCIO_2, INTERNO_ANA, ', proposito', `, 'VIGILANTE'`), 'unico');
+await rechaza('Aviso del vigilante a un contacto del paciente (solo va al equipo)',
+  aviso(MEDIA_ROSA, R2, 2, ', proposito', `, 'VIGILANTE'`, 'CORREO'), 'check');
+await acepta('Aviso de agravamiento a la misma cuenta por la misma alerta (otro propósito)',
+  avisoInterno(SILENCIO_2, INTERNO_ANA, ', proposito', `, 'AGRAVAMIENTO'`));
+await rechaza('Aviso de agravamiento a un contacto del paciente (solo va al equipo)',
+  aviso(MEDIA_ROSA, R2, 2, ', proposito', `, 'AGRAVAMIENTO'`, 'CORREO'), 'check');
+await rechaza('Propósito que no existe', avisoInterno(MEDIA_ROSA, INTERNO_ANA, ', proposito', `, 'OTRO'`), 'enum');
+await rechaza('Aviso interno dirigido a una persona de la lista de un paciente', avisoInterno(MEDIA_ROSA, SEG_CIUDADANA), 'disparador');
+await rechaza('Aviso interno con ronda (las rondas son del recorrido del reloj)', avisoInterno(MEDIA_ROSA, INTERNO_ANA, ', ronda', ', 1'), 'check');
+await rechaza('Aviso a un vínculo sin ronda',
+  `INSERT INTO "REGISTRO_INTENTO"(id_intento, event_id, id_alerta, id_contacto_paciente, canal)
+   VALUES (gen_random_uuid(), gen_random_uuid(), '${MEDIA_ROSA}', '${R2}', 'CORREO')`, 'check');
+await rechaza('Aviso a un vínculo y a un contacto interno a la vez',
+  aviso(MEDIA_ROSA, R2, 2, ', id_contacto_interno', `, '${INTERNO_ANA}'`, 'CORREO'), 'check');
+await rechaza('Aviso sin destino',
+  `INSERT INTO "REGISTRO_INTENTO"(id_intento, event_id, id_alerta, canal) VALUES (gen_random_uuid(), gen_random_uuid(), '${MEDIA_ROSA}', 'CORREO')`, 'check');
+await acepta('Un coordinador responde el aviso a la oficina (V14: su "Voy en camino" también confirma)',
+  avisoInterno(GRAVE_ROSA, INTERNO_ANA, ', respuesta, fecha_hora_respuesta', `, 'NO_PUEDO', now()`));
+await rechaza('Respuesta en el correo del vigilante (no pide confirmar)',
+  avisoInterno(MEDIA_ROSA, INTERNO_ANA, ', proposito, respuesta, fecha_hora_respuesta', `, 'VIGILANTE', 'VOY_EN_CAMINO', now()`), 'check');
+await rechaza('Reintentos negativos', avisoInterno(MEDIA_ROSA, INTERNO_ANA, ', reintentos', ', -1'), 'check');
+await rechaza('Pendiente de envío pero ya enviado',
+  aviso(MEDIA_ROSA, R2, 2, ', fecha_hora_proximo_envio', ', now()', 'CORREO'), 'check');
+await rechaza('Pendiente de envío pero ya marcado como fallido',
+  avisoInterno(MEDIA_ROSA, INTERNO_ANA, ', fecha_hora_proximo_envio, fecha_hora_fallo', ', now(), now()'), 'check');
 
 // =====================================================================
 nuevoGrupo('17. Datos calculados (reportes, hallazgos, panel)');
@@ -611,18 +699,20 @@ await acepta('Borrar a María con todos sus datos', `DELETE FROM "PACIENTE" WHER
 await vale('No queda ningún dato de María', `SELECT (SELECT count(*) FROM "FICHA_PACIENTE" WHERE id_paciente = '${MARIA}')
   + (SELECT count(*) FROM "CONDICION_PACIENTE" WHERE id_paciente = '${MARIA}') + (SELECT count(*) FROM "DOCUMENTO" WHERE id_paciente = '${MARIA}')
   + (SELECT count(*) FROM "CONTACTO_PACIENTE" WHERE id_paciente = '${MARIA}') + (SELECT count(*) FROM "CONFIGURACION" WHERE id_paciente = '${MARIA}')
-  + (SELECT count(*) FROM "UMBRAL" WHERE id_paciente = '${MARIA}') + (SELECT count(*) FROM "ASIGNACION_RELOJ" WHERE id_paciente = '${MARIA}')
+  + (SELECT count(*) FROM "UMBRAL" WHERE id_paciente = '${MARIA}') + (SELECT count(*) FROM "ZONA_SEGURA" WHERE id_paciente = '${MARIA}')
+  + (SELECT count(*) FROM "ASIGNACION_RELOJ" WHERE id_paciente = '${MARIA}')
   + (SELECT count(*) FROM "SINCRONIZACION" WHERE id_asignacion = '${A_MARIA}') + (SELECT count(*) FROM "REGISTRO_VITAL" WHERE id_asignacion = '${A_MARIA}')
   + (SELECT count(*) FROM "UBICACION" WHERE id_asignacion = '${A_MARIA}') + (SELECT count(*) FROM "EVENTO_DESCARTADO" WHERE id_sincronizacion = '${S_MARIA}')
   + (SELECT count(*) FROM "ALERTA" WHERE id_asignacion = '${A_MARIA}') + (SELECT count(*) FROM "ATENCION_ALERTA" WHERE id_alerta = '${CAIDA_MARIA}')
   + (SELECT count(*) FROM "REGISTRO_INTENTO" WHERE id_alerta = '${CAIDA_MARIA}') + (SELECT count(*) FROM "AVISO_FCM" WHERE id_alerta = '${CAIDA_MARIA}')
-  + (SELECT count(*) FROM "SEGUIMIENTO" WHERE id_alerta = '${CAIDA_MARIA}') n`, 0);
+  + (SELECT count(*) FROM "SEGUIMIENTO" WHERE id_alerta = '${CAIDA_MARIA}') + (SELECT count(*) FROM "DISCREPANCIA_ALERTA" WHERE id_alerta = '${CAIDA_MARIA}') n`, 0);
 await vale('Pedro y Rosa conservan sus datos (5 vínculos + 8 alertas)', `SELECT (SELECT count(*) FROM "CONTACTO_PACIENTE" WHERE id_paciente IN ('${PEDRO}', '${ROSA}'))
   + (SELECT count(*) FROM "ALERTA" a JOIN "ASIGNACION_RELOJ" r USING (id_asignacion) WHERE r.id_paciente IN ('${PEDRO}', '${ROSA}')) n`, 13);
 await vale('La auditoría sobre María sobrevive al borrado', `SELECT count(*) n FROM "REGISTRO_AUDITORIA" WHERE id_entidad LIKE '${MARIA}%'`, 2);
 await vale('Seguridad Ciudadana se conserva (sigue siendo contacto de Pedro y Rosa)', `SELECT count(*) n FROM "CONTACTO" WHERE id_contacto = '${SEG_CIUDADANA}'`, 1);
-await acepta('Limpieza: el backend borra las personas que quedaron sin pacientes', `DELETE FROM "CONTACTO" k WHERE NOT EXISTS (SELECT 1 FROM "CONTACTO_PACIENTE" cp WHERE cp.id_contacto = k.id_contacto)`);
-await vale('Se borró solo la hija de María', `SELECT count(*) || ' / ' || count(*) FILTER (WHERE id_contacto = '${HIJA}') n FROM "CONTACTO"`, '3 / 0');
+await acepta('Limpieza: el backend borra las personas que quedaron sin pacientes (no los contactos internos)', `DELETE FROM "CONTACTO" k WHERE k.id_usuario IS NULL AND NOT EXISTS (SELECT 1 FROM "CONTACTO_PACIENTE" cp WHERE cp.id_contacto = k.id_contacto)`);
+await vale('Se borró solo la hija de María', `SELECT count(*) || ' / ' || count(*) FILTER (WHERE id_contacto = '${HIJA}') n FROM "CONTACTO" WHERE id_usuario IS NULL`, '3 / 0');
+await vale('El contacto interno de Ana se conserva', `SELECT count(*) n FROM "CONTACTO" WHERE id_contacto = '${INTERNO_ANA}'`, 1);
 await vale('Se conservan profesionales, relojes y documentos de otros pacientes', `SELECT (SELECT count(*) FROM "USUARIO") || ' / ' || (SELECT count(*) FROM "SMARTWATCH") n`, '4 / 5');
 
 // ---------- Informe ----------

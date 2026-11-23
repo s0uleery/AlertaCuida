@@ -3,8 +3,10 @@ package cl.ucn.alertacuida.application.soporte;
 import cl.ucn.alertacuida.application.clinica.modelo.AjustesClinicos;
 import cl.ucn.alertacuida.application.clinica.modelo.ConfiguracionGuardada;
 import cl.ucn.alertacuida.application.clinica.modelo.UmbralGuardado;
+import cl.ucn.alertacuida.application.clinica.modelo.ZonaGuardada;
 import cl.ucn.alertacuida.application.clinica.puerto.PerfilesClinicos;
 import cl.ucn.alertacuida.domain.clinica.Umbral;
+import cl.ucn.alertacuida.domain.clinica.ZonaSegura;
 import cl.ucn.alertacuida.domain.telemetria.TipoLectura;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -24,7 +26,12 @@ public final class PerfilesClinicosEnMemoria implements PerfilesClinicos {
 	}
 
 	private final List<FilaConfiguracion> configuraciones = new ArrayList<>();
+	/** Una fila de zona segura. */
+	private record FilaZona(UUID idPaciente, ZonaGuardada guardada) {
+	}
+
 	private final List<FilaUmbral> umbrales = new ArrayList<>();
+	private final List<FilaZona> zonas = new ArrayList<>();
 
 	@Override
 	public Optional<ConfiguracionGuardada> configuracionVigente(UUID idPaciente) {
@@ -51,9 +58,21 @@ public final class PerfilesClinicosEnMemoria implements PerfilesClinicos {
 		umbrales.add(new FilaUmbral(idPaciente, variable, new UmbralGuardado(umbral, vigenteDesde)));
 	}
 
-	/** @return cuántas filas de historial se guardaron en total */
+	@Override
+	public Optional<ZonaGuardada> zonaVigente(UUID idPaciente) {
+		return zonas.stream().filter(fila -> fila.idPaciente().equals(idPaciente))
+				.map(FilaZona::guardada)
+				.reduce((anterior, siguiente) -> siguiente);
+	}
+
+	@Override
+	public void guardarZona(UUID idPaciente, Instant vigenteDesde, ZonaSegura zona) {
+		zonas.add(new FilaZona(idPaciente, new ZonaGuardada(zona, vigenteDesde)));
+	}
+
+	/** @return cuántas filas de historial se guardaron en total (configuración, umbrales y zona) */
 	public int filas() {
-		return configuraciones.size() + umbrales.size();
+		return configuraciones.size() + umbrales.size() + zonas.size();
 	}
 
 }

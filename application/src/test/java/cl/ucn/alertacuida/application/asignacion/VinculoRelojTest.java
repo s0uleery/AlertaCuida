@@ -11,6 +11,7 @@ import cl.ucn.alertacuida.application.comun.puerto.SecretosUnSoloUso;
 import cl.ucn.alertacuida.application.comun.puerto.Transacciones;
 import cl.ucn.alertacuida.application.paciente.modelo.DatosPaciente;
 import cl.ucn.alertacuida.application.soporte.AsignacionesEnMemoria;
+import cl.ucn.alertacuida.application.soporte.EmparejamientosEnMemoria;
 import cl.ucn.alertacuida.application.soporte.PacientesEnMemoria;
 import cl.ucn.alertacuida.application.soporte.RelojesEnMemoria;
 import cl.ucn.alertacuida.domain.reloj.EstadoReloj;
@@ -33,6 +34,7 @@ class VinculoRelojTest {
 	private final PacientesEnMemoria pacientes = new PacientesEnMemoria();
 	private final RelojesEnMemoria relojes = new RelojesEnMemoria();
 	private final AsignacionesEnMemoria asignaciones = new AsignacionesEnMemoria();
+	private final EmparejamientosEnMemoria emparejamientos = new EmparejamientosEnMemoria();
 	private VinculoReloj vinculo;
 	private UUID maria;
 	private UUID reloj1;
@@ -58,8 +60,9 @@ class VinculoRelojTest {
 			}
 		};
 		Transacciones enTransaccion = Supplier::get;
-		vinculo = new VinculoReloj(asignaciones, pacientes, relojes, secretos,
-				(usuario, accion, entidad, id, ip, fecha) -> { }, enTransaccion, Clock.fixed(AHORA, ZoneOffset.UTC));
+		vinculo = new VinculoReloj(asignaciones, pacientes, relojes, emparejamientos, secretos,
+				(usuario, accion, entidad, id, ip, fecha, detalle) -> { }, enTransaccion,
+				Clock.fixed(AHORA, ZoneOffset.UTC));
 		maria = pacientes.crear(paciente(AYER), "h-1");
 		reloj1 = relojes.agregar("R-001", EstadoReloj.OPERATIVO);
 		reloj2 = relojes.agregar("R-002", EstadoReloj.OPERATIVO);
@@ -153,6 +156,68 @@ class VinculoRelojTest {
 		assertThat(asignaciones.filas).hasSize(1);
 		assertThat(asignaciones.filas.getFirst().hashToken).isEqualTo("hash-" + nuevo.token());
 		assertThat(asignaciones.filas.getFirst().fin).isNull();
+	}
+
+	/** Con código, el vínculo usa el token que ya tiene el reloj, no entrega otro y el código se gasta. */
+	@Test
+	void conCodigoUsaElTokenDelRelojYElCodigoSirveUnaVez() {
+		emparejamientos.guardar("hash-K7PM42QX", "hash-del-reloj", AHORA, AHORA.plusSeconds(600));
+
+		TokenReloj vinculado = vinculo.vincular(maria, reloj1, "k7pm-42qx", COORDINADOR, "ip");
+
+		assertThat(vinculado.token()).isNull();
+		assertThat(asignaciones.filas.getFirst().hashToken).isEqualTo("hash-del-reloj");
+		assertThat(emparejamientos.filas).isEmpty();
+		vinculo.desvincular(maria, COORDINADOR, "ip");
+		assertThatThrownBy(() -> vinculo.vincular(maria, reloj1, "K7PM-42QX", COORDINADOR, "ip"))
+				.isInstanceOf(SolicitudRechazada.class).hasMessageContaining("venció");
+	}
+
+	/** Un código vencido o inventado no vincula, y el código sigue pendiente si el vínculo falla. */
+	@Test
+	void codigoVencidoNoVinculaYUnVinculoFallidoNoGastaElCodigo() {
+		emparejamientos.guardar("hash-VENCIDO2", "hash-a", AHORA.minusSeconds(700), AHORA.minusSeconds(100));
+		assertThatThrownBy(() -> vinculo.vincular(maria, reloj1, "VENCIDO2", COORDINADOR, "ip"))
+				.isInstanceOf(SolicitudRechazada.class);
+		assertThat(asignaciones.filas).isEmpty();
+
+		emparejamientos.guardar("hash-BBBB3333", "hash-b", AHORA, AHORA.plusSeconds(600));
+		UUID enReparacion = relojes.agregar("R-003", EstadoReloj.EN_REPARACION);
+		assertThatThrownBy(() -> vinculo.vincular(maria, enReparacion, "BBBB3333", COORDINADOR, "ip"))
+				.isInstanceOf(Conflicto.class);
+		assertThat(emparejamientos.pendiente("hash-b", AHORA)).isTrue();
+	}
+
+	/** Reemplazar con código usa el token del reloj nuevo; el del anterior deja de servir. */
+	@Test
+	void reemplazarConCodigoUsaElTokenDelRelojNuevo() {
+		vinculo.vincular(maria, reloj1, COORDINADOR, "ip");
+		emparejamientos.guardar("hash-CCCC4444", "hash-reloj-nuevo", AHORA, AHORA.plusSeconds(600));
+
+		TokenReloj nuevo = vinculo.reemplazar(maria, reloj2, null, "CCCC4444", COORDINADOR, "ip");
+
+		assertThat(nuevo.token()).isNull();
+		assertThat(asignaciones.vigentePorHashToken("hash-reloj-nuevo").orElseThrow().idDispositivo())
+				.isEqualTo(reloj2);
+		assertThat(asignaciones.vigentePorHashToken("hash-token-1")).isEmpty();
+	}
+
+	/** Emparejar de nuevo cambia el token sin cerrar el vínculo; sin reloj vinculado no se puede. */
+	@Test
+	void emparejarDeNuevoCambiaElTokenSinCerrarElVinculo() {
+		emparejamientos.guardar("hash-DDDD5555", "hash-restaurado", AHORA, AHORA.plusSeconds(600));
+		assertThatThrownBy(() -> vinculo.emparejar(maria, "DDDD5555", COORDINADOR, "ip"))
+				.isInstanceOf(Conflicto.class);
+
+		vinculo.vincular(maria, reloj1, COORDINADOR, "ip");
+		vinculo.emparejar(maria, "DDDD5555", COORDINADOR, "ip");
+
+		assertThat(asignaciones.filas).singleElement().satisfies(fila -> {
+			assertThat(fila.hashToken).isEqualTo("hash-restaurado");
+			assertThat(fila.fin).isNull();
+		});
+		assertThatThrownBy(() -> vinculo.emparejar(maria, " ", COORDINADOR, "ip"))
+				.isInstanceOf(SolicitudRechazada.class);
 	}
 
 	/** @return datos de un paciente con esa fecha de consentimiento (null = sin consentimiento) */

@@ -5,6 +5,7 @@ import { formatearFecha } from '../../comun/fechas';
 import { useDatos } from '../../comun/useDatos';
 import { useSesion } from '../sesion/SesionContext';
 import { relojesApi } from './relojesApi';
+import { SemaforoReloj } from './SemaforoReloj';
 import { NOMBRE_ESTADO, type EstadoReloj, type RelojConPaciente } from './tipos';
 
 /** Color de la etiqueta de cada estado. */
@@ -23,11 +24,14 @@ function coincide(fila: RelojConPaciente, busqueda: string): boolean {
 
 /**
  * Inventario de relojes con búsqueda y filtro por estado. Para entregar un reloj a un usuario
- * se va a su ficha. El estado técnico (batería, última sincronización) se agregará más adelante.
+ * se va a su ficha. La columna "Funcionamiento" muestra el semáforo de cada reloj (al pasar el mouse, por qué).
  */
 export function ListaRelojes() {
   const { puede } = useSesion();
   const { datos: relojes, error, cargando } = useDatos(relojesApi.listar);
+  // El semáforo se carga aparte: si falla, la lista se muestra igual, sin el círculo
+  const { datos: estados } = useDatos(relojesApi.estado);
+  const estadoDe = useMemo(() => new Map((estados ?? []).map((estado) => [estado.idDispositivo, estado])), [estados]);
   const [busqueda, setBusqueda] = useState('');
   const [estado, setEstado] = useState<EstadoReloj | ''>('');
 
@@ -66,7 +70,11 @@ export function ListaRelojes() {
         </label>
         <label className="block w-52">
           <span className={CLASE_ETIQUETA}>Estado</span>
-          <select value={estado} onChange={(e) => setEstado(e.target.value as EstadoReloj | '')} className={CLASE_CAMPO}>
+          <select
+            value={estado}
+            onChange={(e) => setEstado(e.target.value as EstadoReloj | '')}
+            className={CLASE_CAMPO}
+          >
             <option value="">Todos</option>
             {(Object.keys(NOMBRE_ESTADO) as EstadoReloj[]).map((valor) => (
               <option key={valor} value={valor}>
@@ -88,6 +96,7 @@ export function ListaRelojes() {
               <th className="px-4 py-3 font-medium">SIM</th>
               <th className="px-4 py-3 font-medium">Plan vence</th>
               <th className="px-4 py-3 font-medium">Estado</th>
+              <th className="px-4 py-3 font-medium">Funcionamiento</th>
               <th className="px-4 py-3 font-medium">Usuario</th>
               <th className="px-4 py-3" />
             </tr>
@@ -105,6 +114,9 @@ export function ListaRelojes() {
                     <span className={`rounded-full px-2 py-0.5 text-xs ${COLOR_ESTADO[d.estado]}`}>
                       {NOMBRE_ESTADO[d.estado]}
                     </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <SemaforoReloj estado={estadoDe.get(fila.reloj.id)} />
                   </td>
                   <td className="px-4 py-3">
                     {fila.idPaciente ? (

@@ -3,12 +3,14 @@ package cl.ucn.alertacuida.application.sesion;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import cl.ucn.alertacuida.application.comun.puerto.SecretosUnSoloUso;
 import cl.ucn.alertacuida.application.sesion.error.InicioSesionFallido;
 import cl.ucn.alertacuida.application.sesion.modelo.CuentaUsuario;
 import cl.ucn.alertacuida.application.sesion.modelo.SesionIniciada;
 import cl.ucn.alertacuida.application.sesion.modelo.TokenAcceso;
 import cl.ucn.alertacuida.application.sesion.puerto.CuentaUsuarioRepository;
 import cl.ucn.alertacuida.application.sesion.puerto.RegistroAccesos;
+import cl.ucn.alertacuida.application.soporte.TokensSesionEnMemoria;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -31,15 +33,27 @@ class IniciarSesionTest {
 
 	private final CuentasEnMemoria cuentas = new CuentasEnMemoria();
 	private final AccesosEnMemoria accesos = new AccesosEnMemoria();
+	private final TokensSesionEnMemoria tokens = new TokensSesionEnMemoria();
 	private IniciarSesion iniciarSesion;
 
 	/** Un administrador activo con contraseña "clave" y bloqueo tras 3 fallos. */
 	@BeforeEach
 	void preparar() {
 		// El "hash" del RUN es el RUN normalizado y el de la contraseña es "hash:" + contraseña
+		AperturaSesion apertura = new AperturaSesion(cuentas, tokens, new SecretosUnSoloUso() {
+			@Override
+			public String nuevo() {
+				return "secreto";
+			}
+
+			@Override
+			public String hash(String secreto) {
+				return "hash:" + secreto;
+			}
+		}, usuario -> new TokenAcceso("token-" + usuario.id(), AHORA.plusSeconds(900)),
+				new PoliticaSesion(Duration.ofHours(10), Duration.ofMinutes(15), Duration.ofSeconds(10)));
 		iniciarSesion = new IniciarSesion(cuentas, accesos, run -> "h-" + run.valor(),
-				(contrasena, hash) -> hash != null && hash.equals("hash:" + contrasena),
-				usuario -> new TokenAcceso("token-" + usuario.id(), AHORA.plusSeconds(900)),
+				(contrasena, hash) -> hash != null && hash.equals("hash:" + contrasena), apertura,
 				new PoliticaBloqueo(3, Duration.ofMinutes(15)), Clock.fixed(AHORA, ZoneOffset.UTC));
 		cuentas.agregar("h-11111111-1", new CuentaUsuario(ADMIN, "Admin", "ADMINISTRADOR", "hash:clave", true));
 		cuentas.permisos.put("ADMINISTRADOR", Set.of("ALERTAS:VER", "USUARIOS:CREAR"));
@@ -54,6 +68,24 @@ class IniciarSesionTest {
 		assertThat(sesion.usuario().codigoRol()).isEqualTo("ADMINISTRADOR");
 		assertThat(sesion.usuario().permisos()).containsExactlyInAnyOrder("ALERTAS:VER", "USUARIOS:CREAR");
 		assertThat(accesos.registros).containsExactly("LOGIN " + ADMIN);
+	}
+
+	/** El login abre una sesión renovable con 10 horas de límite. */
+	@Test
+	void elLoginAbreUnaSesionRenovableConSuLimite() {
+		SesionIniciada sesion = iniciarSesion.iniciar("11.111.111-1", "clave", "127.0.0.1");
+
+		assertThat(sesion.renovacion().valor()).isEqualTo("secreto");
+		assertThat(sesion.renovacion().expiraEn()).isEqualTo(AHORA.plus(Duration.ofHours(10)));
+		assertThat(tokens.cantidad()).isEqualTo(1);
+	}
+
+	/** Un login fallido no abre sesión. */
+	@Test
+	void unLoginFallidoNoAbreSesion() {
+		mensaje(() -> iniciarSesion.iniciar("11111111-1", "otra", "ip"));
+
+		assertThat(tokens.cantidad()).isZero();
 	}
 
 	/** Con contraseña incorrecta falla, y el intento queda en la auditoría. */
@@ -138,6 +170,11 @@ class IniciarSesionTest {
 		@Override
 		public Optional<CuentaUsuario> buscarPorRunHash(String runHash) {
 			return Optional.ofNullable(porRunHash.get(runHash));
+		}
+
+		@Override
+		public Optional<CuentaUsuario> buscarPorId(UUID id) {
+			return porRunHash.values().stream().filter(cuenta -> cuenta.id().equals(id)).findFirst();
 		}
 
 		@Override

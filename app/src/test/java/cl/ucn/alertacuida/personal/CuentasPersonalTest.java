@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import cl.ucn.alertacuida.application.comun.puerto.HashRun;
 import cl.ucn.alertacuida.domain.comun.Run;
+import cl.ucn.alertacuida.soporte.BaseDePrueba;
 import cl.ucn.alertacuida.soporte.PostgresDePrueba;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,11 +46,10 @@ class CuentasPersonalTest {
 	@Autowired
 	private PasswordEncoder encoder;
 
-	/** Un administrador y un coordinador activos, con contraseña "Clave-de-" + nombre + "1". */
+	/** Base vacía; un administrador y un coordinador activos, con contraseña "Clave-de-" + nombre + "1". */
 	@BeforeEach
 	void crearUsuarios() {
-		jdbc.sql("DELETE FROM registro_auditoria").update();
-		jdbc.sql("DELETE FROM usuario").update();
+		BaseDePrueba.vaciar(jdbc);
 		crear("11.111.111-1", "ADMINISTRADOR", "Admin", "admin@muni.cl");
 		crear("22.222.222-2", "COORDINADOR", "Coord", "coord@muni.cl");
 	}
@@ -64,11 +64,16 @@ class CuentasPersonalTest {
 				.andExpect(status().isForbidden());
 	}
 
-	/** El administrador crea la cuenta, la persona la activa con el enlace y puede iniciar sesión. */
+	/**
+	 * El administrador crea la cuenta, la persona la activa con el enlace y puede iniciar sesión. Aquí el correo
+	 * está en modo simulado (no sale), así que el enlace viene en la respuesta para pasárselo a la persona; con
+	 * correo real, lo prueba RequisitosCorreoActivacionTest.
+	 */
 	@Test
 	void elAdministradorCreaLaCuentaLaPersonaLaActivaYPuedeIniciarSesion() throws Exception {
 		ResultActions alta = altaCon(tokenAdmin(), cuenta("12.345.678-5"))
 				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.correoEnviado").value(false))
 				.andExpect(jsonPath("$.enlaceActivacion").value(startsWith(
 						"http://localhost:5173/activar#")));
 		String tokenEnlace = tokenDelEnlace(alta);
@@ -111,6 +116,26 @@ class CuentasPersonalTest {
 
 		altaCon(admin, cuenta("12345678-5")).andExpect(status().isConflict());
 		altaCon(admin, cuenta("12.345.678-0")).andExpect(status().isBadRequest());
+	}
+
+	/** Un coordinador sin teléfono responde 400; con teléfono y opt-in se guarda cifrado y con la fecha. */
+	@Test
+	void elCoordinadorNecesitaTelefonoQueSeGuardaCifradoConSuOptIn() throws Exception {
+		String admin = tokenAdmin();
+		String sinTelefono = """
+				{"run": "12.345.678-5", "nombre": "Rosa", "correo": "rosa@muni.cl", "rol": "COORDINADOR"}""";
+		altaCon(admin, sinTelefono).andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.detail").value(containsString("WhatsApp")));
+
+		altaCon(admin, """
+				{"run": "12.345.678-5", "nombre": "Rosa", "correo": "rosa@muni.cl", "rol": "COORDINADOR",
+				"telefono": "9 1234 5678", "aceptaWhatsapp": true}""").andExpect(status().isCreated());
+
+		String telefono = jdbc.sql("SELECT telefono FROM usuario WHERE correo = 'rosa@muni.cl'").query(String.class)
+				.single();
+		assertThat(telefono).startsWith("v1:").doesNotContain("12345678");
+		assertThat(jdbc.sql("SELECT fecha_opt_in IS NOT NULL FROM usuario WHERE correo = 'rosa@muni.cl'")
+				.query(Boolean.class).single()).isTrue();
 	}
 
 	/** Un enlace nuevo reemplaza al anterior, y una cuenta activa no recibe enlaces (404). */

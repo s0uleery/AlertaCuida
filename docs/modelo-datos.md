@@ -27,16 +27,16 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
 - Los `Enum` se dibujan como `Enum`, pero en las migraciones van como `varchar` con `CHECK` (los `ENUM` de PostgreSQL no permiten quitar ni renombrar valores).
 - **Fuera de la base**, en la configuración del backend (`application.properties`, y el horario hábil y los feriados en `calendario.yml`): umbrales base, matriz de riesgo FC × SpO2 (con su versión), horario hábil, feriados, plazos y la política de bloqueo de sesión (intentos y minutos). Son valores del sistema, no datos de un paciente. Cambiarlos requiere reiniciar el backend. La regla de enrutamiento por gravedad está fija en el código (`ReglaEnrutamiento`).
 
-## Tablas (28)
+## Tablas (30)
 
 | Área | Tablas |
 |---|---|
 | 1. Paciente (identidad) | `PACIENTE` |
 | 2. Salud y documentos | `FICHA_PACIENTE`, `CONDICION_PACIENTE`, `DOCUMENTO` |
 | 3. Contactos | `TIPO_CONTACTO`, `CONTACTO`, `CONTACTO_PACIENTE` |
-| 4. Configuración clínica | `CONFIGURACION`, `UMBRAL` |
+| 4. Configuración clínica | `CONFIGURACION`, `UMBRAL`, `ZONA_SEGURA` |
 | 5. Relojes y telemetría | `SMARTWATCH`, `ASIGNACION_RELOJ`, `SINCRONIZACION`, `EVENTO_DESCARTADO`, `REGISTRO_VITAL`, `UBICACION` |
-| 6. Alertas | `ALERTA`, `ATENCION_ALERTA`, `REGISTRO_INTENTO`, `AVISO_FCM` |
+| 6. Alertas | `ALERTA`, `DISCREPANCIA_ALERTA`, `ATENCION_ALERTA`, `REGISTRO_INTENTO`, `AVISO_FCM` |
 | 7. Seguimiento | `DESTINO_DERIVACION`, `SEGUIMIENTO` |
 | 8. Personal, roles y permisos | `ROL`, `PERMISO_ROL`, `USUARIO`, `CODIGO_RESPALDO`, `TOKEN_SESION`, `TOKEN_ACCION`, `REGISTRO_AUDITORIA` |
 
@@ -65,6 +65,8 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
   - Solo nombre y medio de contacto (minimización): WhatsApp y correo, cifrados, al menos uno de los dos.
   - El opt-in de WhatsApp es de la persona, porque Meta lo registra por número.
   - `whatsapp_hash` y `correo_hash` son únicos: un número o un correo es una sola persona. Así se la encuentra cuando Meta informa un número (por ejemplo, la baja del opt-in).
+  - **Contacto interno (V11):** una cuenta del equipo PRLAC que recibe avisos del servidor (correo por `recibe_avisos`, WhatsApp a la oficina y su correo de respaldo). Es solo el enlace a `USUARIO` (`id_usuario`, único): nombre, correo, teléfono y opt-in se leen de la cuenta, sin copiarlos. El externo es la persona de la lista de un paciente, como antes.
+  - Un contacto interno no entra en la lista de ningún paciente, así que el reloj nunca lo recorre, y un contacto no cambia de interno a externo ni al revés. Lo impiden dos disparadores que responden como un `CHECK`.
 - **`CONTACTO_PACIENTE`**: la lista de contactos de cada paciente. Guarda lo que depende del vínculo:
   - tipo (alguien puede ser cuidadora de un paciente y vecina de otro) y parentesco (solo si es `FAMILIA`);
   - si es el cuidador principal (uno activo por paciente);
@@ -77,8 +79,13 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
 ### 4. Configuración clínica
 
 - **`CONFIGURACION`**: historial de los módulos del paciente. Cada fila rige desde `vigente_desde` hasta la siguiente; **la vigente es la más reciente**. Cada cambio agrega una fila y las anteriores no se modifican.
-  - Un módulo por columna (caídas, FC, SpO2, inactividad, tendencia, GPS), además del modo conservador, los minutos de espera entre contactos (vacío = valor base) y el motivo del cambio (cifrado). Son pocos y fijos, y cada uno depende de la clave completa.
-  - El GPS solo sirve para ubicar a la persona; no genera alertas.
+  - Un módulo por columna (caídas, FC, SpO2, inactividad, tendencia, zona segura, botón de ayuda, GPS), además del modo conservador, los minutos de espera entre contactos (vacío = valor base) y el motivo del cambio (cifrado). Son pocos y fijos, y cada uno depende de la clave completa.
+  - El GPS ubica a la persona y, con `zona_segura_activa`, permite revisar la zona: `CHECK (NOT zona_segura_activa OR gps_activo)`. Que exista una zona guardada lo valida el backend, porque está en otra tabla.
+  - El botón de ayuda viene activo por defecto (V9). Las filas anteriores a V9 quedan con el botón apagado, porque entonces no existía; cada paciente configurado recibió una versión nueva con el botón activo, auditada como cambio del sistema.
+- **`ZONA_SEGURA`** (v8, migración V9): el círculo que el reloj revisa con su GPS, con **historial propio**, como el umbral: cambiar el radio no agrega una versión de `CONFIGURACION`.
+  - Centro (latitud y longitud, **cifradas** como texto porque suelen ser el domicilio), radio en metros (el backend exige de 50 a 5000) y la gravedad de la alerta al salir (media por defecto). Todos dependen de la clave completa `(id_paciente, vigente_desde)`, así que cumple la FNBC.
+  - Guardar una zona no la activa: el interruptor es `CONFIGURACION.zona_segura_activa`. Así se puede dejar definida y apagada sin perderla.
+  - No va dentro de `CONFIGURACION` para no repetir el círculo en cada versión de los módulos, ni dejar columnas vacías en quienes no tienen zona.
 - **`UMBRAL`**: rangos personalizados por variable (FC, SpO2), con **historial propio**. Cambiar el GPS no duplica umbrales, y cambiar un umbral no duplica la configuración.
   - Cada fila define cuatro límites: `grave_bajo < normal_min < normal_max < grave_alto`. Cada variable queda NORMAL, LEVE o GRAVE, y la matriz de riesgo del backend cruza FC y SpO2 para dar la severidad.
   - **Una fila va completa o vacía; no se mezcla con el umbral base:**
@@ -93,6 +100,7 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
 - **`ASIGNACION_RELOJ`**: vínculo reloj-paciente con historial (1.2.4) y el hash del token del reloj (rol `DEVICE`).
   - **Todo lo que llega del reloj cuelga de la asignación**, que da el reloj y el paciente con una sola relación.
   - El token vale mientras la asignación está vigente: cerrarla lo revoca. Para cambiar el token se cierra la asignación y se abre otra.
+- **`EMPAREJAMIENTO_RELOJ`** (V15): códigos de emparejamiento pendientes, con el hash del código, el hash del token que ya tiene el reloj y su vencimiento (10 minutos). Al usarse, el hash del token pasa a `ASIGNACION_RELOJ` y la fila se borra; las vencidas se borran al pedir un código nuevo. Es la única tabla sin relaciones, a propósito: el código lo pide un reloj que todavía no se sabe cuál es ni de quién.
   - **Sin superposiciones en el tiempo**, ni vigentes ni cerradas, ni por reloj ni por paciente (1.2.5): dos restricciones `EXCLUDE`. Cerrar a las 12:00 y abrir otra a las 12:00 no se superpone.
 - **`SINCRONIZACION`**: el lote cada 2 horas (o antes si la batería baja de 15 %) con el estado del reloj: batería, si está puesto, minutos puesto desde el lote anterior (uso del reloj en reportes), LTE o Wi-Fi, versión de la app y **hash de la configuración** que tiene aplicada. La última sincronización da el estado actual (3.4.1, 3.8.1).
 - **`EVENTO_DESCARTADO`**: cuántos eventos de cada tipo descartó el reloj en el lote, una fila por tipo (1FN). Sirve a las métricas de validación (4.7). No admite `SILENCIO_DATOS`, porque ese evento lo detecta el servidor.
@@ -103,8 +111,8 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
 ### 6. Alertas
 
 - **Tipos de evento.**
-  - Clínicos, que escalan a los contactos: caída, FC, SpO2, FC+SpO2, tendencia e inactividad.
-  - Técnicos, que avisan por correo a los profesionales con `recibe_avisos`: silencio de datos (sin señal, reloj apagado o plan vencido), batería baja y reloj no puesto.
+  - Clínicos, que escalan a los contactos: caída, FC, SpO2, FC+SpO2, tendencia, inactividad, salida de la zona segura (con la gravedad de su zona) y botón de ayuda (siempre leve; avisa primero a los `VECINO`, regla `alerta_boton_leve`).
+  - Técnicos, que avisan a todos los coordinadores (por WhatsApp, en horario laboral) y por correo a las demás cuentas con `recibe_avisos` (apagado por defecto desde V10): silencio de datos (sin señal, reloj apagado o plan vencido), batería baja, reloj no puesto y exceso de alertas (`EXCESO_ALERTAS`: desde la 10.ª alerta del mismo reloj en 60 minutos, posible falla; leve).
   - El servidor solo crea alertas técnicas y simulacros, y el silencio de datos solo lo crea el servidor (`CHECK`).
 - **Gravedad y enrutamiento.** Hay tres niveles. La regla está fija en el código (`ReglaEnrutamiento`); el horario de cada contacto se respeta siempre, también en horario hábil:
 
@@ -148,7 +156,11 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
 
   La vista también da la gravedad actual: `GRAVE` si se agravó; si no, la inicial. "Derivada" no es un estado: se ve en `SEGUIMIENTO`.
 - **Una alerta del servidor abierta por reloj y tipo (2.2.5).** "Abierta" depende de `ATENCION_ALERTA`, así que no puede ser un índice parcial. El job del servidor la valida al crearla, dentro de una transacción con `pg_advisory_xact_lock(hashtextextended(id_asignacion::text || ':' || tipo_evento, 0))`. Las del reloj nunca se rechazan (2.1).
-- **`REGISTRO_INTENTO`**: cada aviso que el reloj pidió y el servidor envió a un contacto, con canal, ronda (1 o 2), horas de envío, entrega, lectura (solo WhatsApp) o falla, y la respuesta (botón de WhatsApp o enlace del correo). El estado de entrega es la fecha más avanzada.
+- **`DISCREPANCIA_ALERTA`** (2.1.2, V10): lo que no calzó entre una alerta del reloj y la configuración vigente al recibirla: otra versión, módulo apagado, gravedad distinta de la configurada (tendencia o zona segura) o lecturas que no superan los umbrales. La alerta se acepta igual. Una fila por código (1FN), con un detalle legible. **Se guarda y no se calcula** porque los valores base del backend no tienen historial: después no se podría saber qué regía. Las cancelaciones no se revisan.
+- **Agravamiento** (2.1.3): `fecha_hora_agravamiento` y `segundos_inmovilidad_agravamiento` (solo con la fecha) se completan una vez; repetirlo no cambia la hora.
+- **`REGISTRO_INTENTO`**: cada aviso que el reloj pidió y el servidor envió a un contacto, con canal, ronda (1 o 2), horas de solicitud, envío, entrega, lectura (solo WhatsApp) o falla, y la respuesta (botón de WhatsApp o enlace del correo). El estado de entrega es la fecha más avanzada. También los avisos del servidor al equipo, con su propósito: `AVISO`, `VIGILANTE` (la alerta no avanza porque el reloj dejó de pedir avisos) o `AGRAVAMIENTO` (la alerta pasó a grave después del aviso a los coordinadores).
+  - Desde V11 también guarda los avisos que decide el servidor para el equipo: van a un contacto interno (`id_contacto_interno`), sin ronda. Cada aviso va a un vínculo o a un contacto interno, nunca a los dos. Los avisos al equipo no cuentan para `AVISANDO_CONTACTO`, y solo un contacto del paciente puede responder "Voy en camino".
+  - Es también la bandeja de salida del correo: `fecha_hora_proximo_envio` marca un envío pendiente y desde cuándo puede salir; `reintentos` cuenta los reintentos hechos. Agotados, queda con `fecha_hora_fallo` y `motivo_fallo`.
   - `event_id` lo genera el reloj al pedir el aviso: si reintenta, no se envía dos veces (2.10.2).
   - Además, un aviso por contacto, canal y ronda (`unique`), aunque el reloj genere otro `event_id` tras reiniciarse.
   - `id_externo` es el identificador del mensaje en Meta o en el correo: un webhook repetido no se procesa dos veces.
@@ -165,11 +177,13 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
 - **`USUARIO`**: lo crea el administrador. El usuario recibe un enlace de activación y define su contraseña, y ahí queda activo.
   - Inactivo sin contraseña = pendiente de activar; inactivo con contraseña = desactivado. Los usuarios no se borran.
   - RUN cifrado con `rut_hash` para el inicio de sesión, correo (único y en minúsculas), TOTP, `recibe_avisos` y `recibe_resumen_diario`.
+  - Teléfono (cifrado, número de WhatsApp normalizado) y opt-in de WhatsApp (`fecha_opt_in`, `fecha_revocacion_opt_in`, como en `CONTACTO`). El aviso a la oficina PRLAC llega por WhatsApp a todas las cuentas activas con rol `COORDINADOR` y opt-in vigente, solo en horario laboral; si falla, por correo. El teléfono es obligatorio para ese rol: lo valida el backend al crear la cuenta, porque una regla en la base rechazaría las cuentas que ya existían sin teléfono.
   - **El último acceso y el bloqueo no se guardan**: salen de `REGISTRO_AUDITORIA`. Está bloqueado si tiene N `LOGIN_FALLIDO` en los últimos M minutos sin un `LOGIN` posterior (N y M en el yml).
 - **`CODIGO_RESPALDO`** (1.3.5), **`TOKEN_SESION`** (renovación del dashboard, 1.3.4) y **`TOKEN_ACCION`** (enlaces de activación y recuperación por correo, de un solo uso): tablas propias porque son varios por usuario y tienen ciclos de vida distintos.
 - **`REGISTRO_AUDITORIA`**: quién leyó o cambió qué y cuándo, sin datos personales (1.6, 1.5.2).
   - `id_entidad` no tiene clave foránea a propósito, para que el registro sobreviva al borrado de lo auditado. Es texto porque los catálogos usan código.
-  - En las claves compuestas, `id_entidad` une sus partes con `|` en el orden de la clave: `CONFIGURACION` "id_paciente|vigente_desde", `UMBRAL` "id_paciente|variable|vigente_desde", `PERMISO_ROL` "codigo_rol|modulo|accion" (`vigente_desde` en ISO 8601 UTC).
+  - En las claves compuestas, `id_entidad` une sus partes con `|` en el orden de la clave: `CONFIGURACION` "id_paciente|vigente_desde", `UMBRAL` "id_paciente|variable|vigente_desde", `ZONA_SEGURA` "id_paciente|vigente_desde", `PERMISO_ROL` "codigo_rol|modulo|accion" (`vigente_desde` en ISO 8601 UTC).
+  - En `LEER`, `id_entidad` es el id del paciente cuya información se consultó, o `LISTA`; `entidad` dice qué parte se leyó. En las demás acciones es el id del objeto cambiado. Por eso, el historial de un objeto específico no incluye sus lecturas: están en el historial del paciente.
   - Las frases del dashboard ("Cambio de dependencia de …") se arman al mostrar.
 
 ### Lo que se calcula con consultas
@@ -182,6 +196,7 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
 | Edad | El backend, al descifrar `fecha_nacimiento` (va cifrada, por eso es texto y no `date`) |
 | Configuración vigente | Fila de `CONFIGURACION` con el mayor `vigente_desde` |
 | Umbral vigente (o el que regía en una fecha) | Fila de `UMBRAL` de esa variable con el mayor `vigente_desde` que no supere la fecha; vacía o sin fila = umbral base |
+| Zona segura vigente | Fila de `ZONA_SEGURA` con el mayor `vigente_desde`; rige solo con `zona_segura_activa` |
 | Configuración pendiente del reloj | El hash del último lote no coincide con el que calcula el backend |
 | Validez del token del reloj | La asignación está vigente (`fecha_fin` vacía) |
 | Relojes libres | `OPERATIVO` y sin asignación vigente |
@@ -195,25 +210,26 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
 
 ## Relaciones
 
-31 relaciones, todas 1 a muchos (dos de ellas uno a uno):
+35 relaciones, todas 1 a muchos (tres de ellas uno a uno):
 
 | Tabla padre | Tablas hijas |
 |---|---|
-| `PACIENTE` | `FICHA_PACIENTE` (1 a 1), `CONDICION_PACIENTE`, `DOCUMENTO`, `CONFIGURACION`, `UMBRAL`, `CONTACTO_PACIENTE`, `ASIGNACION_RELOJ` |
-| `CONTACTO` | `CONTACTO_PACIENTE` |
+| `PACIENTE` | `FICHA_PACIENTE` (1 a 1), `CONDICION_PACIENTE`, `DOCUMENTO`, `CONFIGURACION`, `UMBRAL`, `ZONA_SEGURA`, `CONTACTO_PACIENTE`, `ASIGNACION_RELOJ` |
+| `CONTACTO` | `CONTACTO_PACIENTE` (externo), `REGISTRO_INTENTO` (interno) |
 | `TIPO_CONTACTO` | `CONTACTO_PACIENTE` |
 | `SMARTWATCH` | `ASIGNACION_RELOJ` |
 | `ASIGNACION_RELOJ` | `SINCRONIZACION`, `ALERTA` |
 | `SINCRONIZACION` | `EVENTO_DESCARTADO`, `REGISTRO_VITAL`, `UBICACION` |
-| `ALERTA` | `ATENCION_ALERTA` (1 a 1), `REGISTRO_INTENTO`, `AVISO_FCM`, `SEGUIMIENTO` |
+| `ALERTA` | `ATENCION_ALERTA` (1 a 1), `DISCREPANCIA_ALERTA`, `REGISTRO_INTENTO`, `AVISO_FCM`, `SEGUIMIENTO` |
 | `CONTACTO_PACIENTE` | `REGISTRO_INTENTO` |
 | `DESTINO_DERIVACION` | `SEGUIMIENTO` |
 | `ROL` | `USUARIO`, `PERMISO_ROL` |
-| `USUARIO` | `DOCUMENTO`, `ATENCION_ALERTA` (responsable), `ATENCION_ALERTA` (resolutor), `SEGUIMIENTO`, `CODIGO_RESPALDO`, `TOKEN_SESION`, `TOKEN_ACCION`, `REGISTRO_AUDITORIA` |
+| `USUARIO` | `CONTACTO` (interno, 1 a 1), `DOCUMENTO`, `ATENCION_ALERTA` (responsable), `ATENCION_ALERTA` (resolutor), `SEGUIMIENTO`, `CODIGO_RESPALDO`, `TOKEN_SESION`, `TOKEN_ACCION`, `REGISTRO_AUDITORIA` |
 
 - **Uno a uno con `>` en el DBML.** En DBML, `Ref: A.x - B.y` pone la clave foránea en `B`, al revés de lo que se quiere: el paciente dependería de su ficha y la alerta de su atención. Por eso se escriben con `>`. La clave primaria de la tabla hija (que es la misma del padre) ya garantiza que sean uno a uno.
 - **Las dos relaciones de `ATENCION_ALERTA` con `USUARIO`** no se repiten: son dos hechos distintos (quién asumió el caso y quién lo cerró), que pueden ser personas diferentes.
 - **`CONTACTO_PACIENTE`** es la tabla intermedia de una relación muchos a muchos.
+- **`CONTACTO.id_usuario`** es uno a uno con `USUARIO` (columna única) y se escribe con `>` por la misma razón. No repite la relación de `ROL`: dice qué contacto representa a la cuenta, no qué permisos tiene.
 - **`REGISTRO_INTENTO`** une una alerta con un vínculo contacto-paciente, y ambos llevan al mismo paciente por caminos distintos. Es propio de una tabla que une dos cosas del mismo dueño. Que los dos caminos coincidan lo valida el backend.
 - **`hash_configuracion`** no es clave foránea: se compara con el hash que calcula el backend, así que no crea otro camino.
 
@@ -248,6 +264,14 @@ Las tablas las crea Flyway con las migraciones de [`adapters/src/main/resources/
 | `V4__relojes_y_telemetria` | Extensión `btree_gist`, `smartwatch`, `asignacion_reloj`, `sincronizacion`, `evento_descartado`, `registro_vital`, `ubicacion` |
 | `V5__alertas_y_seguimiento` | `alerta`, `atencion_alerta`, `registro_intento`, `aviso_fcm`, `destino_derivacion`, `seguimiento` y la vista `alerta_estado` |
 | `V6__catalogos_iniciales` | Roles (el `ADMINISTRADOR` con todos los permisos), tipos de contacto y destinos de derivación |
+| `V7__auditoria_token_reutilizado` | Agrega la acción `TOKEN_REUTILIZADO` a `REGISTRO_AUDITORIA` |
+| `V8__tendencia_activa_por_defecto` | Activa el módulo de tendencia por defecto y agrega una versión nueva, auditada, a quienes lo tenían apagado |
+| `V9__zona_segura_boton_ayuda_y_optin_equipo` | Zona segura, botón de ayuda y opt-in de WhatsApp de las cuentas del equipo |
+| `V10__discrepancias_agravamiento_y_avisos` | `discrepancia_alerta`, segundos de inmovilidad del agravamiento, `EXCESO_ALERTAS` y `recibe_avisos` apagado por defecto |
+| `V11__correo_y_contacto_interno` | Contacto interno (`contacto.id_usuario`), avisos al equipo y reintentos en `registro_intento`, sus disparadores, y la vista `alerta_estado` sin contar los avisos al equipo |
+| `V12__vigilante_del_escalamiento` | `registro_intento.fecha_hora_solicitud` (cuándo se pidió o encoló cada aviso) y `registro_intento.proposito` (`AVISO` o `VIGILANTE`), que entra en la unicidad de los avisos al equipo |
+| `V13__aviso_de_agravamiento` | Propósito `AGRAVAMIENTO` en `registro_intento`: el segundo aviso a los coordinadores cuando la alerta pasa a grave |
+| `V14__respuesta_de_coordinadores` | La respuesta también se guarda en el aviso a la oficina y en el de agravamiento a un coordinador: su "Voy en camino" confirma la alerta |
 
 Una migración ya aplicada no se edita: los cambios van en una migración nueva (`V7__...`).
 
@@ -264,7 +288,11 @@ Resumen de lo que DBML no dibuja (está dentro de cada tabla en las migraciones 
   - `ALERTA`: el origen coherente con el tipo y con el hash, agravamiento solo de caídas no graves, espera del día hábil solo en leves, cancelada sin "sin respuesta";
   - `ATENCION_ALERTA`: sin filas vacías, clasificación solo al cerrar, `POSITIVA` con responsable;
   - rangos: batería 0–100, prioridad ≥ 1, cantidades e intentos ≥ 0, ronda 1 o 2;
-  - `USUARIO`: activo solo con contraseña, correo en minúsculas.
+  - `USUARIO`: activo solo con contraseña, correo en minúsculas;
+  - `CONTACTO`: el externo con nombre y algún canal, el interno sin datos propios;
+  - `REGISTRO_INTENTO`: un solo destino (vínculo o contacto interno), ronda solo con vínculo, respuesta solo de un vínculo o del aviso a la oficina o de agravamiento a un coordinador (V14), reintentos ≥ 0, y pendiente de envío solo si no salió ni falló.
+- **Disparadores (V11)**, que responden con el código de un `CHECK`: un contacto interno no entra en `CONTACTO_PACIENTE`, un contacto no cambia de interno a externo, y `REGISTRO_INTENTO.id_contacto_interno` apunta a un contacto interno. Son reglas entre tablas que un `CHECK` no puede revisar.
+- **Bandeja de salida:** índice parcial `registro_intento (fecha_hora_proximo_envio) WHERE fecha_hora_proximo_envio IS NOT NULL`, y único `(id_alerta, id_contacto_interno, canal)` para no repetir un aviso al equipo.
 - **Vista** `ALERTA_ESTADO`, con las dos tablas de estados de arriba.
 - **Permisos de la base:** el usuario del dashboard no tiene `UPDATE` sobre `ALERTA`; el de la recepción del reloj, solo `UPDATE (fecha_hora_agravamiento, fecha_hora_cancelacion, fecha_hora_sin_respuesta)`.
 - **UUID** generados con `gen_random_uuid()`, salvo los `event_id`, que los genera el reloj (o el servidor, en sus alertas).
@@ -287,7 +315,7 @@ Reglas que cruzan tablas. Están anotadas en la nota de cada tabla y probadas (�
 ### Borrado al fin del piloto (4.4.5)
 
 - Las relaciones `[delete: cascade]` borran todo lo del paciente: ficha, condiciones, documentos (el backend borra además los archivos del disco), configuración, umbrales, vínculos, asignaciones, lotes, lecturas, alertas, atenciones, intentos, avisos y seguimientos.
-- Los `CONTACTO` no se borran en cascada, porque pueden ser de otro paciente. Después, el backend borra los que quedaron sin pacientes.
+- Los `CONTACTO` no se borran en cascada, porque pueden ser de otro paciente. Después, el backend borra los externos que quedaron sin pacientes; los internos son de las cuentas del equipo y se conservan.
 - `USUARIO`, `SMARTWATCH`, los catálogos y los `CONTACTO` con pacientes no se pueden borrar mientras algo los use.
 - `REGISTRO_AUDITORIA` no tiene datos personales y se conserva.
 

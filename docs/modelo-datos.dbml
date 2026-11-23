@@ -72,9 +72,19 @@ Enum tipo_evento {
   FC_SPO2 [note: 'Clínica']
   TENDENCIA [note: 'Clínica']
   INACTIVIDAD [note: 'Clínica: la persona no mueve el reloj']
+  ZONA_SEGURA [note: 'La persona salió del círculo de su zona segura; gravedad según ZONA_SEGURA.severidad']
+  BOTON_AYUDA [note: 'La persona presionó el botón de ayuda del reloj. Siempre LEVE; avisa primero a los VECINO']
   SILENCIO_DATOS [note: 'Técnica: no llegan datos (sin señal, reloj apagado o plan vencido)']
   BATERIA_BAJA [note: 'Técnica']
   RELOJ_NO_PUESTO [note: 'Técnica']
+  EXCESO_ALERTAS [note: 'Técnica: el reloj envió más alertas de las permitidas en una ventana (posible falla). Solo el servidor']
+}
+
+Enum codigo_discrepancia {
+  VERSION_DISTINTA [note: 'El reloj evaluó con una configuración distinta de la vigente']
+  MODULO_APAGADO [note: 'Alerta de un módulo que el paciente tiene apagado']
+  GRAVEDAD_DISTINTA [note: 'Gravedad distinta de la configurada (tendencia o zona segura)']
+  LECTURAS_EN_RANGO [note: 'Las lecturas de la evidencia no superan los umbrales vigentes']
 }
 
 Enum origen_alerta {
@@ -96,6 +106,12 @@ Enum clasificacion_alerta {
 Enum respuesta_contacto {
   VOY_EN_CAMINO
   NO_PUEDO
+}
+
+Enum proposito_aviso {
+  AVISO [note: 'El que pidió el reloj, el de la oficina, el de recibe_avisos o el respaldo de un WhatsApp']
+  VIGILANTE [note: 'La alerta no avanza: el reloj no pide avisos (solo a cuentas del equipo)']
+  AGRAVAMIENTO [note: 'La alerta pasó a grave después de su aviso a los coordinadores (solo a cuentas del equipo)']
 }
 
 Enum tipo_aviso_fcm {
@@ -142,6 +158,7 @@ Enum entidad_auditoria {
   CONTACTO
   CONFIGURACION
   UMBRAL
+  ZONA_SEGURA
   DOCUMENTO
   SMARTWATCH
   ASIGNACION_RELOJ
@@ -165,6 +182,7 @@ Enum accion_auditoria {
   EXPORTAR
   LOGIN
   LOGIN_FALLIDO
+  TOKEN_REUTILIZADO
 }
 
 // ==========================================
@@ -240,7 +258,8 @@ Table TIPO_CONTACTO {
 
 Table CONTACTO {
   id_contacto uuid [pk]
-  nombre varchar [not null, note: 'cifrado. Persona o institución']
+  id_usuario uuid [unique, note: 'Solo en el contacto interno: la cuenta del equipo. Vacío en el externo']
+  nombre varchar [note: 'cifrado. Persona o institución. Obligatorio en el externo; vacío en el interno']
   whatsapp varchar [note: 'cifrado']
   whatsapp_hash varchar [unique, note: 'Un número es una sola persona. Permite encontrarla cuando Meta informa un número (ej. baja del opt-in)']
   fecha_opt_in timestamptz [note: 'Opt-in de WhatsApp: Meta lo registra por número, así que es de la persona, no del paciente']
@@ -251,8 +270,14 @@ Table CONTACTO {
   La persona se guarda una sola vez, aunque sea contacto de varios pacientes (ej. Seguridad Ciudadana).
   Solo nombre y medio de contacto (minimización): no se guarda RUN, fecha de nacimiento ni sexo.
   El nombre viaja al reloj ("Alerta recibida por..."). El último cambio sale de REGISTRO_AUDITORIA.
-  Al terminar el piloto, el backend borra los contactos que quedan sin pacientes.
-  CHECK (whatsapp IS NOT NULL OR correo IS NOT NULL).
+  Al terminar el piloto, el backend borra los contactos externos que quedan sin pacientes.
+  Contacto interno (V11): una cuenta del equipo PRLAC que recibe avisos del servidor (correo con recibe_avisos,
+  WhatsApp a la oficina y su respaldo). Es solo el enlace a USUARIO: sus datos se leen de la cuenta, sin copiarlos.
+  No entra en la lista de ningún paciente (disparador contacto_paciente_externo), así que el reloj no lo recorre,
+  y un contacto no cambia de interno a externo ni al revés (disparador contacto_tipo_fijo).
+  CHECK (id_usuario IS NOT NULL OR whatsapp IS NOT NULL OR correo IS NOT NULL).
+  CHECK (id_usuario IS NOT NULL OR nombre IS NOT NULL).
+  CHECK (id_usuario IS NULL OR (nombre IS NULL AND whatsapp IS NULL AND correo IS NULL AND fecha_opt_in IS NULL)).
   CHECK ((whatsapp IS NULL) = (whatsapp_hash IS NULL)).
   CHECK ((correo IS NULL) = (correo_hash IS NULL)).
   CHECK (fecha_revocacion_opt_in IS NULL OR fecha_opt_in IS NOT NULL).
@@ -298,17 +323,38 @@ Table CONFIGURACION {
   fc_activa boolean [not null, default: true]
   spo2_activa boolean [not null, default: true]
   inactividad_activa boolean [not null, default: true]
-  tendencia_activa boolean [not null, default: false, note: 'La regla de tendencia (ventana, pendiente) la define el backend']
-  gps_activo boolean [not null, default: false, note: 'Solo para ubicar a la persona; no genera alertas']
+  tendencia_activa boolean [not null, default: true, note: 'El tiempo de la regla de tendencia lo define el backend, igual para todos']
+  zona_segura_activa boolean [not null, default: false, note: 'Alerta ZONA_SEGURA al salir del círculo. Exige gps_activo y una fila en ZONA_SEGURA']
+  boton_ayuda_activo boolean [not null, default: true, note: 'Botón del reloj para pedir ayuda (alerta BOTON_AYUDA, leve)']
+  gps_activo boolean [not null, default: false, note: 'Ubica a la persona y, con zona_segura_activa, revisa la zona']
   modo_conservador boolean [not null, default: false]
   minutos_espera int [note: 'Espera antes de pasar al siguiente contacto. Vacío = valor base']
   motivo_cambio text [note: 'cifrado. Ej. ajuste por enfermedad de base']
   Note: '''
   Historial de la configuración clínica: cada cambio agrega una fila y nunca se modifican las anteriores.
   Un módulo por columna: son pocos y fijos, y cada uno depende de la clave completa.
-  Los umbrales y los contactos tienen su propio historial y no agregan filas aquí.
+  Los umbrales, la zona segura y los contactos tienen su propio historial y no agregan filas aquí.
   Quién hizo cada cambio queda en REGISTRO_AUDITORIA (1.5.2).
   CHECK (minutos_espera > 0).
+  CHECK (NOT zona_segura_activa OR gps_activo): la zona se revisa con el GPS.
+  Lo valida el backend: activar la zona exige una fila vigente en ZONA_SEGURA (está en otra tabla).
+  '''
+}
+
+Table ZONA_SEGURA {
+  id_paciente uuid [pk]
+  vigente_desde timestamptz [pk, note: 'Rige hasta la fila siguiente del mismo paciente']
+  latitud varchar [not null, note: 'cifrado. Centro del círculo, en grados; suele ser el domicilio']
+  longitud varchar [not null, note: 'cifrado']
+  radio_metros int [not null, note: 'El backend exige de 50 a 5000 m']
+  severidad severidad [not null, default: 'MEDIA', note: 'Gravedad de la alerta ZONA_SEGURA al salir']
+  Note: '''
+  Zona segura del paciente: un círculo que el reloj revisa con su GPS. Historial propio, como UMBRAL:
+  cambiar el radio no agrega una versión de CONFIGURACION, y cada atributo depende de la clave completa (FNBC).
+  Guardar una zona no la activa: el interruptor es CONFIGURACION.zona_segura_activa, así se puede dejar
+  definida y apagada. Las coordenadas van cifradas como texto porque suelen ser el domicilio.
+  La zona viaja al reloj solo con el módulo activo.
+  CHECK (radio_metros > 0).
   '''
 }
 
@@ -372,6 +418,21 @@ Table ASIGNACION_RELOJ {
   (fecha_fin vacía = rango abierto; cerrar a las 12:00 y abrir otra a las 12:00 no se superpone.)
   Lo valida el backend: solo se asignan relojes OPERATIVO, a pacientes con consentimiento y sin baja.
   CHECK (fecha_fin IS NULL OR fecha_fin > fecha_inicio).
+  '''
+}
+
+Table EMPAREJAMIENTO_RELOJ {
+  id_emparejamiento uuid [pk]
+  hash_codigo varchar [unique, not null, note: 'SHA-256 del código normalizado (sin guion, en mayúsculas)']
+  hash_token varchar [unique, not null, note: 'SHA-256 del token que ya tiene el reloj']
+  fecha_creacion timestamptz [not null]
+  fecha_expiracion timestamptz [not null, note: '10 minutos después de la creación']
+  Note: '''
+  Códigos de emparejamiento pendientes (V15). El reloj, sin token, pide un código y recibe su token;
+  quien instala escribe el código al vincular. Entonces el hash del token pasa a ASIGNACION_RELOJ y la
+  fila se borra (cada código sirve una vez). Las vencidas se borran al pedir un código nuevo.
+  Única tabla sin relaciones, a propósito: el reloj que pide el código aún no se sabe cuál es ni de quién.
+  CHECK (fecha_expiracion > fecha_creacion).
   '''
 }
 
@@ -454,6 +515,7 @@ Table ALERTA {
   tipo_evento tipo_evento [not null]
   severidad severidad [not null, note: 'Gravedad con que llegó la alerta; el equipo no la edita. La actual es GRAVE si se agravó']
   fecha_hora_agravamiento timestamptz [note: 'Una caída leve o media que sube a grave por inmovilidad (2.1.3). Vacío = no se agravó']
+  segundos_inmovilidad_agravamiento int [note: 'Cuánto tiempo quedó sin moverse al agravarse. Solo con fecha_hora_agravamiento']
   evidencia jsonb [note: 'Foto de lo que causó la alerta: lecturas, nivel de cada variable, umbrales aplicados, versión de la matriz de riesgo y la celda que dio la severidad. Se lee completa']
   es_simulacro boolean [not null, default: false, note: 'Se excluye de reportes y métricas']
   espera_dia_habil boolean [not null, default: false, note: 'Leve fuera del horario hábil: el reloj no avisa a contactos']
@@ -488,10 +550,28 @@ Table ALERTA {
   Que una alerta CANCELADA no tenga atención ni avisos a contactos lo valida el backend.
   CHECK (fecha_hora_cancelacion IS NULL OR fecha_hora_sin_respuesta IS NULL).
   CHECK ((origen = 'SERVIDOR') = (hash_configuracion IS NULL)).
-  CHECK (origen = 'RELOJ' OR es_simulacro OR tipo_evento IN ('SILENCIO_DATOS', 'BATERIA_BAJA', 'RELOJ_NO_PUESTO')): el servidor solo crea técnicas y simulacros.
+  CHECK (origen = 'RELOJ' OR es_simulacro OR tipo_evento IN ('SILENCIO_DATOS', 'BATERIA_BAJA', 'RELOJ_NO_PUESTO', 'EXCESO_ALERTAS')): el servidor solo crea técnicas y simulacros.
   CHECK (tipo_evento <> 'SILENCIO_DATOS' OR origen = 'SERVIDOR'): el silencio de datos solo lo detecta el servidor.
+  CHECK (tipo_evento <> 'EXCESO_ALERTAS' OR origen = 'SERVIDOR'): el exceso de alertas solo lo detecta el servidor.
+  CHECK (segundos_inmovilidad_agravamiento >= 0).
+  CHECK (segundos_inmovilidad_agravamiento IS NULL OR fecha_hora_agravamiento IS NOT NULL).
   CHECK (fecha_hora_agravamiento IS NULL OR (tipo_evento = 'CAIDA' AND severidad <> 'GRAVE')).
   CHECK (NOT espera_dia_habil OR severidad = 'LEVE'): solo la leve espera; media y grave avisan siempre.
+  CHECK (tipo_evento <> 'BOTON_AYUDA' OR severidad = 'LEVE'): el botón de ayuda siempre es leve (si el reloj envía otra
+  gravedad, el backend la guarda como LEVE en vez de rechazar el pedido de ayuda).
+  '''
+}
+
+Table DISCREPANCIA_ALERTA {
+  id_alerta uuid [pk]
+  codigo codigo_discrepancia [pk]
+  detalle text [not null, note: 'Legible para el equipo, ej. "FC 95 dentro del rango normal 50–110"']
+  Note: '''
+  Lo que no calzó entre una alerta del reloj y la configuración vigente al recibirla (2.1.2). La alerta se
+  acepta igual: el servidor nunca descarta una. Se guarda al recibirla y no se calcula después, porque los
+  valores base del backend (application.properties) no tienen historial: más tarde no se podría saber qué
+  regía. Una fila por discrepancia (1FN); cada código a lo más una vez por alerta.
+  Las alertas canceladas por el paciente no se revisan.
   '''
 }
 
@@ -525,9 +605,14 @@ Table REGISTRO_INTENTO {
   id_intento uuid [pk]
   event_id uuid [unique, not null, note: 'Lo genera el reloj al pedir el aviso: si reintenta, no se envía dos veces (2.10.2)']
   id_alerta uuid [not null]
-  id_contacto_paciente uuid [not null, note: 'Da la persona (número o correo) y el paciente']
+  id_contacto_paciente uuid [note: 'Aviso pedido por el reloj: da la persona (número o correo) y el paciente']
+  id_contacto_interno uuid [note: 'Aviso del servidor a una cuenta del equipo (contacto interno)']
   canal canal [not null]
-  ronda int [not null, note: '1 o 2. La informa el reloj']
+  ronda int [note: '1 o 2. La informa el reloj. Vacía en los avisos al equipo']
+  proposito proposito_aviso [not null, default: 'AVISO', note: 'Para qué es el aviso; VIGILANTE y AGRAVAMIENTO solo a cuentas del equipo']
+  fecha_hora_solicitud timestamptz [not null, default: `now()`, note: 'Cuándo lo pidió el reloj o lo encoló el servidor; mide "sin noticias del reloj"']
+  reintentos int [not null, default: 0, note: 'Reintentos de envío ya hechos']
+  fecha_hora_proximo_envio timestamptz [note: 'Pendiente de envío desde esa hora (bandeja de salida); vacía si ya salió o falló']
   id_externo varchar [unique, note: 'ID del mensaje en Meta o en el correo; evita procesar dos veces un webhook']
   fecha_hora_envio timestamptz
   fecha_hora_entrega timestamptz
@@ -539,9 +624,23 @@ Table REGISTRO_INTENTO {
   Indexes {
     (id_alerta, id_contacto_paciente, canal, ronda) [unique, note: 'Un aviso por contacto, canal y ronda, aunque el reloj genere otro event_id (ej. tras reiniciarse)']
     (id_contacto_paciente) [note: 'Lo revisa la clave diferida al borrar vínculos']
+    (id_alerta, id_contacto_interno, canal, proposito) [unique, note: 'Un aviso por cuenta, canal, alerta y propósito, aunque el servidor lo encole varias veces']
+    fecha_hora_proximo_envio [note: 'Índice parcial (WHERE fecha_hora_proximo_envio IS NOT NULL): lo que la tarea programada envía']
   }
   Note: '''
-  Cada aviso que el reloj pidió y el servidor envió a un contacto.
+  Cada aviso que el reloj pidió y el servidor envió a un contacto, y cada aviso que el servidor decidió
+  enviar a una cuenta del equipo (correo con recibe_avisos o respaldo de un WhatsApp fallido).
+  Va a un vínculo de la lista del paciente (con ronda) o a un contacto interno (sin ronda), nunca a los dos.
+  Los avisos al equipo no cuentan para AVISANDO_CONTACTO. Responden los contactos del paciente y, desde V14, los
+  coordinadores en el aviso a la oficina y en el de agravamiento (solo en alertas de salud, lo controla el backend).
+  Si un envío falla, se reprograma y suma un reintento; agotados, queda con fecha_hora_fallo y motivo_fallo.
+  CHECK ((id_contacto_paciente IS NULL) <> (id_contacto_interno IS NULL)).
+  CHECK ((ronda IS NULL) = (id_contacto_paciente IS NULL)).
+  CHECK (reintentos >= 0).
+  CHECK (respuesta IS NULL OR id_contacto_paciente IS NOT NULL OR proposito IN ('AVISO', 'AGRAVAMIENTO')).
+  CHECK (fecha_hora_proximo_envio IS NULL OR (fecha_hora_envio IS NULL AND fecha_hora_fallo IS NULL)).
+  CHECK (proposito = 'AVISO' OR id_contacto_interno IS NOT NULL).
+  Disparador intento_contacto_interno: id_contacto_interno debe ser un contacto interno.
   El estado de entrega no se guarda: es la fecha más avanzada (fallo > lectura > entrega > envío).
   CHECK (ronda IN (1, 2)).
   CHECK ((respuesta IS NULL) = (fecha_hora_respuesta IS NULL)).
@@ -630,16 +729,22 @@ Table USUARIO {
   nombre_profesional varchar [not null]
   cargo varchar
   correo varchar [unique, not null, note: 'Recibe los enlaces de activación y recuperación. Se guarda en minúsculas']
-  telefono varchar [note: 'cifrado']
+  telefono varchar [note: 'cifrado. Número de WhatsApp normalizado. Lo valida el backend: obligatorio para el rol COORDINADOR']
+  fecha_opt_in timestamptz [note: 'Aceptó recibir por WhatsApp los avisos de la oficina PRLAC (opt-in de Meta)']
+  fecha_revocacion_opt_in timestamptz
   hash_contrasena varchar [note: 'Vacío hasta que el usuario activa su cuenta']
   totp_secreto varchar [note: 'cifrado']
   totp_activo boolean [not null, default: false]
-  recibe_avisos boolean [not null, default: true, note: 'Recibe por correo las alertas técnicas, medias y graves']
+  recibe_avisos boolean [not null, default: false, note: 'Recibe por correo las alertas técnicas (las de salud las enruta el reloj). Apagado por defecto (V10). También aplica al rol COORDINADOR, además del WhatsApp de la oficina PRLAC']
   recibe_resumen_diario boolean [not null, default: false]
   activo boolean [not null, default: false, note: 'Se activa al definir la contraseña']
   Note: '''
   Lo crea el administrador desde la plataforma; el usuario recibe un TOKEN_ACCION de ACTIVACION.
   Los usuarios no se borran, se desactivan: sus acciones quedan en el historial.
+  Aviso a la oficina PRLAC: en horario laboral, WhatsApp a la vez a todas las cuentas activas con rol COORDINADOR
+  y opt-in vigente; si un WhatsApp falla, va un correo de respaldo. Fuera del horario laboral no se envía nada.
+  CHECK (fecha_opt_in IS NULL OR telefono IS NOT NULL).
+  CHECK (fecha_revocacion_opt_in IS NULL OR fecha_opt_in IS NOT NULL).
   El último acceso no se guarda: sale del último LOGIN en REGISTRO_AUDITORIA.
   El bloqueo tampoco: está bloqueado si tiene N LOGIN_FALLIDO en los últimos M minutos sin un LOGIN posterior
   (N y M en el yml). Índice recomendado en REGISTRO_AUDITORIA: (id_usuario, accion, fecha_hora).
@@ -724,6 +829,7 @@ Ref: DOCUMENTO.id_paciente > PACIENTE.id_paciente [delete: cascade]
 Ref: DOCUMENTO.id_usuario > USUARIO.id_usuario
 Ref: CONFIGURACION.id_paciente > PACIENTE.id_paciente [delete: cascade]
 Ref: UMBRAL.id_paciente > PACIENTE.id_paciente [delete: cascade]
+Ref: ZONA_SEGURA.id_paciente > PACIENTE.id_paciente [delete: cascade]
 
 // 2. Contactos
 Ref: CONTACTO_PACIENTE.id_paciente > PACIENTE.id_paciente [delete: cascade]
@@ -741,10 +847,14 @@ Ref: EVENTO_DESCARTADO.id_sincronizacion > SINCRONIZACION.id_sincronizacion [del
 // 4. Alertas
 Ref: ALERTA.id_asignacion > ASIGNACION_RELOJ.id_asignacion [delete: cascade]
 Ref: ATENCION_ALERTA.id_alerta > ALERTA.id_alerta [delete: cascade] // Uno a uno (ver la nota de FICHA_PACIENTE)
+Ref: DISCREPANCIA_ALERTA.id_alerta > ALERTA.id_alerta [delete: cascade]
 Ref: ATENCION_ALERTA.id_usuario_responsable > USUARIO.id_usuario
 Ref: ATENCION_ALERTA.id_usuario_resolutor > USUARIO.id_usuario
 Ref: REGISTRO_INTENTO.id_alerta > ALERTA.id_alerta [delete: cascade]
 Ref: REGISTRO_INTENTO.id_contacto_paciente > CONTACTO_PACIENTE.id_contacto_paciente
+Ref: REGISTRO_INTENTO.id_contacto_interno > CONTACTO.id_contacto
+// Uno a uno: id_usuario es único en CONTACTO (se escribe como > para que la clave quede en CONTACTO)
+Ref: CONTACTO.id_usuario > USUARIO.id_usuario
 Ref: AVISO_FCM.id_alerta > ALERTA.id_alerta [delete: cascade]
 
 // 5. Seguimiento

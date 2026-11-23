@@ -15,15 +15,36 @@ export interface SolicitudCuenta {
   cargo: string;
   correo: string;
   rol: Rol;
+  /** Celular con WhatsApp; obligatorio para COORDINADOR, que recibe los avisos de la oficina PRLAC */
+  telefono: string;
+  /** La persona aceptó recibir esos avisos por WhatsApp (opt-in que exige Meta) */
+  aceptaWhatsapp: boolean;
+  /** Recibe por correo los avisos de las alertas técnicas (batería, reloj sin datos…); apagado por defecto */
+  recibeAvisos: boolean;
 }
 
-/** Respuesta del alta y de un enlace nuevo. */
+/**
+ * Cuerpo de PUT /api/personal/{id}/rol. El teléfono solo se envía al pasar a COORDINADOR a una cuenta
+ * que no lo tiene (tieneTelefono = false).
+ */
+export interface SolicitudCambioRol {
+  rol: Rol;
+  telefono?: string;
+  aceptaWhatsapp?: boolean;
+}
+
+/**
+ * Respuesta del alta y de un enlace nuevo. El enlace se envía por correo a la persona; solo viene aquí si el
+ * correo no salió (falló, o está en modo simulado en desarrollo).
+ */
 export interface RespuestaEnlace {
   idUsuario: string;
-  /** Dirección completa, con el token después de "#" */
-  enlaceActivacion: string;
+  /** Dirección completa, con el token después de "#"; null si salió por correo */
+  enlaceActivacion: string | null;
   /** Fecha ISO en UTC */
   expiraEn: string;
+  /** Si el enlace le llegó por correo a la persona */
+  correoEnviado: boolean;
 }
 
 /** ACTIVA: ya eligió su contraseña. PENDIENTE: no ha usado su enlace. DESACTIVADA: tenía contraseña y se le quitó el acceso. */
@@ -39,6 +60,10 @@ export interface PerfilEquipo {
   estado: EstadoCuenta;
   /** Último LOGIN en la auditoría, fecha ISO en UTC; null si nunca ha entrado */
   ultimoAcceso: string | null;
+  /** Recibe por correo los avisos de las alertas técnicas */
+  recibeAvisos: boolean;
+  /** Tiene celular con WhatsApp; si no, hay que pedirlo al pasarla a COORDINADOR */
+  tieneTelefono: boolean;
 }
 
 /** Fila de GET /api/roles: un rol con los permisos que tiene hoy. */
@@ -51,7 +76,15 @@ export interface RolConPermisos {
 }
 
 /** Valores de registro_auditoria.accion. */
-export type AccionAuditoria = 'LEER' | 'CREAR' | 'MODIFICAR' | 'ELIMINAR' | 'EXPORTAR' | 'LOGIN' | 'LOGIN_FALLIDO';
+export type AccionAuditoria =
+  | 'LEER'
+  | 'CREAR'
+  | 'MODIFICAR'
+  | 'ELIMINAR'
+  | 'EXPORTAR'
+  | 'LOGIN'
+  | 'LOGIN_FALLIDO'
+  | 'TOKEN_REUTILIZADO';
 
 /** Valores de registro_auditoria.entidad. */
 export type EntidadAuditoria =
@@ -62,6 +95,7 @@ export type EntidadAuditoria =
   | 'CONTACTO_PACIENTE'
   | 'CONFIGURACION'
   | 'UMBRAL'
+  | 'ZONA_SEGURA'
   | 'DOCUMENTO'
   | 'SMARTWATCH'
   | 'ASIGNACION_RELOJ'
@@ -79,12 +113,13 @@ export interface RegistroAuditoria {
   /** Fecha ISO en UTC */
   fechaHora: string;
   accion: AccionAuditoria;
-  /** null en LOGIN y LOGIN_FALLIDO */
+  /** null en LOGIN, LOGIN_FALLIDO y TOKEN_REUTILIZADO */
   entidad: EntidadAuditoria | null;
+  /** En LEER es el id del paciente o "LISTA"; en las demás acciones, el id del objeto cambiado */
   idEntidad: string | null;
   /** Ej. valor anterior y nuevo */
   detalle: Record<string, unknown> | null;
-  /** Quién lo hizo; null en un login fallido con un RUN que no existe */
+  /** Quién lo hizo; null en un login fallido con un RUN que no existe o en un cambio del sistema */
   usuario: { id: string; nombre: string } | null;
   ip: string | null;
 }

@@ -8,6 +8,8 @@ Contrato entre el reloj (o el simulador) y la plataforma, tareas 0.4.3 a 0.4.7 d
 
 | Mensaje | Endpoint | Cuándo |
 |---|---|---|
+| Pedir código de emparejamiento | `POST /api/reloj/v1/emparejamientos` (sin token) | Al abrir la app sin token, o si el código venció |
+| Consultar el emparejamiento | `POST /api/reloj/v1/emparejamientos/consulta` (sin token) | Cada `segundosConsulta` mientras muestra el código |
 | Sincronización | `POST /api/reloj/v1/sincronizaciones` | Cada 2 h, o al 15 % de batería |
 | Configuración | `GET /api/reloj/v1/configuracion` | Si la sincronización o un aviso FCM dice que hay una nueva |
 | Alerta | `POST /api/reloj/v1/alertas` | Al terminar la ventana de 30 s sin cancelación |
@@ -20,6 +22,35 @@ Contrato entre el reloj (o el simulador) y la plataforma, tareas 0.4.3 a 0.4.7 d
 | Acuse de aviso FCM | `POST /api/reloj/v1/avisos-fcm/{idAviso}/recepcion` | Apenas llega un aviso de una alerta |
 | Avisos FCM (servidor → reloj) | Firebase, esquema `AvisoFcm` | Alerta confirmada o resuelta, simulacro, configuración nueva |
 | Webhook de WhatsApp (Meta → servidor) | `GET` y `POST /api/webhooks/whatsapp` | Verificación inicial; respuestas de botones y estados de entrega |
+
+## Configuración inicial: emparejamiento con código (23-11-2026)
+
+El reloj no tiene cámara ni un teclado cómodo, así que no se le escribe el token: se empareja con un código corto, como un Smart TV.
+
+```mermaid
+sequenceDiagram
+    participant R as Reloj
+    participant S as Servidor
+    participant D as Dashboard (quien instala)
+    R->>S: POST /emparejamientos (sin token)
+    S-->>R: 201 codigo "K7PM-42QX", token, expiraEn (10 min), segundosConsulta (5)
+    Note over R: Muestra el código y guarda el token
+    loop cada 5 s
+        R->>S: POST /emparejamientos/consulta {token}
+        S-->>R: PENDIENTE
+    end
+    D->>S: POST /api/pacientes/{id}/reloj {idDispositivo, codigoEmparejamiento}
+    S-->>D: 201 (sin token)
+    R->>S: POST /emparejamientos/consulta {token}
+    S-->>R: VINCULADO
+    R->>S: PUT /token-fcm, POST /sincronizaciones, GET /configuracion (con su token)
+```
+
+- **El reloj recibe su token al pedir el código**, pero no sirve hasta que alguien escribe el código en el dashboard. Al vincular, el servidor asocia ese token al vínculo: nadie ve ni copia el token, y la base guarda solo hashes.
+- **El código** tiene 8 caracteres sin letras que se confundan (ni 0/O ni 1/I/L), se muestra con un guion y da lo mismo cómo se escriba (minúsculas, espacios). Vence a los 10 minutos y sirve una sola vez. Si vence, la consulta responde `VENCIDO` y el reloj pide otro.
+- **Las dos rutas no llevan token**: el reloj todavía no tiene uno que sirva. La consulta lleva el token en el cuerpo. Para proteger la ruta pública, con más de 50 códigos pendientes a la vez responde 429 `DEMASIADAS_PETICIONES` con `Retry-After`.
+- **Emparejar de nuevo** (reloj restaurado de fábrica): el reloj pide otro código y en el dashboard se usa "Emparejar de nuevo". El token anterior deja de servir; el vínculo sigue.
+- **Sin código** (desarrollo y simulador): vincular sin `codigoEmparejamiento` sigue entregando un token una sola vez, para cargarlo a mano.
 
 ## Flujo de una alerta
 
@@ -48,17 +79,19 @@ sequenceDiagram
     R->>R: Muestra "Alerta recibida por ..." y deja de avisar
 ```
 
-Si nadie confirma, el reloj recorre la lista dos veces y termina con `POST /alertas/A/sin-respuesta`. Las alertas medias y graves, además, avisan por correo a los profesionales desde el servidor, en paralelo (2.10.5).
+Si nadie confirma, el reloj recorre la lista dos veces y termina con `POST /alertas/A/sin-respuesta`. Además, en horario laboral el servidor avisa por WhatsApp a la oficina PRLAC, a todos los coordinadores a la vez y en paralelo a este recorrido, sin esperar a los contactos, con correo de respaldo si un WhatsApp falla (2.10.5). El reloj no participa en ese aviso.
 
 ## Decisiones
 
-- **El reloj se identifica solo con su token.** Es el que se muestra una vez al vincular el reloj (rol DEVICE). De él se deduce la asignación y, de ahí, el paciente: el reloj nunca envía el id del paciente, así que no puede escribir datos de otro. Si el reloj se desvincula o se reemplaza, el token deja de servir y todo responde 401.
+- **El reloj se identifica solo con su token.** Lo recibe al pedir su código de emparejamiento y empieza a servir cuando alguien escribe el código al vincular (rol DEVICE; ver [Configuración inicial](#configuración-inicial-emparejamiento-con-código-23-11-2026)). De él se deduce la asignación y, de ahí, el paciente: el reloj nunca envía el id del paciente, así que no puede escribir datos de otro. Si el reloj se desvincula o se reemplaza, el token deja de servir y todo responde 401.
 - **Las alertas se identifican por el `eventId` del reloj**, no por el id interno del servidor. Si la respuesta de `POST /alertas` se pierde por falta de señal, el reloj igual puede pedir avisos y consultar el estado con el id que ya conoce. Si el servidor todavía no tiene la alerta, responde 404 `ALERTA_DESCONOCIDA` y el reloj la reenvía primero.
 - **Todo lo que se reintenta es idempotente.** Sincronizaciones, alertas, cancelaciones y solicitudes de aviso llevan un `eventId` (UUID v4) único en la base. Repetir el mensaje devuelve la misma respuesta. Además, el mismo contacto, canal y ronda no se avisa dos veces aunque llegue con otro `eventId` (por ejemplo, tras reiniciarse el reloj).
 - **Una lectura mala no traba la sincronización.** Las lecturas fuera de rango (FC fuera de 20 a 250; SpO2 fuera de 50 a 100), con hora futura o anteriores a la asignación se descartan una por una y se informan en `lecturasRechazadas`. Si se rechazara el lote completo, el reloj lo reintentaría para siempre. Las lecturas repetidas se ignoran sin error (`lecturasRepetidas`).
 - **Una alerta nunca se rechaza por su contenido.** Si la evidencia no calza con la configuración vigente, el servidor la acepta y marca la discrepancia (2.1.2). Solo responde 400 si el mensaje está mal formado (falta un campo, un tipo no existe); eso es un error de programación del reloj, y el reloj debe mostrar "No se pudo avisar".
 - **La cancelación es un mensaje aparte.** Una alerta cancelada nunca se envió como alerta; se informa después, cuando haya conexión, solo para métricas.
-- **El agravamiento aal ctualiza la alerta existente** (2.1.3): no crea otra. Solo vale para caídas leves o medias.
+- **El agravamiento actualiza la alerta existente** (2.1.3): no crea otra. Solo vale para caídas leves o medias, no canceladas; repetirlo no cambia la hora. Guarda también los segundos de inmovilidad.
+- **Discrepancias** (2.1.2): el servidor compara cada alerta con la configuración vigente (versión, módulo activo, gravedad configurada de tendencia y zona, y que las lecturas superen los umbrales). Si algo no calza, la acepta igual y guarda la discrepancia para el equipo; el reloj no recibe nada distinto.
+- **Exceso de alertas** (2.1.4): desde la 10.ª alerta de un reloj (sin contar cancelaciones) en 60 minutos, el servidor las acepta todas y crea una alerta técnica `EXCESO_ALERTAS`, leve, para revisar el reloj. Nunca responde 429 por esto.
 - **Hora del reloj desfasada:** se acepta igual. Si la diferencia con el servidor supera 120 s, la respuesta de la sincronización la informa (`desfaseRelojSegundos`) y el dashboard la muestra.
 - **Configuración por versión.** La `version` es un hash del contenido, el mismo que guarda la base (`hash_configuracion`). Cambia con cualquier dato, incluso el nombre o el horario de un contacto. La sincronización avisa si el reloj tiene una versión distinta (`configuracionNueva`); el reloj la descarga con `GET /configuracion` y `If-None-Match`, y el servidor responde 304 si ya es la vigente. Así no viaja en cada sincronización.
 - **La configuración trae todo para trabajar sin conexión:** módulos, umbrales (con los valores base si el paciente no tiene ajustes), plazo de espera, contactos, horario hábil y feriados. Los contactos van sin número ni correo: el reloj pide los avisos por `idContacto` (el vínculo `contacto_paciente`) y el servidor elige el número o el correo.
@@ -75,7 +108,7 @@ Si nadie confirma, el reloj recorre la lista dos veces y termina con `POST /aler
 | Mensaje | Tablas |
 |---|---|
 | Sincronización | `sincronizacion`, `registro_vital`, `ubicacion`, `evento_descartado` |
-| Alerta, cancelación y agravamiento | `alerta` (el estado lo calcula la vista `alerta_estado`) |
+| Alerta, cancelación y agravamiento | `alerta` (el estado lo calcula la vista `alerta_estado`) y `discrepancia_alerta` |
 | Solicitud de aviso | `registro_intento` |
 | Webhook de WhatsApp | `registro_intento` (entrega, lectura, fallo y respuesta) |
 | Fin del escalamiento | `alerta.fecha_hora_sin_respuesta` |
@@ -96,14 +129,20 @@ Si nadie confirma, el reloj recorre la lista dos veces y termina con `POST /aler
 
 1. **Simulacro:** propuesta: el servidor crea la alerta de prueba y manda el aviso FCM `SIMULACRO` con su `eventIdAlerta`; el reloj muestra "PRUEBA" y escala como siempre con ese `eventId`, y el servidor usa la plantilla "PRUEBA". ¿Le sirve, o el servidor debe avisar solo, sin pasar por el reloj?
 2. ¿El reloj puede enviar alertas `BATERIA_BAJA` y `RELOJ_NO_PUESTO`, o esas las detecta solo el servidor con la sincronización (2.2.4)?
-3. ¿Cuánto tarda en llegar un aviso FCM por LTE en la prueba de factibilidad? Define el plazo para reintentarlo.
+3. ¿Cuánto tarda en llegar un aviso FCM por LTE en la prueba de factibilidad? Define el plazo para reintentarlo. Hoy, provisional: 1, 1 y 2 minutos desde el envío anterior, y un mismo `idAviso` puede llegar más de una vez.
 4. ¿El reloj puede guardar la cola y los temporizadores de forma que sobrevivan a un reinicio (Room)?
 5. ¿Los rangos válidos de las lecturas (FC de 20 a 250 y SpO2 de 50 a 100) calzan con lo que entrega el Samsung Health Sensor SDK?
 6. ¿Le basta la `version` como hash, o prefiere además un número correlativo para mostrar en pantalla?
-7. Los parámetros de la regla de tendencia y de la matriz FC × SpO2 quedan pendientes del Anexo B (equipo clínico); por ahora la configuración solo trae `reglas.versionMatriz`.
+7. La matriz FC × SpO2 queda pendiente del Anexo B (equipo clínico); por ahora solo viaja `reglas.versionMatriz`.
+8. **Regla de tendencia (`reglas.tendencia`, 05-11-2026):** el reloj alerta cuando FC o SpO2 lleva ese tiempo fuera de su rango normal, sin llegar al límite grave; la regla de 2 lecturas consecutivas queda solo para los valores más allá del límite grave. Definido: la alerta usa la gravedad de `reglas.tendencia.severidad` (hoy `MEDIA`), sin fijarla en el código del reloj; si una lectura vuelve al rango normal, el tiempo parte de cero; con los umbrales de cada paciente, `normalMin` y `normalMax` son normales, y `graveBajo` y `graveAlto` son zona intermedia. Definido además (05-11-2026): una sola alerta mientras el valor siga en esa zona; puede volver a alertar solo después de que una lectura vuelva al rango normal (sujeto a validación del equipo clínico).
+9. **Zona segura (`zonaSegura`, 05-11-2026):** viene solo con `modulos.zonaSegura` activo (y entonces `gpsActivo` es `true`). El reloj compara su GPS con el círculo (`latitud`, `longitud`, `radioMetros`) y, si la persona sale, envía una alerta `ZONA_SEGURA` con `zonaSegura.severidad` (media por defecto; se elige por paciente). Por definir con quien desarrolla el reloj: cada cuánto revisa el GPS (afecta la batería, por eso la zona se había eliminado en la v7), cuántas posiciones fuera del círculo exige antes de alertar (el GPS puede saltar) y si vuelve a alertar después de que la persona regresa.
+10. **Botón de ayuda (`modulos.botonAyuda`, 05-11-2026):** el reloj muestra un botón para pedir ayuda. Al presionarlo envía una alerta `BOTON_AYUDA` siempre `LEVE`, con la ventana de 30 s para cancelar. Como toda leve, fuera del horario hábil espera al día hábil. Avisa primero a los contactos con `tipo` `VECINO`, por prioridad, y después al resto, por prioridad. Por definir: dónde va el botón en la pantalla y cómo evitar que se presione por error.
+11. **Inactividad como respaldo del servidor (08-11-2026):** hoy la sincronización no trae ningún dato de movimiento, así que el servidor no puede detectar una inactividad prolongada. ¿El reloj puede informar en cada lote un dato como los minutos sin movimiento? Si puede, faltaría definir el plazo con el equipo clínico.
+12. **Cuando nadie responde y confirmación de un coordinador (16-11-2026):** hoy el reloj recorre la lista dos veces (`escalamiento.rondas: 2`), informa `SIN_RESPUESTA` y se detiene, y el servidor rechaza con 400 un aviso de ronda 3 o mayor. Se quiere que el reloj vuelva a recorrer la lista mientras nadie responda: ¿sin límite hasta que la alerta se confirme o se resuelva, o con un máximo de vueltas? Además, en las alertas de salud los coordinadores del PRLAC reciben un aviso en paralelo y pueden confirmar: en ese caso `confirmadaPor.idContacto` (en la consulta de estado y en el aviso FCM `ALERTA_CONFIRMADA`) trae el id del coordinador, que no está en la lista de contactos del reloj. El reloj debe detenerse igual.
 
 ## Pendiente
 
 - Ya implementados: sincronización, alertas, cancelaciones y estado de una alerta (25-10-2026, tarea 1.4); configuración y token de Firebase (27-10-2026, tarea 1.7). Detalle en [backend.md](backend.md#api-del-reloj).
-- Por implementar: 2.1.3 (agravamiento), 2.3 (avisos FCM y acuse), 2.9 (webhook) y 2.10 (solicitud de aviso y fin del escalamiento).
+- Implementado el 05-11-2026 (tarea 2.1): agravamiento, discrepancias y exceso de alertas.
+- Por implementar: 2.9 (webhook y envío real por WhatsApp). La solicitud de aviso existe desde el 13-11-2026; mientras WhatsApp no esté configurado, esos avisos salen por correo de respaldo. Los avisos FCM y su acuse están programados con canal simulado; falta probarlos con Firebase y el reloj real.
 - Definir con TI el subdominio público (0.8); en el contrato figura uno de ejemplo.

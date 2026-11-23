@@ -3,9 +3,12 @@ package cl.ucn.alertacuida.adapters.web.reloj;
 import cl.ucn.alertacuida.adapters.seguridad.TokenJwt;
 import cl.ucn.alertacuida.adapters.web.Permisos;
 import cl.ucn.alertacuida.adapters.web.RespuestaId;
+import cl.ucn.alertacuida.adapters.web.auditoria.LecturaAuditada;
+import cl.ucn.alertacuida.application.reloj.ConsultarEstadoRelojes;
 import cl.ucn.alertacuida.application.reloj.ConsultarRelojes;
 import cl.ucn.alertacuida.application.reloj.EditarReloj;
 import cl.ucn.alertacuida.application.reloj.RegistrarReloj;
+import cl.ucn.alertacuida.application.reloj.modelo.EstadoTecnicoReloj;
 import cl.ucn.alertacuida.application.reloj.modelo.RelojConPaciente;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -32,19 +35,39 @@ public class RelojesController {
 	private final ConsultarRelojes consultar;
 	private final RegistrarReloj registrar;
 	private final EditarReloj editar;
+	private final ConsultarEstadoRelojes estados;
 
 	/** Recibe los casos de uso desde ConfiguracionCasosDeUso. */
-	public RelojesController(ConsultarRelojes consultar, RegistrarReloj registrar, EditarReloj editar) {
+	public RelojesController(ConsultarRelojes consultar, RegistrarReloj registrar, EditarReloj editar,
+			ConsultarEstadoRelojes estados) {
 		this.consultar = consultar;
 		this.registrar = registrar;
 		this.editar = editar;
+		this.estados = estados;
 	}
 
-	/** @return todos los relojes con el paciente que usa cada uno */
+	/**
+	 * Se audita porque la lista muestra quién usa cada reloj, así que también revela datos de pacientes.
+	 *
+	 * @return todos los relojes con el paciente que usa cada uno
+	 */
 	@GetMapping
 	@PreAuthorize(Permisos.USUARIOS_VER)
+	@LecturaAuditada(entidad = "SMARTWATCH")
 	public List<RelojConPaciente> listar() {
 		return consultar.listar();
+	}
+
+	/**
+	 * Semáforo y última sincronización de cada reloj, para el inventario y la ficha del usuario. No se audita:
+	 * solo trae datos técnicos e identificadores de reloj, sin datos de pacientes.
+	 *
+	 * @return el estado técnico de todos los relojes
+	 */
+	@GetMapping("/estado")
+	@PreAuthorize(Permisos.USUARIOS_VER)
+	public List<EstadoTecnicoReloj> estado() {
+		return estados.consultar();
 	}
 
 	/** @return 201 con el identificador. 409 si el identificador o la SIM ya son de otro reloj */

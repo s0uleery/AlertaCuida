@@ -3,6 +3,7 @@ package cl.ucn.alertacuida.adapters.web.contacto;
 import cl.ucn.alertacuida.adapters.seguridad.TokenJwt;
 import cl.ucn.alertacuida.adapters.web.Permisos;
 import cl.ucn.alertacuida.adapters.web.RespuestaId;
+import cl.ucn.alertacuida.adapters.web.auditoria.LecturaAuditada;
 import cl.ucn.alertacuida.application.contacto.ContactosPaciente;
 import cl.ucn.alertacuida.application.contacto.modelo.TipoContacto;
 import jakarta.servlet.http.HttpServletRequest;
@@ -64,6 +65,7 @@ public class ContactosController {
 	/** @return la lista del paciente con las horas sin cobertura. 404 si el paciente no existe */
 	@GetMapping("/pacientes/{idPaciente}/contactos")
 	@PreAuthorize(Permisos.USUARIOS_VER)
+	@LecturaAuditada(entidad = "CONTACTO_PACIENTE", idVariable = "idPaciente")
 	public RespuestaContactos listar(@PathVariable UUID idPaciente) {
 		return RespuestaContactos.de(contactos.listar(idPaciente));
 	}

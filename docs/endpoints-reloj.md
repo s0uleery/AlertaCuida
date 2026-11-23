@@ -1,12 +1,12 @@
 # Endpoints del reloj
 
-Lo que el backend **ya atiende** para el reloj (o el simulador), al 26 de octubre de 2026. Es una referencia rápida con ejemplos. El contrato completo, que incluye lo que todavía no está hecho, está en [api-reloj.md](api-reloj.md) (decisiones y flujo) y en [api-reloj.yaml](api-reloj.yaml) (OpenAPI). Los endpoints del dashboard van aparte, en [endpoints-dashboard.md](endpoints-dashboard.md).
+Lo que el backend **ya atiende** para el reloj (o el simulador), al 13 de noviembre de 2026. Es una referencia rápida con ejemplos. El contrato completo, que incluye lo que todavía no está hecho, está en [api-reloj.md](api-reloj.md) (decisiones y flujo) y en [api-reloj.yaml](api-reloj.yaml) (OpenAPI). Los endpoints del dashboard van aparte, en [endpoints-dashboard.md](endpoints-dashboard.md).
 
 ## Reglas comunes
 
 - **Base:** `/api/reloj/v1`. En desarrollo, `http://localhost:8080/api/reloj/v1`. El subdominio público está por definir con TI.
 - **Token del reloj:** cada petición lleva `Authorization: Bearer <token>`.
-  - El token se obtiene al vincular el reloj con un paciente desde el dashboard (`POST /api/pacientes/{id}/reloj`) y se muestra una sola vez.
+  - El token se obtiene con el [emparejamiento](#emparejamiento-sin-token): el reloj pide un código, lo muestra, y su token empieza a servir cuando alguien escribe el código al vincularlo en el dashboard. En desarrollo también se puede vincular sin código: el dashboard muestra el token una sola vez.
   - Con él, el servidor sabe qué reloj es y de qué paciente: el reloj **nunca** envía el id del paciente.
   - El token del dashboard no sirve aquí, ni el del reloj en el dashboard.
 - **Horas:** siempre en UTC, ISO 8601 (`2026-10-26T14:00:00Z`).
@@ -23,18 +23,48 @@ Lo que el backend **ya atiende** para el reloj (o el simulador), al 26 de octubr
 | 404 | `ALERTA_DESCONOCIDA` | El servidor no tiene esa alerta. Reenviar primero la alerta y después repetir el mensaje. |
 | 409 | `NO_APLICA` | El `eventId` ya se usó para otra cosa (por ejemplo, se envió como alerta y ahora llega como cancelación). No reintentar. |
 | 413 | `LOTE_GRANDE` | Más de 2.000 lecturas o ubicaciones. Partir el historial en varios lotes, cada uno con su `eventId`. |
+| 429 | `DEMASIADAS_PETICIONES` | Solo al pedir un código de emparejamiento: hay demasiados pendientes. Esperar `Retry-After` segundos y pedir otro. |
 | 429 / 5xx / sin red | — | Reintentar más tarde (respetar `Retry-After` si viene). |
 
 ## Resumen
 
 | Método y ruta | Cuándo | Respuesta |
 |---|---|---|
+| `POST /api/reloj/v1/emparejamientos` (sin token) | Al abrir la app sin token, o si el código venció | 201, 429 |
+| `POST /api/reloj/v1/emparejamientos/consulta` (sin token) | Cada `segundosConsulta` mientras muestra el código | 200 |
 | `POST /api/reloj/v1/sincronizaciones` | Cada 2 h, o al bajar del 15 % de batería | 200 |
 | `POST /api/reloj/v1/alertas` | Al terminar la ventana de 30 s sin cancelación | 201 nueva, 200 reenvío |
 | `POST /api/reloj/v1/cancelaciones` | Si el paciente canceló dentro de los 30 s (solo métricas) | 201 nueva, 200 reenvío |
+| `POST /api/reloj/v1/alertas/{eventId}/agravamiento` | Si una caída leve o media pasa a grave por inmovilidad | 200 |
+| `POST /api/reloj/v1/alertas/{eventId}/avisos` | Cada vez que avisa a un contacto | 200 (aceptado o rechazado) |
+| `POST /api/reloj/v1/alertas/{eventId}/sin-respuesta` | Al terminar la lista dos veces sin confirmación | 200 |
 | `GET /api/reloj/v1/alertas/{eventId}` | Antes de pasar al siguiente contacto | 200 |
 | `GET /api/reloj/v1/configuracion` | Si la sincronización responde `configuracionNueva: true` | 200, 304 si no cambió |
 | `PUT /api/reloj/v1/token-fcm` | Al instalarse y cada vez que Firebase renueva el token | 204 |
+| `POST /api/reloj/v1/avisos-fcm/{idAviso}/recepcion` | Apenas llega un aviso de una alerta | 204 |
+
+## Emparejamiento (sin token)
+
+Son las únicas rutas sin `Authorization`: el reloj todavía no tiene un token que sirva. Decisiones en [api-reloj.md](api-reloj.md#configuración-inicial-emparejamiento-con-código-23-11-2026).
+
+### `POST /api/reloj/v1/emparejamientos`
+
+Sin cuerpo. Respuesta 201:
+```json
+{ "codigo": "K7PM-42QX", "token": "…", "expiraEn": "2026-11-23T15:10:00Z", "segundosConsulta": 5 }
+```
+- Mostrar `codigo` en pantalla y guardar `token` (todavía no sirve).
+- 429 `DEMASIADAS_PETICIONES`: esperar `Retry-After` segundos y volver a pedir.
+
+### `POST /api/reloj/v1/emparejamientos/consulta`
+
+```json
+{ "token": "…" }
+```
+Respuesta 200 con `estado`:
+- `PENDIENTE`: nadie ha escrito el código todavía. Volver a preguntar en `segundosConsulta`.
+- `VINCULADO`: el token ya sirve. Registrar el token de Firebase, sincronizar y descargar la configuración.
+- `VENCIDO`: el código venció (o el token no corresponde a nada). Pedir un código nuevo.
 
 ## `POST /api/reloj/v1/sincronizaciones`
 
@@ -120,7 +150,7 @@ Respuesta 200:
 
 | Campo | Obligatorio | Valores |
 |---|---|---|
-| `tipoEvento` | sí | `CAIDA`, `FC`, `SPO2`, `FC_SPO2`, `TENDENCIA`, `INACTIVIDAD`, `BATERIA_BAJA`, `RELOJ_NO_PUESTO`. `SILENCIO_DATOS` no: ese lo detecta solo el servidor |
+| `tipoEvento` | sí | `CAIDA`, `FC`, `SPO2`, `FC_SPO2`, `TENDENCIA`, `INACTIVIDAD`, `ZONA_SEGURA`, `BOTON_AYUDA` (siempre `LEVE`), `BATERIA_BAJA`, `RELOJ_NO_PUESTO`. `SILENCIO_DATOS` no: ese lo detecta solo el servidor |
 | `severidad` | sí | `LEVE`, `MEDIA`, `GRAVE` |
 | `versionConfiguracion` | sí | la configuración con que se detectó |
 | `esperaDiaHabil` | sí | `true` si es leve, fuera del horario hábil, y el reloj no avisará a nadie |
@@ -142,6 +172,18 @@ Respuesta 201 (o 200 si es un reenvío, con el mismo cuerpo):
 ```
 **Una alerta nunca se rechaza por su contenido:** si la evidencia no calza con la configuración, el servidor igual la guarda. Solo responde 400 si el mensaje está mal formado.
 
+- **Discrepancias:** el servidor guarda, para el equipo, lo que no calza con la configuración vigente: otra versión, un módulo apagado, una gravedad distinta de la configurada (tendencia y zona segura) o lecturas que no superan los umbrales. La respuesta al reloj no cambia.
+- **Exceso de alertas:** desde la 10.ª alerta (sin contar cancelaciones) en 60 minutos, el servidor crea una alerta técnica `EXCESO_ALERTAS` para revisar el reloj. Todas las alertas se guardan igual.
+
+## `POST /api/reloj/v1/alertas/{eventId}/agravamiento`
+
+Una caída leve o media pasa a grave porque la persona sigue sin moverse.
+
+```json
+{ "fechaHoraAgravamiento": "2026-10-26T15:12:00Z", "segundosInmovilidad": 90 }
+```
+Responde 200 con el estado de la alerta (`severidadActual: "GRAVE"`). Repetirlo no cambia la hora ya registrada. 404 `ALERTA_DESCONOCIDA` si este reloj no envió esa alerta; 409 `NO_APLICA` si no es una caída, llegó grave o la canceló el paciente.
+
 ## `POST /api/reloj/v1/cancelaciones`
 
 La alerta que el paciente canceló en los 30 s nunca se envió como alerta. Se informa después, cuando haya conexión, solo para métricas.
@@ -159,6 +201,38 @@ La alerta que el paciente canceló en los 30 s nunca se envió como alerta. Se i
 ```
 La respuesta tiene el mismo formato que la de una alerta, con `estado: "CANCELADA"`. 409 `NO_APLICA` si ese `eventId` ya se había enviado como alerta.
 
+## `POST /api/reloj/v1/alertas/{eventId}/avisos`
+
+El reloj pide avisar a un contacto; el servidor elige el número o el correo y lo envía.
+
+```json
+{ "eventId": "5b1e…", "idContacto": "…", "canal": "WHATSAPP", "ronda": 1 }
+```
+- `idContacto`: el de la configuración. `canal`: `WHATSAPP` o `CORREO`. `ronda`: 1 o 2.
+
+Responde 200 en los dos casos:
+```json
+{ "resultado": "ACEPTADO", "idIntento": "…",
+  "estadoAlerta": { "eventId": "…", "estado": "AVISANDO_CONTACTO", "severidadActual": "GRAVE",
+                    "detenerEscalamiento": false, "confirmadaPor": null } }
+```
+```json
+{ "resultado": "RECHAZADO", "motivo": "SIN_OPT_IN", "estadoAlerta": { … } }
+```
+- **Un rechazo no es un error:** el reloj pasa al siguiente contacto. Motivos: `SIN_OPT_IN`, `CANAL_NO_DISPONIBLE`, `CONTACTO_INACTIVO`, `CONTACTO_DESCONOCIDO` y `ALERTA_TERMINADA` (confirmada, resuelta o cancelada; viene con `detenerEscalamiento: true`).
+- **No se envía dos veces:** repetir el `eventId`, o pedir el mismo contacto, canal y ronda con otro `eventId`, responde el mismo `idIntento`.
+- **Mientras WhatsApp no esté configurado** (hasta la 2.9), un aviso por WhatsApp se acepta igual y sale por correo como respaldo, si la persona tiene correo.
+- 404 `ALERTA_DESCONOCIDA` si este reloj no envió esa alerta; 400 `MENSAJE_INVALIDO` si falta un dato o la ronda no es 1 ni 2; 409 `NO_APLICA` si ese `eventId` ya se usó para un aviso de otra alerta.
+
+## `POST /api/reloj/v1/alertas/{eventId}/sin-respuesta`
+
+El reloj la llama al terminar la lista dos veces sin que nadie confirme. La alerta queda con prioridad máxima en el dashboard.
+
+```json
+{ "fechaHora": "2026-10-26T15:40:00Z" }
+```
+Responde 200 con el mismo formato que la consulta de estado. Repetirla responde 200 y conserva la primera hora. 404 `ALERTA_DESCONOCIDA` si este reloj no envió esa alerta, 409 `NO_APLICA` si el paciente la canceló y 400 `MENSAJE_INVALIDO` si falta `fechaHora`.
+
 ## `GET /api/reloj/v1/alertas/{eventId}`
 
 El reloj la consulta antes de avisar al siguiente contacto, para saber si alguien ya respondió.
@@ -174,6 +248,7 @@ El reloj la consulta antes de avisar al siguiente contacto, para saber si alguie
 ```
 - `estado`: `RECIBIDA`, `AVISANDO_CONTACTO`, `CONFIRMADA`, `SIN_RESPUESTA`, `RESUELTA`, `PENDIENTE_DIA_HABIL` o `CANCELADA`.
 - **Si `detenerEscalamiento` es `true`** (confirmada, resuelta o cancelada), el reloj deja de avisar.
+- `confirmadaPor.idContacto` es el contacto que confirmó. Puede ser un coordinador del PRLAC, que confirma desde el aviso a la oficina y no está en la lista del reloj (16-11-2026, pregunta 12 de [api-reloj.md](api-reloj.md)).
 - 404 `ALERTA_DESCONOCIDA` si este reloj no envió una alerta con ese `eventId`.
 
 ## `GET /api/reloj/v1/configuracion`
@@ -183,18 +258,21 @@ Todo lo que el reloj necesita para evaluar y escalar sin conexión. Con `If-None
 ```json
 {
   "version": "9f2c4e1a7b3d5e60",
-  "modulos": { "caidas": true, "fc": true, "spo2": true, "inactividad": true, "tendencia": false },
-  "gpsActivo": false,
+  "modulos": { "caidas": true, "fc": true, "spo2": true, "inactividad": true, "tendencia": false,
+               "zonaSegura": true, "botonAyuda": true },
+  "gpsActivo": true,
   "modoConservador": false,
+  "zonaSegura": { "latitud": -23.6509, "longitud": -70.3975, "radioMetros": 200, "severidad": "MEDIA" },
   "umbrales": {
     "fc": { "graveBajo": 40, "normalMin": 50, "normalMax": 110, "graveAlto": 130 },
     "spo2": { "graveBajo": 88, "normalMin": 92 }
   },
-  "reglas": { "versionMatriz": "PROVISIONAL" },
+  "reglas": { "versionMatriz": "PROVISIONAL", "tendencia": { "minutos": 120, "severidad": "MEDIA" } },
   "escalamiento": { "minutosEspera": 5, "rondas": 2 },
   "contactos": [
-    { "idContacto": "…", "nombre": "Ana Rojas", "prioridad": 1, "horario": null, "canales": ["WHATSAPP", "CORREO"] },
-    { "idContacto": "…", "nombre": "Seguridad Ciudadana", "prioridad": 2, "horario": { "inicio": "20:00", "fin": "08:00" }, "canales": ["CORREO"] }
+    { "idContacto": "…", "nombre": "Ana Rojas", "tipo": "FAMILIA", "prioridad": 1, "horario": null, "canales": ["WHATSAPP", "CORREO"] },
+    { "idContacto": "…", "nombre": "Juan Pérez", "tipo": "VECINO", "prioridad": 2, "horario": null, "canales": ["WHATSAPP"] },
+    { "idContacto": "…", "nombre": "Seguridad Ciudadana", "tipo": "SEGURIDAD_CIUDADANA", "prioridad": 3, "horario": { "inicio": "20:00", "fin": "08:00" }, "canales": ["CORREO"] }
   ],
   "calendario": {
     "zonaHoraria": "America/Santiago",
@@ -204,9 +282,12 @@ Todo lo que el reloj necesita para evaluar y escalar sin conexión. Con `If-None
 }
 ```
 - **Umbrales y espera**: los del paciente, o los valores base si no tiene ajustes.
-- **Contactos**: solo los activos con algún canal que el servidor pueda usar hoy (WhatsApp con opt-in vigente, o correo), por prioridad. Sin número ni correo: el reloj pide los avisos por `idContacto`. `horario: null` = todo el día; si `inicio` > `fin`, cruza la medianoche.
+- **Contactos**: solo los activos con algún canal que el servidor pueda usar hoy (WhatsApp con opt-in vigente, o correo), por prioridad, con su `tipo`. Sin número ni correo: el reloj pide los avisos por `idContacto`. Con el botón de ayuda, el reloj avisa primero a los `VECINO` (por prioridad) y después al resto (por prioridad).
+- **`zonaSegura`**: viene solo si `modulos.zonaSegura` es `true` (si no, `null`). El reloj revisa con su GPS si la persona sigue dentro del círculo; al salir envía una alerta `ZONA_SEGURA` con esa `severidad`.
+- **`botonAyuda`**: el botón envía una alerta `BOTON_AYUDA`, siempre `LEVE` (fuera del horario hábil espera, como toda leve). `horario: null` = todo el día; si `inicio` > `fin`, cruza la medianoche.
 - **Feriados**: del año en curso y el siguiente. Las horas van en hora de Chile.
 - **`versionMatriz`**: `PROVISIONAL` hasta recibir el Anexo B.
+- **`tendencia`**: rige para FC y SpO2 si `modulos.tendencia` es `true`. El reloj envía una alerta `TENDENCIA`, con la `severidad` indicada aquí, cuando el signo vital lleva ese tiempo fuera de su rango normal, sin llegar al límite grave. Si una lectura vuelve al rango normal, el tiempo parte de cero. Usa los `umbrales` de esta configuración, que cada paciente puede tener ajustados desde el dashboard: `normalMin` y `normalMax` son normales; `graveBajo` y `graveAlto` son zona intermedia. Más allá del límite grave rige la regla de 2 lecturas consecutivas. El tiempo es un valor único, y todo es provisional hasta que lo valide el equipo clínico ([dónde cambiar cada parte](backend.md#regla-de-tendencia-dónde-cambiar-cada-parte)).
 
 ## `PUT /api/reloj/v1/token-fcm`
 
@@ -215,14 +296,19 @@ Todo lo que el reloj necesita para evaluar y escalar sin conexión. Con `If-None
 ```
 Responde 204. El nuevo token reemplaza al anterior. 400 `MENSAJE_INVALIDO` si viene vacío o supera 4.096 caracteres.
 
-## Todavía no existen
+## `POST /api/reloj/v1/avisos-fcm/{idAviso}/recepcion`
 
-Están definidos en el contrato ([api-reloj.yaml](api-reloj.yaml)), pero el servidor aún no los atiende.
+El reloj lo llama apenas le llega un aviso de una alerta, con el `idAviso` que venía en él.
 
-| Método y ruta | Para qué | Cronograma |
-|---|---|---|
-| `POST /api/reloj/v1/alertas/{eventId}/agravamiento` | Caída leve o media que pasa a grave por inmovilidad | 2.1.3 |
-| `POST /api/reloj/v1/avisos-fcm/{idAviso}/recepcion` | Acusar que llegó un aviso FCM | 2.3 |
-| `POST /api/reloj/v1/alertas/{eventId}/avisos` | Pedir al servidor que avise a un contacto | 2.10 |
-| `POST /api/reloj/v1/alertas/{eventId}/sin-respuesta` | Informar que se recorrió la lista dos veces sin confirmación | 2.10 |
-| Avisos FCM (servidor → reloj) | Alerta confirmada o resuelta, simulacro, configuración nueva | 2.3 |
+```json
+{ "fechaHoraRecepcion": "2026-10-26T15:14:06Z" }
+```
+Responde 204. Repetirlo responde 204 y conserva la primera hora. 404 si no hay un aviso con ese id para este reloj y 400 `MENSAJE_INVALIDO` si falta la hora.
+
+## Avisos que recibe el reloj por Firebase
+
+Son de alta prioridad y solo llevan identificadores (`data`): `tipo`, y según el caso `idAviso`, `eventIdAlerta` e `idContacto`.
+
+- `ALERTA_CONFIRMADA`, `ALERTA_RESUELTA` y `SIMULACRO` se acusan. Sin acuse, el servidor reintenta a 1, 1 y 2 minutos del envío anterior, así que **un mismo `idAviso` puede llegar más de una vez**.
+- `CONFIGURACION_NUEVA` solo trae el `tipo` y no se acusa: el reloj descarga la configuración. Se envía cuando cambia la lista de contactos; es un intento único, y si no llega, el reloj se entera en su siguiente sincronización.
+

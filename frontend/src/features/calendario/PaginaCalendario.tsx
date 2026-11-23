@@ -44,9 +44,9 @@ function HorarioHabil({ calendario }: { calendario: Calendario }) {
         Una alerta leve que llega fuera de este horario o en un feriado espera al siguiente día hábil. Las alertas
         medias y graves avisan siempre, a los contactos disponibles a esa hora.
       </p>
-      <div className="overflow-x-auto rounded-lg border border-prlac">
+      <div className="overflow-x-auto rounded-lg border border-red-700">
         <table className="w-full border-collapse text-left text-sm">
-          <thead className="bg-prlac text-white">
+          <thead className="bg-red-700 text-white">
             <tr>
               <th className={`${CELDA} font-bold`}>Día</th>
               <th className={`${CELDA} font-bold`}>Desde</th>
@@ -94,9 +94,9 @@ function Feriados({ feriados }: { feriados: Feriado[] }) {
         {anios.map((anio) => (
           <div key={anio}>
             <h2 className="mb-2 text-base font-bold text-tinta">{anio}</h2>
-            <div className="overflow-x-auto rounded-lg border border-prlac">
+            <div className="overflow-x-auto rounded-lg border border-red-700">
               <table className="w-full border-collapse text-left text-sm">
-                <thead className="bg-prlac text-white">
+                <thead className="bg-red-700 text-white">
                   <tr>
                     <th className={`${CELDA} font-bold`}>Fecha</th>
                     <th className={`${CELDA} font-bold`}>Día</th>

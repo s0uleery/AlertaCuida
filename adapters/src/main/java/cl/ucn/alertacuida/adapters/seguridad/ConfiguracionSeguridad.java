@@ -30,7 +30,8 @@ import org.springframework.security.web.SecurityFilterChain;
 /**
  * Seguridad del dashboard y de la API del reloj, cada uno con su propia cadena de filtros y su
  * propio token. Sin sesión en el servidor: cada petición trae el token en la cabecera
- * Authorization: Bearer. Por eso no hace falta CSRF (no hay cookies que el navegador mande solo).
+ * Authorization: Bearer. Por eso no hace falta CSRF: la única cookie es la de renovación, que es
+ * SameSite=Strict y solo se envía a /api/auth (ver CookieRenovacion).
  * Cada permiso del token ("ALERTAS:VER") es una authority.
  *
  * <p>Autorización en dos niveles:
@@ -49,6 +50,8 @@ public class ConfiguracionSeguridad {
 	 * Reglas de la API del reloj (/api/reloj/**), aparte de las del dashboard: solo acepta el token
 	 * del reloj (rol DEVICE), que se revisa contra la base en cada petición. Va primera: las
 	 * peticiones del reloj nunca llegan a la cadena del dashboard, ni el token del dashboard sirve aquí.
+	 * La excepción es el emparejamiento: el reloj pide su código y pregunta si ya lo vincularon antes de
+	 * tener un token que sirva (EmparejamientoRelojController).
 	 *
 	 * @param http         constructor de reglas de Spring Security
 	 * @param introspector reconoce el token del reloj
@@ -63,7 +66,10 @@ public class ConfiguracionSeguridad {
 				.securityMatcher("/api/reloj/**")
 				.csrf(AbstractHttpConfigurer::disable)
 				.sessionManagement(sesion -> sesion.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-				.authorizeHttpRequests(rutas -> rutas.anyRequest().hasAuthority(PrincipalReloj.ROL))
+				.authorizeHttpRequests(rutas -> rutas
+						.requestMatchers(HttpMethod.POST, "/api/reloj/v1/emparejamientos",
+								"/api/reloj/v1/emparejamientos/consulta").permitAll()
+						.anyRequest().hasAuthority(PrincipalReloj.ROL))
 				.exceptionHandling(errores -> errores.authenticationEntryPoint(noAutorizado))
 				.oauth2ResourceServer(servidor -> servidor
 						.authenticationEntryPoint(noAutorizado)
@@ -85,8 +91,13 @@ public class ConfiguracionSeguridad {
 				.sessionManagement(sesion -> sesion.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(rutas -> rutas
 						.requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+						// Las autoriza la cookie de renovación, porque el token de acceso puede estar vencido
+						.requestMatchers(HttpMethod.POST, "/api/auth/renovar", "/api/auth/salir").permitAll()
 						// Quien activa su cuenta aún no tiene contraseña: lo autoriza el token del enlace
 						.requestMatchers(HttpMethod.POST, "/api/auth/activar").permitAll()
+						// El contacto del paciente no tiene cuenta: lo autoriza el token firmado de su correo
+						.requestMatchers(HttpMethod.POST, "/api/respuestas-contacto",
+								"/api/respuestas-contacto/consulta").permitAll()
 						.requestMatchers("/actuator/health", "/error").permitAll()
 						.anyRequest().authenticated())
 				.oauth2ResourceServer(servidor -> servidor.jwt(jwt -> jwt.jwtAuthenticationConverter(permisos())));

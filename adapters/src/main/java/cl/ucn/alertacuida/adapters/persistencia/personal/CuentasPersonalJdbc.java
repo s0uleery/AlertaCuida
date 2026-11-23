@@ -6,6 +6,7 @@ import cl.ucn.alertacuida.application.personal.error.CuentaDuplicada;
 import cl.ucn.alertacuida.application.personal.modelo.CuentaPendiente;
 import cl.ucn.alertacuida.application.personal.modelo.NuevaCuenta;
 import cl.ucn.alertacuida.application.personal.puerto.CuentasPersonal;
+import java.sql.Timestamp;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.dao.DuplicateKeyException;
@@ -24,7 +25,7 @@ public class CuentasPersonalJdbc implements CuentasPersonal {
 
 	/**
 	 * @param jdbc    cliente de Spring sobre la conexión a PostgreSQL
-	 * @param cifrado cifra el RUN antes de guardarlo
+	 * @param cifrado cifra el RUN y el teléfono antes de guardarlos
 	 */
 	public CuentasPersonalJdbc(JdbcClient jdbc, CifradoCampos cifrado) {
 		this.jdbc = jdbc;
@@ -49,6 +50,14 @@ public class CuentasPersonalJdbc implements CuentasPersonal {
 				.single();
 	}
 
+	/** Cuenta cualquier estado: una cuenta pendiente o desactivada también evita crear otro administrador. */
+	@Override
+	public boolean existeAdministrador() {
+		return jdbc.sql("SELECT EXISTS (SELECT 1 FROM usuario WHERE codigo_rol = 'ADMINISTRADOR')")
+				.query(Boolean.class)
+				.single();
+	}
+
 	@Override
 	public boolean rolActivo(String codigoRol) {
 		return jdbc.sql("SELECT EXISTS (SELECT 1 FROM rol WHERE codigo = :rol AND activo)")
@@ -67,8 +76,9 @@ public class CuentasPersonalJdbc implements CuentasPersonal {
 	public UUID crear(NuevaCuenta cuenta) {
 		try {
 			return jdbc.sql("""
-					INSERT INTO usuario (codigo_rol, rut, rut_hash, nombre_profesional, cargo, correo)
-					VALUES (:rol, :rut, :rutHash, :nombre, :cargo, :correo)
+					INSERT INTO usuario (codigo_rol, rut, rut_hash, nombre_profesional, cargo, correo, telefono,
+						fecha_opt_in, recibe_avisos)
+					VALUES (:rol, :rut, :rutHash, :nombre, :cargo, :correo, :telefono, :optIn, :recibeAvisos)
 					RETURNING id_usuario""")
 					.param("rol", cuenta.codigoRol())
 					.param("rut", cifrado.cifrar(cuenta.run(), ColumnaCifrada.USUARIO_RUT))
@@ -76,6 +86,9 @@ public class CuentasPersonalJdbc implements CuentasPersonal {
 					.param("nombre", cuenta.nombre())
 					.param("cargo", cuenta.cargo())
 					.param("correo", cuenta.correo())
+					.param("telefono", cifrado.cifrar(cuenta.telefono(), ColumnaCifrada.USUARIO_TELEFONO))
+					.param("optIn", cuenta.fechaOptIn() == null ? null : Timestamp.from(cuenta.fechaOptIn()))
+					.param("recibeAvisos", cuenta.recibeAvisos())
 					.query(UUID.class)
 					.single();
 		} catch (DuplicateKeyException duplicada) {
@@ -85,10 +98,12 @@ public class CuentasPersonalJdbc implements CuentasPersonal {
 
 	@Override
 	public Optional<CuentaPendiente> buscarPendiente(UUID id) {
-		return jdbc.sql("SELECT id_usuario, rut_hash FROM usuario WHERE id_usuario = :id AND hash_contrasena IS NULL")
+		return jdbc.sql("""
+				SELECT id_usuario, rut_hash, nombre_profesional, correo FROM usuario
+				WHERE id_usuario = :id AND hash_contrasena IS NULL""")
 				.param("id", id)
 				.query((fila, n) -> new CuentaPendiente(fila.getObject("id_usuario", UUID.class),
-						fila.getString("rut_hash")))
+						fila.getString("rut_hash"), fila.getString("nombre_profesional"), fila.getString("correo")))
 				.optional();
 	}
 

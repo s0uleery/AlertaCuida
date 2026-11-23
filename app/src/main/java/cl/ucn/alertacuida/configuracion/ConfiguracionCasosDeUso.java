@@ -1,22 +1,42 @@
 package cl.ucn.alertacuida.configuracion;
 
 import cl.ucn.alertacuida.adapters.seguridad.PropiedadesSeguridad;
+import cl.ucn.alertacuida.application.auditoria.ConsultarAuditoria;
+import cl.ucn.alertacuida.application.auditoria.RegistrarLectura;
+import cl.ucn.alertacuida.application.auditoria.puerto.ConsultaAuditoria;
 import cl.ucn.alertacuida.application.auditoria.puerto.RegistroAuditoria;
+import cl.ucn.alertacuida.application.aviso.PlantillasCorreo;
+import cl.ucn.alertacuida.application.aviso.puerto.CanalNotificacion;
 import cl.ucn.alertacuida.application.comun.puerto.HashRun;
 import cl.ucn.alertacuida.application.comun.puerto.SecretosUnSoloUso;
 import cl.ucn.alertacuida.application.comun.puerto.Transacciones;
 import cl.ucn.alertacuida.application.personal.ActivarCuenta;
+import cl.ucn.alertacuida.application.personal.CambiarRecibeAvisos;
+import cl.ucn.alertacuida.application.personal.CambiarRolPersonal;
+import cl.ucn.alertacuida.application.personal.CambiarTelefonoPersonal;
+import cl.ucn.alertacuida.application.personal.ConsultarEquipo;
+import cl.ucn.alertacuida.application.personal.CrearAdministradorInicial;
 import cl.ucn.alertacuida.application.personal.CrearCuentaPersonal;
 import cl.ucn.alertacuida.application.personal.EmisorEnlacesActivacion;
+import cl.ucn.alertacuida.application.personal.EnviarEnlaceActivacion;
+import cl.ucn.alertacuida.application.personal.GuardarPermisosRol;
 import cl.ucn.alertacuida.application.personal.NuevoEnlaceActivacion;
 import cl.ucn.alertacuida.application.personal.puerto.CuentasPersonal;
+import cl.ucn.alertacuida.application.personal.puerto.EquipoPersonal;
 import cl.ucn.alertacuida.application.personal.puerto.HashContrasena;
+import cl.ucn.alertacuida.application.personal.puerto.RolesPermisos;
 import cl.ucn.alertacuida.application.personal.puerto.TokensActivacion;
+import cl.ucn.alertacuida.application.sesion.AperturaSesion;
+import cl.ucn.alertacuida.application.sesion.CerrarSesion;
 import cl.ucn.alertacuida.application.sesion.IniciarSesion;
+import cl.ucn.alertacuida.application.sesion.LimpiarTokensVencidos;
 import cl.ucn.alertacuida.application.sesion.PoliticaBloqueo;
+import cl.ucn.alertacuida.application.sesion.PoliticaSesion;
+import cl.ucn.alertacuida.application.sesion.RenovarSesion;
 import cl.ucn.alertacuida.application.sesion.puerto.CuentaUsuarioRepository;
 import cl.ucn.alertacuida.application.sesion.puerto.EmisorToken;
 import cl.ucn.alertacuida.application.sesion.puerto.RegistroAccesos;
+import cl.ucn.alertacuida.application.sesion.puerto.TokensSesion;
 import cl.ucn.alertacuida.application.sesion.puerto.VerificadorContrasena;
 import java.time.Clock;
 import org.springframework.context.annotation.Bean;
@@ -38,13 +58,60 @@ public class ConfiguracionCasosDeUso {
 		return Clock.systemUTC();
 	}
 
+	/** Registro de las lecturas de datos de pacientes. */
+	@Bean
+	RegistrarLectura registrarLectura(RegistroAuditoria auditoria, Clock reloj) {
+		return new RegistrarLectura(auditoria, reloj);
+	}
+
+	/** Consulta del registro de auditoría. */
+	@Bean
+	ConsultarAuditoria consultarAuditoria(ConsultaAuditoria consulta) {
+		return new ConsultarAuditoria(consulta);
+	}
+
+	/** Cuánto puede durar una sesión del dashboard. */
+	@Bean
+	PoliticaSesion politicaSesion(PropiedadesSeguridad propiedades) {
+		PropiedadesSeguridad.Sesion sesion = propiedades.sesion();
+		return new PoliticaSesion(sesion.duracionMaxima(), sesion.inactividad(), sesion.graciaRotacion());
+	}
+
+	/** Entrega de tokens, compartida por el inicio de sesión y la renovación. */
+	@Bean
+	AperturaSesion aperturaSesion(CuentaUsuarioRepository cuentas, TokensSesion tokens, SecretosUnSoloUso secretos,
+			EmisorToken emisor, PoliticaSesion politica) {
+		return new AperturaSesion(cuentas, tokens, secretos, emisor, politica);
+	}
+
 	/** Inicio de sesión con RUN y contraseña. */
 	@Bean
 	IniciarSesion iniciarSesion(CuentaUsuarioRepository cuentas, RegistroAccesos accesos, HashRun hashRun,
-			VerificadorContrasena verificador, EmisorToken emisor, PropiedadesSeguridad propiedades, Clock reloj) {
+			VerificadorContrasena verificador, AperturaSesion apertura, PropiedadesSeguridad propiedades,
+			Clock reloj) {
 		PropiedadesSeguridad.Bloqueo bloqueo = propiedades.bloqueo();
-		return new IniciarSesion(cuentas, accesos, hashRun, verificador, emisor,
+		return new IniciarSesion(cuentas, accesos, hashRun, verificador, apertura,
 				new PoliticaBloqueo(bloqueo.intentos(), bloqueo.ventana()), reloj);
+	}
+
+	/** Renovación de la sesión con el token de la cookie. */
+	@Bean
+	RenovarSesion renovarSesion(TokensSesion tokens, CuentaUsuarioRepository cuentas, SecretosUnSoloUso secretos,
+			AperturaSesion apertura, PoliticaSesion politica, RegistroAuditoria auditoria, Transacciones transacciones,
+			Clock reloj) {
+		return new RenovarSesion(tokens, cuentas, secretos, apertura, politica, auditoria, transacciones, reloj);
+	}
+
+	/** Limpieza de los tokens de renovación vencidos. */
+	@Bean
+	LimpiarTokensVencidos limpiarTokensVencidos(TokensSesion tokens, Clock reloj) {
+		return new LimpiarTokensVencidos(tokens, reloj);
+	}
+
+	/** Cierre de la sesión de un navegador. */
+	@Bean
+	CerrarSesion cerrarSesion(TokensSesion tokens, SecretosUnSoloUso secretos) {
+		return new CerrarSesion(tokens, secretos);
 	}
 
 	/** Emisor de enlaces de activación, compartido por el alta y por el enlace nuevo. */
@@ -61,11 +128,57 @@ public class ConfiguracionCasosDeUso {
 		return new CrearCuentaPersonal(cuentas, hashRun, enlaces, auditoria, transacciones, reloj);
 	}
 
+	/** Primer administrador de un servidor sin datos de ejemplo; lo usa AdministradorInicialAlArrancar. */
+	@Bean
+	CrearAdministradorInicial crearAdministradorInicial(CuentasPersonal cuentas, CrearCuentaPersonal crear) {
+		return new CrearAdministradorInicial(cuentas, crear);
+	}
+
 	/** Reemplazo de un enlace de activación perdido o vencido. */
 	@Bean
 	NuevoEnlaceActivacion nuevoEnlaceActivacion(CuentasPersonal cuentas, EmisorEnlacesActivacion enlaces,
 			RegistroAuditoria auditoria, Transacciones transacciones, Clock reloj) {
 		return new NuevoEnlaceActivacion(cuentas, enlaces, auditoria, transacciones, reloj);
+	}
+
+	/** Envío por correo del enlace de activación, con la plantilla "activacion" de correos.yml. */
+	@Bean
+	EnviarEnlaceActivacion enviarEnlaceActivacion(CuentasPersonal cuentas, PlantillasCorreo plantillas,
+			CanalNotificacion canalCorreo, PropiedadesSeguridad propiedades) {
+		return new EnviarEnlaceActivacion(cuentas, plantillas, canalCorreo, propiedades.activacion().url());
+	}
+
+	/** Lista de las cuentas del equipo y de los roles con sus permisos. */
+	@Bean
+	ConsultarEquipo consultarEquipo(EquipoPersonal equipo, RolesPermisos roles) {
+		return new ConsultarEquipo(equipo, roles);
+	}
+
+	/** Cambio del rol de una cuenta del equipo. */
+	@Bean
+	CambiarRolPersonal cambiarRolPersonal(EquipoPersonal equipo, RolesPermisos roles, RegistroAuditoria auditoria,
+			Transacciones transacciones, Clock reloj) {
+		return new CambiarRolPersonal(equipo, roles, auditoria, transacciones, reloj);
+	}
+
+	/** Aviso por correo de las alertas técnicas de una cuenta. */
+	@Bean
+	CambiarRecibeAvisos cambiarRecibeAvisos(EquipoPersonal equipo, RegistroAuditoria auditoria, Clock reloj) {
+		return new CambiarRecibeAvisos(equipo, auditoria, reloj);
+	}
+
+	/** Celular con WhatsApp y opt-in de una cuenta ya creada. */
+	@Bean
+	CambiarTelefonoPersonal cambiarTelefonoPersonal(EquipoPersonal equipo, RegistroAuditoria auditoria,
+			Transacciones transacciones, Clock reloj) {
+		return new CambiarTelefonoPersonal(equipo, auditoria, transacciones, reloj);
+	}
+
+	/** Permisos de los roles. */
+	@Bean
+	GuardarPermisosRol guardarPermisosRol(RolesPermisos roles, RegistroAuditoria auditoria,
+			Transacciones transacciones, Clock reloj) {
+		return new GuardarPermisosRol(roles, auditoria, transacciones, reloj);
 	}
 
 	/** Activación de la cuenta con el enlace. */
