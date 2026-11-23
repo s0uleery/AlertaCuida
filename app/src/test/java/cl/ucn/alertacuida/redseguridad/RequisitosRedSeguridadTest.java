@@ -13,6 +13,7 @@ import cl.ucn.alertacuida.adapters.seguridad.cifrado.ColumnaCifrada;
 import cl.ucn.alertacuida.application.comun.puerto.HashRun;
 import cl.ucn.alertacuida.domain.comun.Run;
 import cl.ucn.alertacuida.domain.comun.ZonaHoraria;
+import cl.ucn.alertacuida.soporte.BaseDePrueba;
 import cl.ucn.alertacuida.soporte.PostgresDePrueba;
 import com.jayway.jsonpath.JsonPath;
 import java.sql.Timestamp;
@@ -81,10 +82,7 @@ class RequisitosRedSeguridadTest {
 	/** Base vacía; una paciente con su reloj desde hace un mes y una coordinadora con sesión. */
 	@BeforeEach
 	void preparar() throws Exception {
-		for (String tabla : new String[] {"asignacion_reloj", "smartwatch", "paciente", "registro_auditoria",
-				"usuario"}) {
-			jdbc.sql("DELETE FROM " + tabla).update();
-		}
+		BaseDePrueba.vaciar(jdbc);
 		paciente = paciente("María", "Soto Rojas");
 		asignacion = reloj(paciente, "R-RED-1");
 		usuario(RUN_COORDINADORA, "COORDINADOR", "Camila");

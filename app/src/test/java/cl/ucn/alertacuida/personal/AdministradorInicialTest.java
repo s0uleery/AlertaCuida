@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import cl.ucn.alertacuida.application.personal.CrearAdministradorInicial;
 import cl.ucn.alertacuida.configuracion.AdministradorInicialAlArrancar;
 import cl.ucn.alertacuida.configuracion.PropiedadesAdministradorInicial;
+import cl.ucn.alertacuida.soporte.BaseDePrueba;
 import cl.ucn.alertacuida.soporte.PostgresDePrueba;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,8 +36,7 @@ class AdministradorInicialTest {
 	/** Un servidor recién instalado: sin cuentas ni auditoría. */
 	@BeforeEach
 	void servidorVacio() {
-		jdbc.sql("DELETE FROM registro_auditoria").update();
-		jdbc.sql("DELETE FROM usuario").update();
+		BaseDePrueba.vaciar(jdbc);
 	}
 
 	/** Con el RUN configurado se crea un administrador pendiente, con el RUN cifrado y el enlace al dashboard. */

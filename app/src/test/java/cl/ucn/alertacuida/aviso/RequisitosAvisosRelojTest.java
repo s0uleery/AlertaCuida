@@ -22,6 +22,7 @@ import cl.ucn.alertacuida.application.avisoreloj.puerto.CanalAvisoReloj;
 import cl.ucn.alertacuida.application.comun.puerto.HashRun;
 import cl.ucn.alertacuida.application.comun.puerto.SecretosUnSoloUso;
 import cl.ucn.alertacuida.domain.comun.Run;
+import cl.ucn.alertacuida.soporte.BaseDePrueba;
 import cl.ucn.alertacuida.soporte.PostgresDePrueba;
 import com.jayway.jsonpath.JsonPath;
 import java.sql.Timestamp;
@@ -156,10 +157,7 @@ class RequisitosAvisosRelojTest {
 	/** Base vacía; una paciente con su reloj (con token de Firebase) y una alerta; otro reloj ajeno. */
 	@BeforeEach
 	void preparar() throws Exception {
-		for (String tabla : new String[] {"asignacion_reloj", "smartwatch", "paciente", "contacto",
-				"registro_auditoria", "usuario"}) {
-			jdbc.sql("DELETE FROM " + tabla).update();
-		}
+		BaseDePrueba.vaciar(jdbc);
 		canal.limpiar();
 		ahora = Instant.now().truncatedTo(ChronoUnit.SECONDS);
 		paciente = paciente("12345678-5", "hash-avisos-1");

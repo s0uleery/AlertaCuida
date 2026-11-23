@@ -16,6 +16,7 @@ import cl.ucn.alertacuida.application.comun.puerto.HashRun;
 import cl.ucn.alertacuida.application.comun.puerto.SecretosUnSoloUso;
 import cl.ucn.alertacuida.domain.comun.Run;
 import cl.ucn.alertacuida.domain.comun.ZonaHoraria;
+import cl.ucn.alertacuida.soporte.BaseDePrueba;
 import cl.ucn.alertacuida.soporte.PostgresDePrueba;
 import com.jayway.jsonpath.JsonPath;
 import java.sql.Timestamp;
@@ -124,10 +125,7 @@ class RequisitosAtencionAlertasTest {
 	 */
 	@BeforeEach
 	void preparar() throws Exception {
-		for (String tabla : new String[] {"asignacion_reloj", "smartwatch", "paciente", "contacto",
-				"registro_auditoria", "usuario"}) {
-			jdbc.sql("DELETE FROM " + tabla).update();
-		}
+		BaseDePrueba.vaciar(jdbc);
 		jdbc.sql("DELETE FROM rol WHERE codigo IN ('SOLO_VER', 'SIN_ALERTAS')").update();
 		ahora = Instant.now().truncatedTo(ChronoUnit.SECONDS);
 		paciente = paciente("12345678-5", "hash-atencion-1", "María", "Soto Rojas", LocalDate.of(1940, 3, 15));

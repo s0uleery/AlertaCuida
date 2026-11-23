@@ -11,6 +11,7 @@ import cl.ucn.alertacuida.adapters.seguridad.cifrado.CifradoCampos;
 import cl.ucn.alertacuida.adapters.seguridad.cifrado.ColumnaCifrada;
 import cl.ucn.alertacuida.application.comun.puerto.HashRun;
 import cl.ucn.alertacuida.domain.comun.Run;
+import cl.ucn.alertacuida.soporte.BaseDePrueba;
 import cl.ucn.alertacuida.soporte.PostgresDePrueba;
 import com.jayway.jsonpath.JsonPath;
 import java.sql.Timestamp;
@@ -68,10 +69,7 @@ class RequisitosPanelTest {
 	/** Base vacía y una persona de rol PERSONAL con sesión (solo tiene permisos de alertas). */
 	@BeforeEach
 	void preparar() throws Exception {
-		for (String tabla : new String[] {"asignacion_reloj", "smartwatch", "paciente", "registro_auditoria",
-				"usuario"}) {
-			jdbc.sql("DELETE FROM " + tabla).update();
-		}
+		BaseDePrueba.vaciar(jdbc);
 		jdbc.sql("""
 				INSERT INTO usuario (codigo_rol, rut, rut_hash, nombre_profesional, correo, hash_contrasena, activo)
 				VALUES ('PERSONAL', 'cifrado', :hash, 'Diego', 'diego@muni.cl', :clave, true)""")
