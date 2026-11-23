@@ -274,7 +274,7 @@ class AltaYActivacionTest {
 		public Optional<CuentaPendiente> buscarPendiente(UUID id) {
 			return Optional.ofNullable(guardadas.get(id))
 					.filter(g -> g.hashContrasena() == null)
-					.map(g -> new CuentaPendiente(id, g.cuenta().runHash()));
+					.map(g -> new CuentaPendiente(id, g.cuenta().runHash(), g.cuenta().nombre(), g.cuenta().correo()));
 		}
 
 		@Override

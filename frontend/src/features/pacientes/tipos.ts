@@ -74,10 +74,13 @@ export interface ConfiguracionAplicada {
   ultimaSincronizacion: string | null;
 }
 
-/** Llave del reloj: se muestra una sola vez para ingresarla en la app del reloj. */
+/**
+ * Resultado de vincular un reloj. Con código de emparejamiento el reloj ya tiene su token y `token` es null;
+ * sin código (desarrollo) trae la llave, que se muestra una sola vez para cargarla a mano en el reloj.
+ */
 export interface TokenReloj {
   idAsignacion: string;
-  token: string;
+  token: string | null;
 }
 
 /** Enfermedad (EPOC, hipertensión…) o situación (movilidad reducida, vive sola…). */

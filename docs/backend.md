@@ -135,8 +135,8 @@ Endpoints:
 
 | Endpoint | Permiso | Qué hace |
 |---|---|---|
-| `POST /api/personal` | `ADMINISTRACION:CREAR` | Crea la cuenta y devuelve el enlace de activación (201). |
-| `POST /api/personal/{id}/enlace-activacion` | `ADMINISTRACION:CREAR` | Emite otro enlace si el anterior se perdió o venció; el anterior deja de servir. |
+| `POST /api/personal` | `ADMINISTRACION:CREAR` | Crea la cuenta y le envía el enlace de activación por correo (201); el enlace solo viene en la respuesta si el correo no salió. |
+| `POST /api/personal/{id}/enlace-activacion` | `ADMINISTRACION:CREAR` | Emite otro enlace si el anterior se perdió o venció, y lo envía por correo; el anterior deja de servir. |
 | `POST /api/auth/activar` | Público | Recibe `{token, contrasena}`, guarda la contraseña y activa la cuenta (204). |
 | `GET /api/personal` | `ADMINISTRACION:VER` | Lista las cuentas por nombre, con estado, último acceso, `recibeAvisos` y `tieneTelefono`. Sin el RUN ni el teléfono. |
 | `PUT /api/personal/{id}/rol` | `ADMINISTRACION:EDITAR` | Cambia el rol de otra cuenta (204). Ver "Equipo y permisos". |
@@ -156,7 +156,10 @@ Recorrido:
    - lo registra en la auditoría.
 
    Todo en una transacción.
-2. El enlace es `http://…/activar#<token>` y vence en 48 h. Mientras no exista el correo, el administrador lo copia y se lo pasa a la persona.
+2. El enlace es `http://…/activar#<token>` y vence en 48 h. Después de guardar la cuenta, `EnviarEnlaceActivacion` se lo envía a la persona por correo con la plantilla `activacion` de `correos.yml` (su nombre, el enlace y cuándo vence, en hora de Chile):
+   - si el correo sale, la respuesta **no trae el enlace**: solo la persona lo conoce;
+   - si falla, o el canal es el simulado de desarrollo (`CanalNotificacion.entregaDeVerdad()` es false), la respuesta trae el enlace para que el administrador se lo pase por otra vía. La cuenta queda creada igual;
+   - el envío no se reintenta solo: "Enviar otro enlace" emite uno nuevo y lo vuelve a enviar (el anterior deja de servir).
 3. La persona abre el enlace y elige su contraseña. `ActivarCuenta`:
    - revisa que el token exista, no esté usado ni vencido;
    - valida la contraseña con `PoliticaContrasena`;
@@ -212,10 +215,11 @@ En el dashboard, a los pacientes se les llama "usuarios" (término del PRLAC); e
 | `GET /api/pacientes/{id}/condiciones` | `VER` | Enfermedades y luego situaciones, por orden alfabético. |
 | `POST /api/pacientes/{id}/condiciones` | `EDITAR` | Agrega una enfermedad o situación (texto libre); 409 si ya la tiene. |
 | `DELETE /api/pacientes/{id}/condiciones/{idCondicion}` | `EDITAR` | Quita una condición; 404 si es de otro paciente. |
-| `POST /api/pacientes/{id}/reloj` | `EDITAR` | Vincula un reloj; devuelve su token (201). |
-| `POST /api/pacientes/{id}/reloj/reemplazo` | `EDITAR` | Cambia el reloj por otro; el anterior puede quedar "en reparación". |
+| `POST /api/pacientes/{id}/reloj` | `EDITAR` | Vincula un reloj con el código que muestra (201, sin token); sin código devuelve un token nuevo. |
+| `POST /api/pacientes/{id}/reloj/reemplazo` | `EDITAR` | Cambia el reloj por otro; el anterior puede quedar "en reparación". Mismo código opcional. |
+| `POST /api/pacientes/{id}/reloj/emparejamiento` | `EDITAR` | Empareja de nuevo el mismo reloj con su código; el token anterior deja de servir. |
 | `DELETE /api/pacientes/{id}/reloj` | `EDITAR` | Retira el reloj; su token deja de servir. |
-| `POST /api/pacientes/{id}/reloj/token` | `EDITAR` | Otro token para el mismo reloj. |
+| `POST /api/pacientes/{id}/reloj/token` | `EDITAR` | Otro token para el mismo reloj (desarrollo). |
 | `GET /api/relojes` | `VER` | Inventario con el paciente que usa cada reloj. |
 | `POST /api/relojes` / `PUT /api/relojes/{id}` | `CREAR` / `EDITAR` | Registro y edición (modelo, SIM, plan, estado). |
 | `GET /api/relojes/estado` | `VER` | Semáforo y última sincronización de cada reloj (ver abajo). |
@@ -232,7 +236,8 @@ Reglas, en `VinculoReloj`, `EditarPaciente`, `EditarReloj` y `CondicionesPacient
 Decisiones:
 
 - **El historial nunca se pierde**: los vínculos se cierran con fecha de fin, no se borran. Así se sabe qué reloj mandó cada dato.
-- **Token del reloj (rol DEVICE)**: 256 bits aleatorios, se muestran una sola vez y en la base va su SHA-256, igual que el enlace de activación. Cerrar el vínculo lo revoca. El reloj lo usará cuando exista su API.
+- **Token del reloj (rol DEVICE)**: 256 bits aleatorios y en la base va su SHA-256, igual que el enlace de activación. Cerrar el vínculo lo revoca.
+- **Emparejamiento con código (23-11-2026)**: el reloj pide un código sin token (`EmparejarReloj`, `POST /api/reloj/v1/emparejamientos`) y recibe ahí mismo su token, que todavía no sirve. Quien instala escribe el código al vincular (`VinculoReloj`): el caso de uso borra el código (`DELETE ... RETURNING`, dentro de la transacción del vínculo, así un vínculo fallido no lo gasta) y guarda el hash del token en `asignacion_reloj`. El reloj pregunta con `.../consulta` hasta recibir `VINCULADO`. Códigos de 8 caracteres de un alfabeto de 31 (`CodigosCortosAleatorios`), 10 minutos de vigencia y un máximo de 50 pendientes, que protege la ruta pública (429); en `alertacuida.emparejamiento.*`. Los vencidos se borran cada vez que se pide uno nuevo. Sin código, vincular sigue entregando el token una sola vez (desarrollo y simulador).
 - **La edad no se guarda**: se calcula con la fecha de hoy en Chile (`ZonaHoraria`).
 - **Datos personales cifrados** (ver [Cifrado](#cifrado-de-datos-personales)): RUN, nombres, apellidos, fecha de nacimiento, dirección y la descripción de las condiciones. Por eso la lista se ordena en Java y la búsqueda se hace en el dashboard: la base no puede ordenar ni buscar datos cifrados. Por lo mismo, las condiciones repetidas se detectan en el caso de uso y no con un `UNIQUE`.
 - **Enfermedades y situaciones en texto libre**: el dashboard sugiere las comunes, pero se puede escribir cualquiera.

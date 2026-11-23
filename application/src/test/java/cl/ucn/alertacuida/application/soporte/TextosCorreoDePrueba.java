@@ -32,7 +32,9 @@ public final class TextosCorreoDePrueba {
 						"Hay una {alerta}{deQuien}.\n\nConfirmar: {responder}\n\nVer: {dashboard}\n\n{pie}\n"),
 				Map.of(Severidad.LEVE, "leve", Severidad.MEDIA, "media", Severidad.GRAVE, "grave"),
 				Map.of(TipoEvento.BATERIA_BAJA, "batería baja", TipoEvento.RELOJ_NO_PUESTO, "reloj no puesto",
-						TipoEvento.EXCESO_ALERTAS, "exceso de alertas"));
+						TipoEvento.EXCESO_ALERTAS, "exceso de alertas"),
+				new TextosCorreo.Activacion("Active su cuenta, {nombre}",
+						"Hola, {nombre}.\n\nActivar: {enlace}\n\nVence el {vence}.\n\n{pie}\n"));
 	}
 
 }

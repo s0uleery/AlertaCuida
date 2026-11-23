@@ -1,5 +1,6 @@
 package cl.ucn.alertacuida.adapters.web.dispositivo;
 
+import cl.ucn.alertacuida.application.asignacion.error.DemasiadosEmparejamientos;
 import cl.ucn.alertacuida.application.comun.error.Conflicto;
 import cl.ucn.alertacuida.application.comun.error.NoEncontrado;
 import cl.ucn.alertacuida.application.comun.error.SolicitudRechazada;
@@ -50,6 +51,14 @@ public class ErroresApiReloj extends ResponseEntityExceptionHandler {
 	@ExceptionHandler(LoteGrande.class)
 	ProblemDetail loteGrande(LoteGrande error) {
 		return problema(HttpStatus.CONTENT_TOO_LARGE, error.getMessage(), "LOTE_GRANDE");
+	}
+
+	/** @return 429 DEMASIADAS_PETICIONES con Retry-After: el reloj debe esperar y pedir otro código */
+	@ExceptionHandler(DemasiadosEmparejamientos.class)
+	ResponseEntity<ProblemDetail> demasiadosEmparejamientos(DemasiadosEmparejamientos error) {
+		return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+				.header(HttpHeaders.RETRY_AFTER, "60")
+				.body(problema(HttpStatus.TOO_MANY_REQUESTS, error.getMessage(), "DEMASIADAS_PETICIONES"));
 	}
 
 	/** Agrega el código a los errores que arma Spring (cuerpo ilegible, validación, método no permitido…). */

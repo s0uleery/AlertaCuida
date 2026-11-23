@@ -12,7 +12,7 @@ export function TokenRelojMostrado({ token, alCerrar }: { token: TokenReloj; alC
   /** Copia el token al portapapeles. */
   async function copiar() {
     try {
-      await navigator.clipboard.writeText(token.token);
+      await navigator.clipboard.writeText(token.token ?? '');
       setCopiado(true);
     } catch {
       // Sin permiso para el portapapeles: queda el campo para copiar a mano
@@ -28,7 +28,7 @@ export function TokenRelojMostrado({ token, alCerrar }: { token: TokenReloj; alC
       </p>
       <input
         readOnly
-        value={token.token}
+        value={token.token ?? ''}
         onFocus={(e) => e.target.select()}
         aria-label="Token del reloj"
         className={`${CLASE_CAMPO} bg-white font-mono text-sm`}

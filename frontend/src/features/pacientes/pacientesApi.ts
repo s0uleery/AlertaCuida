@@ -109,15 +109,33 @@ export const pacientesApi = {
   reordenarContactos: (id: string, orden: string[]) =>
     pedir<void>(`/pacientes/${id}/contactos/orden`, { method: 'PUT', body: JSON.stringify({ orden }) }),
 
-  /** Entrega un reloj a un paciente que no tiene. */
-  vincular: (id: string, idDispositivo: string) =>
-    pedir<TokenReloj>(`/pacientes/${id}/reloj`, { method: 'POST', body: JSON.stringify({ idDispositivo }) }),
+  /**
+   * Entrega un reloj a un paciente que no tiene. Con el código que muestra el reloj no se entrega token;
+   * sin código (null) la respuesta trae uno para cargarlo a mano.
+   */
+  vincular: (id: string, idDispositivo: string, codigoEmparejamiento: string | null) =>
+    pedir<TokenReloj>(`/pacientes/${id}/reloj`, {
+      method: 'POST',
+      body: JSON.stringify({ idDispositivo, codigoEmparejamiento }),
+    }),
 
   /** Cambia su reloj por otro; el anterior puede quedar en otro estado (ej. EN_REPARACION). */
-  reemplazar: (id: string, idDispositivo: string, estadoRelojAnterior: EstadoReloj | null) =>
+  reemplazar: (
+    id: string,
+    idDispositivo: string,
+    estadoRelojAnterior: EstadoReloj | null,
+    codigoEmparejamiento: string | null,
+  ) =>
     pedir<TokenReloj>(`/pacientes/${id}/reloj/reemplazo`, {
       method: 'POST',
-      body: JSON.stringify({ idDispositivo, estadoRelojAnterior }),
+      body: JSON.stringify({ idDispositivo, estadoRelojAnterior, codigoEmparejamiento }),
+    }),
+
+  /** Empareja de nuevo el mismo reloj (ej. tras restaurarlo) con el código que muestra. */
+  emparejar: (id: string, codigoEmparejamiento: string) =>
+    pedir<TokenReloj>(`/pacientes/${id}/reloj/emparejamiento`, {
+      method: 'POST',
+      body: JSON.stringify({ codigoEmparejamiento }),
     }),
 
   /** Le retira el reloj; su token deja de servir. */

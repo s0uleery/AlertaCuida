@@ -146,14 +146,20 @@ La persona llega desde el enlace de activación (`/activar?token=…`) y elige s
 { "run": "12.345.678-5", "nombre": "Camila Vera", "cargo": "Enfermera", "correo": "camila@ejemplo.cl", "rol": "COORDINADOR",
   "telefono": "+56 9 1234 5678", "aceptaWhatsapp": true, "recibeAvisos": false }
 ```
-`rol`: `ADMINISTRADOR`, `COORDINADOR` o `PERSONAL`; 400 si no existe o está desactivado. `telefono` (celular con WhatsApp) es obligatorio para `COORDINADOR`, porque recibe los avisos de la oficina PRLAC; se guarda normalizado y cifrado. `aceptaWhatsapp: true` registra el opt-in con la fecha de hoy y exige el teléfono. `recibeAvisos` (correo de las alertas técnicas) es opcional y vale `false` si no viene. Respuesta 201:
+`rol`: `ADMINISTRADOR`, `COORDINADOR` o `PERSONAL`; 400 si no existe o está desactivado. `telefono` (celular con WhatsApp) es obligatorio para `COORDINADOR`, porque recibe los avisos de la oficina PRLAC; se guarda normalizado y cifrado. `aceptaWhatsapp: true` registra el opt-in con la fecha de hoy y exige el teléfono. `recibeAvisos` (correo de las alertas técnicas) es opcional y vale `false` si no viene.
+
+El backend le envía a la persona el correo de activación con su enlace (plantilla `activacion` de `correos.yml`). Respuesta 201:
 ```json
-{ "idUsuario": "…", "enlaceActivacion": "http://localhost:5173/activar?token=…", "expiraEn": "2026-10-28T14:00:00Z" }
+{ "idUsuario": "…", "enlaceActivacion": null, "expiraEn": "2026-10-28T14:00:00Z", "correoEnviado": true }
 ```
+- `correoEnviado: true`: el enlace solo le llegó a la persona y no viene en la respuesta.
+- `correoEnviado: false`: el correo falló o está en modo simulado (desarrollo). Entonces `enlaceActivacion` trae `http://localhost:5173/activar#…` para que el administrador se lo pase por otra vía. **Se muestra una sola vez.**
+- La cuenta queda creada aunque el correo falle.
+
 409 si el RUN o el correo ya tienen cuenta.
 
 ### `POST /api/personal/{id}/enlace-activacion`
-Otro enlace para una cuenta que aún no se activa; el anterior deja de servir. Misma respuesta. 404 si la cuenta no existe o ya está activa.
+Otro enlace para una cuenta que aún no se activa, que también se envía por correo; el anterior deja de servir. Misma respuesta (200). 404 si la cuenta no existe o ya está activa.
 
 ### `GET /api/personal`
 Todas las cuentas, por nombre. No trae el RUN ni el teléfono (van cifrados).
@@ -347,15 +353,25 @@ Debe traer **todos** los activos, cada uno una vez.
 
 ### `POST /api/pacientes/{id}/reloj` y `…/reloj/reemplazo`
 ```json
-{ "idDispositivo": "…", "estadoRelojAnterior": "EN_REPARACION" }
+{ "idDispositivo": "…", "estadoRelojAnterior": "EN_REPARACION", "codigoEmparejamiento": "K7PM-42QX" }
 ```
-`estadoRelojAnterior` solo se usa en el reemplazo (`OPERATIVO`, `EN_REPARACION` o `RETIRADO`). Respuesta:
+- `estadoRelojAnterior` solo se usa en el reemplazo (`OPERATIVO`, `EN_REPARACION` o `RETIRADO`).
+- `codigoEmparejamiento`: el que muestra el reloj (da lo mismo con o sin guion, en minúsculas o con espacios). **Es lo normal:** el reloj ya tiene su token y la respuesta no lo trae:
+  ```json
+  { "idAsignacion": "…", "token": null }
+  ```
+- Sin `codigoEmparejamiento` (desarrollo y simulador), la respuesta trae un token nuevo: **se muestra una sola vez**, para cargarlo a mano, porque no se puede volver a consultar.
+
+Errores:
+- Vincular: 400 si el paciente no tiene fecha de consentimiento, o si el código no existe o venció; 409 si ya tiene reloj, está de baja, o el reloj no está operativo o lo usa otro paciente.
+- Reemplazar: 400 si el reloj nuevo es el mismo, o si el código no existe o venció; 409 si el paciente no tiene reloj o si el nuevo no está disponible.
+- Si el vínculo falla, el código no se gasta: se puede volver a usar mientras no venza.
+
+### `POST /api/pacientes/{id}/reloj/emparejamiento`
 ```json
-{ "idAsignacion": "…", "token": "el-token-del-reloj" }
+{ "codigoEmparejamiento": "K7PM-42QX" }
 ```
-**El token se muestra una sola vez:** hay que mostrarlo para cargarlo en el reloj, porque no se puede volver a consultar. Errores:
-- Vincular: 400 si el paciente no tiene fecha de consentimiento; 409 si ya tiene reloj, está de baja, o el reloj no está operativo o lo usa otro paciente.
-- Reemplazar: 400 si el reloj nuevo es el mismo; 409 si el paciente no tiene reloj o si el nuevo no está disponible.
+Empareja de nuevo el mismo reloj (por ejemplo, tras restaurarlo de fábrica). El token anterior deja de servir y el vínculo sigue igual. Responde 200 con `{ "idAsignacion": "…", "token": null }`; 400 si el código no existe o venció; 409 si el paciente no tiene reloj.
 
 ### `DELETE /api/pacientes/{id}/reloj`
 Retira el reloj y su token deja de servir. 409 si el paciente no tenía reloj.

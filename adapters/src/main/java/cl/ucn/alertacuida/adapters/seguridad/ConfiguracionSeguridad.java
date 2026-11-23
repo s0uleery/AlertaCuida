@@ -50,6 +50,8 @@ public class ConfiguracionSeguridad {
 	 * Reglas de la API del reloj (/api/reloj/**), aparte de las del dashboard: solo acepta el token
 	 * del reloj (rol DEVICE), que se revisa contra la base en cada petición. Va primera: las
 	 * peticiones del reloj nunca llegan a la cadena del dashboard, ni el token del dashboard sirve aquí.
+	 * La excepción es el emparejamiento: el reloj pide su código y pregunta si ya lo vincularon antes de
+	 * tener un token que sirva (EmparejamientoRelojController).
 	 *
 	 * @param http         constructor de reglas de Spring Security
 	 * @param introspector reconoce el token del reloj
@@ -64,7 +66,10 @@ public class ConfiguracionSeguridad {
 				.securityMatcher("/api/reloj/**")
 				.csrf(AbstractHttpConfigurer::disable)
 				.sessionManagement(sesion -> sesion.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-				.authorizeHttpRequests(rutas -> rutas.anyRequest().hasAuthority(PrincipalReloj.ROL))
+				.authorizeHttpRequests(rutas -> rutas
+						.requestMatchers(HttpMethod.POST, "/api/reloj/v1/emparejamientos",
+								"/api/reloj/v1/emparejamientos/consulta").permitAll()
+						.anyRequest().hasAuthority(PrincipalReloj.ROL))
 				.exceptionHandling(errores -> errores.authenticationEntryPoint(noAutorizado))
 				.oauth2ResourceServer(servidor -> servidor
 						.authenticationEntryPoint(noAutorizado)

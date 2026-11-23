@@ -6,6 +6,8 @@ import cl.ucn.alertacuida.application.asignacion.VinculoReloj;
 import cl.ucn.alertacuida.application.asignacion.modelo.TokenReloj;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -35,31 +37,55 @@ public class VinculoRelojController {
 	}
 
 	/**
+	 * Cuerpo de {@code POST .../reloj/emparejamiento}.
+	 *
+	 * @param codigoEmparejamiento el que muestra el reloj
+	 */
+	public record SolicitudEmparejamiento(@NotBlank @Size(max = 20) String codigoEmparejamiento) {
+	}
+
+	/**
 	 * Entrega un reloj a un paciente que no tiene.
 	 *
-	 * @return 201 con el token del reloj. 400 sin consentimiento; 404 si algo no existe; 409 si el
-	 *         paciente ya tiene reloj, está de baja, o el reloj no está disponible
+	 * @return 201 con el vínculo; trae token solo si se vinculó sin código. 400 sin consentimiento o con
+	 *         un código que no existe o venció; 404 si algo no existe; 409 si el paciente ya tiene reloj,
+	 *         está de baja, o el reloj no está disponible
 	 */
 	@PostMapping
 	@PreAuthorize(Permisos.USUARIOS_EDITAR)
 	@ResponseStatus(HttpStatus.CREATED)
 	public TokenReloj vincular(@PathVariable UUID idPaciente, @Valid @RequestBody SolicitudVinculo solicitud,
 			@AuthenticationPrincipal Jwt jwt, HttpServletRequest peticion) {
-		return vinculo.vincular(idPaciente, solicitud.idDispositivo(), TokenJwt.leer(jwt).id(),
-				peticion.getRemoteAddr());
+		return vinculo.vincular(idPaciente, solicitud.idDispositivo(), solicitud.codigoEmparejamiento(),
+				TokenJwt.leer(jwt).id(), peticion.getRemoteAddr());
 	}
 
 	/**
 	 * Cambia el reloj del paciente por otro. El token del anterior deja de servir.
 	 *
-	 * @return el token del reloj nuevo. 409 si el paciente no tiene reloj o el nuevo no está disponible
+	 * @return el vínculo nuevo (con token solo si fue sin código). 400 si el código no existe o venció;
+	 *         409 si el paciente no tiene reloj o el nuevo no está disponible
 	 */
 	@PostMapping("/reemplazo")
 	@PreAuthorize(Permisos.USUARIOS_EDITAR)
 	public TokenReloj reemplazar(@PathVariable UUID idPaciente, @Valid @RequestBody SolicitudVinculo solicitud,
 			@AuthenticationPrincipal Jwt jwt, HttpServletRequest peticion) {
 		return vinculo.reemplazar(idPaciente, solicitud.idDispositivo(), solicitud.estadoRelojAnterior(),
-				TokenJwt.leer(jwt).id(), peticion.getRemoteAddr());
+				solicitud.codigoEmparejamiento(), TokenJwt.leer(jwt).id(), peticion.getRemoteAddr());
+	}
+
+	/**
+	 * Empareja de nuevo el mismo reloj (por ejemplo, tras restaurarlo de fábrica) con el código que
+	 * muestra. Su token anterior deja de servir; el vínculo sigue igual.
+	 *
+	 * @return el vínculo, sin token. 400 si el código no existe o venció; 409 si no tiene reloj
+	 */
+	@PostMapping("/emparejamiento")
+	@PreAuthorize(Permisos.USUARIOS_EDITAR)
+	public TokenReloj emparejar(@PathVariable UUID idPaciente, @Valid @RequestBody SolicitudEmparejamiento solicitud,
+			@AuthenticationPrincipal Jwt jwt, HttpServletRequest peticion) {
+		return vinculo.emparejar(idPaciente, solicitud.codigoEmparejamiento(), TokenJwt.leer(jwt).id(),
+				peticion.getRemoteAddr());
 	}
 
 	/** Retira el reloj al paciente; su token deja de servir. 204 sin cuerpo; 409 si no tenía. */

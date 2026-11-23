@@ -64,11 +64,16 @@ class CuentasPersonalTest {
 				.andExpect(status().isForbidden());
 	}
 
-	/** El administrador crea la cuenta, la persona la activa con el enlace y puede iniciar sesión. */
+	/**
+	 * El administrador crea la cuenta, la persona la activa con el enlace y puede iniciar sesión. Aquí el correo
+	 * está en modo simulado (no sale), así que el enlace viene en la respuesta para pasárselo a la persona; con
+	 * correo real, lo prueba RequisitosCorreoActivacionTest.
+	 */
 	@Test
 	void elAdministradorCreaLaCuentaLaPersonaLaActivaYPuedeIniciarSesion() throws Exception {
 		ResultActions alta = altaCon(tokenAdmin(), cuenta("12.345.678-5"))
 				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.correoEnviado").value(false))
 				.andExpect(jsonPath("$.enlaceActivacion").value(startsWith(
 						"http://localhost:5173/activar#")));
 		String tokenEnlace = tokenDelEnlace(alta);

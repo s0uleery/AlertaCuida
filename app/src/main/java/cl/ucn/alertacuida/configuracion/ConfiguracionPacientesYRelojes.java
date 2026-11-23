@@ -2,6 +2,7 @@ package cl.ucn.alertacuida.configuracion;
 
 import cl.ucn.alertacuida.application.asignacion.VinculoReloj;
 import cl.ucn.alertacuida.application.asignacion.puerto.Asignaciones;
+import cl.ucn.alertacuida.application.asignacion.puerto.Emparejamientos;
 import cl.ucn.alertacuida.application.auditoria.puerto.RegistroAuditoria;
 import cl.ucn.alertacuida.application.comun.puerto.HashRun;
 import cl.ucn.alertacuida.application.comun.puerto.SecretosUnSoloUso;
@@ -106,8 +107,10 @@ public class ConfiguracionPacientesYRelojes {
 	/** Vincular, reemplazar y desvincular relojes. */
 	@Bean
 	VinculoReloj vinculoReloj(Asignaciones asignaciones, Pacientes pacientes, Relojes relojes,
-			SecretosUnSoloUso secretos, RegistroAuditoria auditoria, Transacciones transacciones, Clock reloj) {
-		return new VinculoReloj(asignaciones, pacientes, relojes, secretos, auditoria, transacciones, reloj);
+			Emparejamientos emparejamientos, SecretosUnSoloUso secretos, RegistroAuditoria auditoria,
+			Transacciones transacciones, Clock reloj) {
+		return new VinculoReloj(asignaciones, pacientes, relojes, emparejamientos, secretos, auditoria, transacciones,
+				reloj);
 	}
 
 }

@@ -33,13 +33,18 @@ export interface SolicitudCambioRol {
   aceptaWhatsapp?: boolean;
 }
 
-/** Respuesta del alta y de un enlace nuevo. */
+/**
+ * Respuesta del alta y de un enlace nuevo. El enlace se envía por correo a la persona; solo viene aquí si el
+ * correo no salió (falló, o está en modo simulado en desarrollo).
+ */
 export interface RespuestaEnlace {
   idUsuario: string;
-  /** Dirección completa, con el token después de "#" */
-  enlaceActivacion: string;
+  /** Dirección completa, con el token después de "#"; null si salió por correo */
+  enlaceActivacion: string | null;
   /** Fecha ISO en UTC */
   expiraEn: string;
+  /** Si el enlace le llegó por correo a la persona */
+  correoEnviado: boolean;
 }
 
 /** ACTIVA: ya eligió su contraseña. PENDIENTE: no ha usado su enlace. DESACTIVADA: tenía contraseña y se le quitó el acceso. */

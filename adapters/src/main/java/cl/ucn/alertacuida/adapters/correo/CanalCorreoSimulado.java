@@ -20,6 +20,12 @@ public class CanalCorreoSimulado implements CanalNotificacion {
 		return "simulado-" + UUID.randomUUID();
 	}
 
+	/** @return false: el correo no sale, solo queda en el log */
+	@Override
+	public boolean entregaDeVerdad() {
+		return false;
+	}
+
 	/** @return el correo con la parte local oculta, ej. a***@muni.cl */
 	static String enmascarar(String correo) {
 		int arroba = correo.indexOf('@');

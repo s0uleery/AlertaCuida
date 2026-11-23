@@ -421,6 +421,21 @@ Table ASIGNACION_RELOJ {
   '''
 }
 
+Table EMPAREJAMIENTO_RELOJ {
+  id_emparejamiento uuid [pk]
+  hash_codigo varchar [unique, not null, note: 'SHA-256 del código normalizado (sin guion, en mayúsculas)']
+  hash_token varchar [unique, not null, note: 'SHA-256 del token que ya tiene el reloj']
+  fecha_creacion timestamptz [not null]
+  fecha_expiracion timestamptz [not null, note: '10 minutos después de la creación']
+  Note: '''
+  Códigos de emparejamiento pendientes (V15). El reloj, sin token, pide un código y recibe su token;
+  quien instala escribe el código al vincular. Entonces el hash del token pasa a ASIGNACION_RELOJ y la
+  fila se borra (cada código sirve una vez). Las vencidas se borran al pedir un código nuevo.
+  Única tabla sin relaciones, a propósito: el reloj que pide el código aún no se sabe cuál es ni de quién.
+  CHECK (fecha_expiracion > fecha_creacion).
+  '''
+}
+
 Table SINCRONIZACION {
   id_sincronizacion uuid [pk]
   event_id uuid [unique, not null, note: 'Evita duplicados si el reloj reintenta']
