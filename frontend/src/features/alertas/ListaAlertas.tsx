@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router';
 import { CLASE_CAMPO, CLASE_ERROR, CLASE_ETIQUETA, CLASE_TARJETA } from '../../comun/estilos';
 import { formatearAntiguedad, formatearHoraReciente } from '../../comun/fechas';
 import { useDatos } from '../../comun/useDatos';
 import { alertasApi } from './alertasApi';
-import { CONDICION, ESTADO, ESTADO_CONTACTO, InsigniaGravedad, InsigniaSimulacro } from './etiquetas';
+import { CONDICION, describirContacto, ESTADO, InsigniaGravedad, InsigniaSimulacro } from './etiquetas';
 import type { CategoriaAlerta, ResumenAlerta, Severidad } from './tipos';
 
 /** Qué alertas se muestran según su atención. */
@@ -31,14 +32,6 @@ function estaAbierta(alerta: ResumenAlerta): boolean {
 function coincide(alerta: ResumenAlerta, busqueda: string): boolean {
   const texto = `${alerta.paciente.nombres} ${alerta.paciente.apellidos} #${alerta.numero}`.toLowerCase();
   return texto.includes(busqueda.toLowerCase());
-}
-
-/** A quién está avisando el reloj, con el nombre del contacto cuando lo hay. */
-function contacto(alerta: ResumenAlerta): string {
-  if (alerta.estadoContacto === 'AVISANDO_CONTACTO' && alerta.contactoEnCurso) {
-    return `Avisando a ${alerta.contactoEnCurso}`;
-  }
-  return ESTADO_CONTACTO[alerta.estadoContacto];
 }
 
 /**
@@ -145,7 +138,11 @@ export function ListaAlertas() {
           <tbody>
             {visibles.map((alerta) => (
               <tr key={alerta.id} className={`border-t border-slate-300 ${BORDE_GRAVEDAD[alerta.severidad]}`}>
-                <td className="px-3 py-2.5 font-medium tabular-nums">#{alerta.numero}</td>
+                <td className="px-3 py-2.5 font-medium tabular-nums">
+                  <Link to={`/alertas/${alerta.id}`} className="text-sky-700 hover:underline" title="Ver la ficha">
+                    #{alerta.numero}
+                  </Link>
+                </td>
                 <td className="px-3 py-2.5">
                   <div>{formatearHoraReciente(alerta.recepcion)}</div>
                   <div className="text-xs text-slate-500">{formatearAntiguedad(alerta.recepcion)}</div>
@@ -164,9 +161,9 @@ export function ListaAlertas() {
                 {esSalud && (
                   <td className="px-3 py-2.5">
                     {alerta.prioridadMaxima ? (
-                      <span className="font-bold text-[#a1111a]">{contacto(alerta)}</span>
+                      <span className="font-bold text-[#a1111a]">{describirContacto(alerta)}</span>
                     ) : (
-                      contacto(alerta)
+                      describirContacto(alerta)
                     )}
                   </td>
                 )}

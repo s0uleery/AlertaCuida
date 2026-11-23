@@ -41,6 +41,8 @@ tags:
     description: Permisos de cada rol (pestaña Permisos de Administración). Solo el administrador.
   - name: Alertas
     description: Lista, línea de tiempo y atención de las alertas.
+  - name: Reportes
+    description: Red de seguridad (posibles eventos que el reloj no alertó).
   - name: Pacientes
     description: Personas mayores atendidas (en pantalla, "usuarios").
   - name: Condiciones
@@ -238,6 +240,193 @@ paths:
         '403': { $ref: '#/components/responses/SinPermiso' }
         '404': { $ref: '#/components/responses/NoEncontrado' }
         '409': { $ref: '#/components/responses/Conflicto' }
+
+  /api/hallazgos:
+    get:
+      tags: [Reportes]
+      operationId: listarHallazgos
+      summary: Red de seguridad — lecturas graves sin alerta del reloj cerca
+      description: >-
+        Exige `REPORTES:VER`; la lectura queda auditada como `LEER REPORTE`. Lecturas de FC o SpO2 más allá del
+        límite grave vigente al medir (estricto), con el módulo de esa variable encendido, sin una alerta del reloj
+        de FC, SPO2, FC_SPO2 o TENDENCIA a 30 minutos o menos (también canceladas; sin simulacros). No se guarda
+        nada ni se avisa a nadie. La más reciente primero, hasta 500.
+      parameters:
+        - { name: desde, in: query, required: false, description: 'Primer día de Chile, incluido. Por defecto, 6 días antes de hasta.', schema: { type: string, format: date } }
+        - { name: hasta, in: query, required: false, description: 'Último día de Chile, incluido. Por defecto, hoy.', schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Los hallazgos.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Hallazgo' }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+
+  /api/alertas/{id}/seguimiento:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [Alertas]
+      operationId: registrarSeguimiento
+      summary: Registra una llamada, visita, derivación o nota del caso
+      description: >-
+        Exige `ALERTAS:EDITAR`. Con la alerta sin asignar, en atención o en seguimiento. `nota` obligatoria salvo en
+        DERIVACION, que exige un `destino` activo. Nota cifrada; auditada como `CREAR SEGUIMIENTO`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tipo]
+              properties:
+                tipo: { type: string, enum: [LLAMADA, VISITA, DERIVACION, NOTA] }
+                destino: { type: string, nullable: true, examples: [CESFAM] }
+                nota: { type: string, nullable: true }
+      responses:
+        '201':
+          description: Registrada.
+          content:
+            application/json:
+              schema: { type: object, properties: { id: { type: string, format: uuid } } }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '409': { $ref: '#/components/responses/Conflicto' }
+
+  /api/destinos-derivacion:
+    get:
+      tags: [Alertas]
+      operationId: listarDestinosDerivacion
+      summary: Destinos activos a los que se puede derivar un caso
+      description: Exige `ALERTAS:VER`. Por nombre.
+      responses:
+        '200':
+          description: Los destinos.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    codigo: { type: string, examples: [CESFAM] }
+                    nombre: { type: string }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+
+  /api/personal/{id}/telefono:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    put:
+      tags: [Cuentas del equipo]
+      operationId: cambiarTelefonoPersonal
+      summary: Cambia o quita el celular con WhatsApp de una cuenta y su opt-in
+      description: >-
+        Exige `ADMINISTRACION:EDITAR`. Vacío o null quita el teléfono (no en un coordinador). `aceptaWhatsapp`
+        deja el opt-in con la hora del cambio. Se guarda cifrado; la auditoría no guarda el número.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [aceptaWhatsapp]
+              properties:
+                telefono: { type: string, nullable: true, examples: ['+56 9 1234 5678'] }
+                aceptaWhatsapp: { type: boolean }
+      responses:
+        '204': { description: Guardado. }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
+  /api/pacientes/{id}/tendencias:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Reportes]
+      operationId: tendenciasPaciente
+      summary: Evolución de FC y SpO2 con sus alertas
+      description: >-
+        Exige `REPORTES:VER`; auditada como `LEER REPORTE`. Hasta 2 días cada lectura, hasta 31 por hora y hasta
+        90 por día (hora de Chile). Por defecto, los últimos 7 días.
+      parameters:
+        - { name: desde, in: query, required: false, schema: { type: string, format: date } }
+        - { name: hasta, in: query, required: false, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Las tendencias.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TendenciasPaciente' }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
+  /api/pacientes/{id}/reportes/diario:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Reportes]
+      operationId: reporteDiario
+      summary: Reporte de un día de Chile
+      description: Exige `REPORTES:VER`; auditado como `LEER REPORTE`. Se calcula al pedirlo. Por defecto, hoy.
+      parameters:
+        - { name: dia, in: query, required: false, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: El reporte; `anterior` va vacío.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReporteUsuario' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
+  /api/pacientes/{id}/reportes/semanal:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Reportes]
+      operationId: reporteSemanal
+      summary: Reporte de lunes a domingo, con la semana anterior
+      description: Exige `REPORTES:VER`; auditado como `LEER REPORTE`. `dia` es cualquier día de la semana; por defecto, hoy.
+      parameters:
+        - { name: dia, in: query, required: false, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: El reporte con `anterior`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReporteUsuario' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
+  /api/panel:
+    get:
+      tags: [Alertas]
+      operationId: panelGeneral
+      summary: Panel general de la portada
+      description: >-
+        Exige `ALERTAS:VER`. Totales de alertas abiertas (como la lista), sin respuesta y en seguimiento; relojes en
+        rojo y amarillo; una fila por usuario activo con su reloj vigente, su semáforo y sus alertas abiertas.
+      responses:
+        '200':
+          description: El panel.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Panel' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
 
   /api/auth/yo:
     get:
@@ -1246,6 +1435,163 @@ components:
             lineaTiempo:
               type: array
               items: { $ref: '#/components/schemas/PasoAlerta' }
+            evidencia: { $ref: '#/components/schemas/EvidenciaAlerta' }
+            discrepancias:
+              type: array
+              description: Lo que no calzó con la configuración vigente al recibirla, ordenado por código; vacía si nada.
+              items:
+                type: object
+                properties:
+                  codigo: { type: string, enum: [VERSION_DISTINTA, MODULO_APAGADO, GRAVEDAD_DISTINTA, LECTURAS_EN_RANGO] }
+                  detalle: { type: string, examples: ['FC 95 dentro del rango normal 50–110'] }
+    EvidenciaAlerta:
+      type: object
+      description: >-
+        Lo que explica la alerta, leído de alerta.evidencia. Cada campo es null si la alerta no lo trae; un campo con
+        un tipo inesperado se omite y una evidencia ilegible sale vacía. La celda de la matriz no se muestra.
+      properties:
+        lecturas:
+          type: array
+          description: Las que mandó el reloj; vacía si no trae.
+          items:
+            type: object
+            properties:
+              tipo: { type: string, enum: [FC, SPO2] }
+              valor: { type: number, examples: [128.0] }
+              fechaHoraMedicion: { type: string, format: date-time }
+        nivelBateria: { type: integer, nullable: true, description: 'En %. Del reloj o de BATERIA_BAJA.' }
+        segundosInmovilidad: { type: integer, nullable: true, description: En las caídas. }
+        ubicacion:
+          type: object
+          nullable: true
+          properties:
+            latitud: { type: number }
+            longitud: { type: number }
+            precisionMetros: { type: number, nullable: true }
+            fechaHoraMedicion: { type: string, format: date-time }
+        alertasEnVentana: { type: integer, nullable: true, description: 'EXCESO_ALERTAS: cuántas llegaron.' }
+        ventanaMinutos: { type: integer, nullable: true, description: 'EXCESO_ALERTAS: largo de la ventana.' }
+        noPuestoDesde: { type: string, format: date-time, nullable: true, description: 'RELOJ_NO_PUESTO.' }
+        ultimaSincronizacion:
+          type: string
+          format: date-time
+          nullable: true
+          description: 'SILENCIO_DATOS: la última sincronización; null también si nunca sincronizó.'
+    Hallazgo:
+      type: object
+      description: Una lectura más allá del límite grave sin alerta del reloj cerca. Sirve para auditar el reloj.
+      properties:
+        paciente:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            nombres: { type: string, nullable: true }
+            apellidos: { type: string, nullable: true }
+        variable: { type: string, enum: [FC, SPO2] }
+        valor: { type: number, examples: [135.0] }
+        fechaHoraMedicion: { type: string, format: date-time }
+        limiteGrave: { type: number, description: 'El límite grave vigente al medir que superó.', examples: [130] }
+    PuntoTendencia:
+      type: object
+      properties:
+        fechaHora: { type: string, format: date-time, description: 'Hora de medición, o comienzo de la hora o del día de Chile.' }
+        promedio: { type: number }
+        minimo: { type: number }
+        maximo: { type: number }
+        cantidad: { type: integer }
+    TendenciasPaciente:
+      type: object
+      properties:
+        agrupacion: { type: string, enum: [LECTURA, HORA, DIA] }
+        desde: { type: string, format: date-time }
+        hasta: { type: string, format: date-time }
+        fc: { type: array, items: { $ref: '#/components/schemas/PuntoTendencia' } }
+        spo2: { type: array, items: { $ref: '#/components/schemas/PuntoTendencia' } }
+        alertas:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              numero: { type: integer }
+              tipoEvento: { type: string }
+              severidad: { type: string, enum: [LEVE, MEDIA, GRAVE] }
+              fechaHoraDeteccion: { type: string, format: date-time }
+              cancelada: { type: boolean }
+        ubicaciones:
+          type: array
+          description: Con LECTURA todas; con HORA o DIA la última de cada hora o día de Chile.
+          items:
+            type: object
+            properties:
+              latitud: { type: number }
+              longitud: { type: number }
+              precisionMetros: { type: number, nullable: true }
+              fechaHoraMedicion: { type: string, format: date-time }
+    Estadistica:
+      type: object
+      properties:
+        promedio: { type: number, nullable: true }
+        minimo: { type: number, nullable: true }
+        maximo: { type: number, nullable: true }
+        lecturas: { type: integer }
+    IndicadoresPeriodo:
+      type: object
+      properties:
+        fc: { $ref: '#/components/schemas/Estadistica' }
+        spo2: { $ref: '#/components/schemas/Estadistica' }
+        uso:
+          type: object
+          properties:
+            minutosPuesto: { type: integer }
+            sincronizaciones: { type: integer }
+        bateriaMinima: { type: integer, nullable: true }
+        alertasPorTipo: { type: object, additionalProperties: { type: integer } }
+        alertasPorGravedad: { type: object, additionalProperties: { type: integer } }
+        alertasCanceladas: { type: integer }
+    ReporteUsuario:
+      type: object
+      properties:
+        periodo: { type: string, enum: [DIARIO, SEMANAL] }
+        desde: { type: string, format: date }
+        hasta: { type: string, format: date }
+        indicadores: { $ref: '#/components/schemas/IndicadoresPeriodo' }
+        anterior:
+          allOf: [{ $ref: '#/components/schemas/IndicadoresPeriodo' }]
+          nullable: true
+          description: La semana anterior; vacío en el diario.
+    Panel:
+      type: object
+      properties:
+        totales:
+          type: object
+          properties:
+            alertasAbiertas: { type: integer }
+            sinRespuesta: { type: integer }
+            enSeguimiento: { type: integer }
+            relojesRojo: { type: integer }
+            relojesAmarillo: { type: integer }
+        usuarios:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              nombres: { type: string, nullable: true }
+              apellidos: { type: string, nullable: true }
+              alertasAbiertas: { type: integer }
+              reloj:
+                type: object
+                nullable: true
+                properties:
+                  idDispositivo: { type: string, format: uuid }
+                  identificador: { type: string }
+                  semaforo: { type: string, enum: [VERDE, AMARILLO, ROJO, GRIS] }
+                  motivos: { type: array, items: { type: string } }
+                  ultimaSincronizacion: { type: string, format: date-time, nullable: true }
+                  nivelBateria: { type: integer, nullable: true }
+                  tipoConexion: { type: string, enum: [LTE, WIFI], nullable: true }
+                  configuracionPendiente: { type: boolean }
     SolicitudResolucion:
       type: object
       required: [observaciones]

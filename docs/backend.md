@@ -52,6 +52,30 @@ app (pruebas)/<funcionalidad>/      pruebas de punta a punta; soporte/ tiene el 
 
 Las pruebas unitarias van en la misma carpeta (paquete) que la clase que prueban.
 
+## Entornos y configuración
+
+Tres entornos, con un solo `application.properties` que lee variables de entorno y un valor por defecto pensado para trabajar en local:
+
+| Entorno | Cómo se activa | Qué cambia |
+|---|---|---|
+| Local | perfil `dev` (`docker compose up` lo pone; o `-Dspring-boot.run.profiles=dev`) | `application-dev.properties`: lee el `.env` de la raíz, claves de desarrollo escritas en el repositorio, datos de ejemplo (`db/ejemplo`) y cookie de sesión sin HTTPS |
+| Pruebas | automático al correr `./mvnw test` | `app/src/test/resources/config/application.properties`: claves de prueba, bloqueo a los 3 intentos y tareas programadas apagadas (las pruebas las llaman cuando las necesitan); PostgreSQL de Testcontainers |
+| Servidor (piloto) | sin perfil (`docker-compose.servidor.yml`) | Todo por variables del `.env` del servidor; sin datos de ejemplo. Ver [despliegue.md](despliegue.md) |
+
+Variables de entorno (las marcadas con **obligatoria** no tienen valor por defecto: sin ellas el servidor no arranca):
+
+| Variable | Para qué | Por defecto |
+|---|---|---|
+| `DB_URL`, `DB_USUARIO`, `DB_CLAVE` | Conexión a PostgreSQL (`dev` usa `DB_PUERTO` y `DB_NOMBRE`) | `localhost:5432/alertacuida`, `alertacuida`, vacía |
+| `RUN_CLAVE`, `JWT_CLAVE`, `CIFRADO_CLAVE`, `RESPUESTA_CLAVE` | Hash del RUN, firma de los tokens, cifrado de campos y firma de los enlaces de respuesta | **obligatorias** (en `dev`, las de desarrollo) |
+| `CORREO_CANAL`, `CORREO_REMITENTE`, `SMTP_HOST`, `SMTP_PUERTO`, `SMTP_USUARIO`, `SMTP_CLAVE`, `SMTP_AUTH`, `SMTP_TLS` | Envío de correos | `SIMULADO`, `no-responder@localhost`, Mailpit (`localhost:1025`) sin autenticación |
+| `DASHBOARD_URL` | Enlaces de los correos y de la activación de cuentas | `http://localhost:5173` |
+| `FCM_CANAL`, `FCM_CREDENCIALES`, `FCM_SIMULADOR_URL` | Avisos al reloj (`FIREBASE`, `SIMULADOR` o `SIMULADO`) | `SIMULADO` |
+| `WHATSAPP_CANAL` | Canal de WhatsApp | `NO_CONFIGURADO` (cae al correo de respaldo) |
+| `ADMIN_INICIAL_RUN`, `ADMIN_INICIAL_NOMBRE`, `ADMIN_INICIAL_CORREO` | Primer administrador de un servidor sin cuentas | vacías (no crea ninguno) |
+
+Los demás valores (plazos, umbrales base, horarios) están en `application.properties` con su explicación y se pueden pisar con la variable de entorno equivalente de Spring (por ejemplo `ALERTACUIDA_ESCALAMIENTO_PLAZO`).
+
 ## Base de datos
 
 Al arrancar, Flyway aplica las migraciones de `adapters/src/main/resources/db/migration`:
@@ -150,6 +174,14 @@ Decisiones:
 - **Un enlace sirve una sola vez, aunque se use en dos pestañas a la vez**: las actualizaciones tienen condiciones (`WHERE fecha_uso IS NULL`, `WHERE hash_contrasena IS NULL`).
 - **Transacciones sin Spring en los casos de uso**: usan el puerto `Transacciones`, implementado con `TransactionTemplate` en `adapters`.
 - **El alta acepta `recibeAvisos`**, apagado si no se marca (decisión del 13-11-2026).
+
+**Administrador inicial.** Un servidor sin perfil `dev` no tiene datos de ejemplo, así que no hay ninguna cuenta con la que entrar. Al terminar de arrancar (después de Flyway), `AdministradorInicialAlArrancar` (en `app/configuracion`) lee `ADMIN_INICIAL_RUN`, `ADMIN_INICIAL_NOMBRE` y `ADMIN_INICIAL_CORREO` (`PropiedadesAdministradorInicial`):
+
+- sin RUN (desarrollo y pruebas), no hace nada;
+- con el RUN pero sin nombre o correo, detiene el arranque diciendo qué variable falta;
+- con los tres, llama a `CrearAdministradorInicial`, que crea la cuenta con rol `ADMINISTRADOR` usando el mismo `CrearCuentaPersonal`, **solo si no hay ningún administrador** (`CuentasPersonal.existeAdministrador`, en cualquier estado). Por eso puede quedar configurado: reiniciar no crea otro.
+
+La cuenta queda pendiente como cualquier alta, y el enlace de activación (`…/activar#<token>`) se escribe en el log del backend con nivel WARN; no se envía por correo. En la auditoría, el `CREAR` queda sin usuario ni IP, porque lo hace el servidor. Decidido por ella el 18-11-2026 al preparar el servidor público ([despliegue.md](despliegue.md)). Pruebas: `AltaYActivacionTest` (sin base) y `AdministradorInicialTest` (con PostgreSQL).
 
 ### Equipo y permisos
 
@@ -261,11 +293,24 @@ Deciden si una alerta leve avisa o espera al día hábil, y a quién se avisa.
 - **`ReglaEnrutamiento`** (aplicación), fija en el código: una alerta leve fuera de horario o en feriado espera al día hábil; en cualquier otro caso se avisa a los contactos activos, con algún canal y cuyo horario cubre ese momento, por prioridad. Con el botón de ayuda (`BOTON_AYUDA`, siempre leve) van primero los `VECINO` por prioridad y después el resto por prioridad. El horario de cada contacto se respeta siempre, también en horario hábil.
 - **Quién la usa**: el reloj, porque escala (lo recibe en su configuración); el servidor, para revisar el `esperaDiaHabil` de las alertas que recibe (2.1.2) y para sus alertas técnicas (2.2).
 
+## Tendencias, reportes y panel
+
+Sin migración: todo se calcula al pedirlo (el modelo de datos no guarda reportes). Decisiones del 19-11-2026.
+
+- **Tendencias** (`application/tendencia`): `ConsultarTendencias` elige la agrupación por el largo del rango (≤ 2 días `LECTURA`, ≤ 31 `HORA`, ≤ 90 `DIA`); `TendenciasJdbc` agrupa con `date_trunc` en hora de Chile (`AT TIME ZONE 'America/Santiago'`) y une por `asignacion_reloj.id_paciente`, así que los relojes reemplazados cuentan. Bean en `ConfiguracionReportes`.
+- **Reportes** (`application/reporte`): `ConsultarReportes` arma el día o la semana de lunes a domingo (y la anterior); `ReportesJdbc` hace tres consultas (lecturas, sincronizaciones y alertas con `alerta_estado.severidad_actual`) y cuenta las alertas en Java. Bean en `ConfiguracionReportes`.
+- **Panel** (`application/panel`): `ConsultarPanel` recibe `ConsultarEstadoRelojes::consultar` como `Supplier`, así el semáforo es el mismo de la lista de relojes y no se calcula dos veces; `PanelUsuariosJdbc` lee los usuarios activos y los totales de alertas abiertas con `alerta_estado`. Bean en `ConfiguracionPacientesYRelojes`.
+
+## Red de seguridad
+
+Paquete `application/redseguridad`. `ConsultarHallazgos` arma el rango (días de Chile, por defecto 7, máximo 31) y el criterio (ventana de 30 minutos, umbrales base de `ValoresBase`, tope de 500); `HallazgosJdbc` (`adapters/persistencia/redseguridad`) hace todo en una consulta: para cada lectura de `registro_vital` toma la última fila de `umbral` y de `configuracion` con `vigente_desde` anterior a la medición, y descarta las que tienen una alerta del reloj de FC, SpO2, FC+SpO2 o tendencia a 30 minutos o menos. Sin migración: los hallazgos no se guardan. `GET /api/hallazgos` exige `REPORTES:VER`. A propósito no repite las reglas del reloj (dos lecturas seguidas, tendencia): las alertas las decide el reloj y esto solo sirve para auditarlo.
+
 ## Atención de alertas en el dashboard
 
 Paquete `application/alerta`. `ConsultarAlertas` lee la lista y el detalle; `AtenderAlerta` asume, resuelve y cierra el seguimiento. Sin migración: usa `atencion_alerta`, `aviso_fcm` y la vista `alerta_estado`.
 
 - **Línea de tiempo (`LineaTiempoAlerta`):** no se guarda. Se arma con las fechas de `alerta`, `registro_intento`, `atencion_alerta`, `seguimiento` y `aviso_fcm`, y se ordena por fecha. Hay `SALTO_CONTACTO` cuando un aviso a la lista del paciente va a otra persona que el aviso anterior a esa lista; el respaldo al mismo contacto y los avisos al equipo no cuentan.
+- **Evidencia y discrepancias del detalle:** `ConsultaAlertasJdbc` lee `alerta.evidencia` con `LectorEvidencia` (paquete `adapters/persistencia/alerta`), que la convierte en `EvidenciaAlerta` campo por campo: un campo con un tipo inesperado se omite y un JSON ilegible da `EvidenciaAlerta.VACIA`, sin error. Lee el formato del reloj (`EvidenciaReloj`) y el que guardan las técnicas del servidor (`RecibirAlerta.vigilarExceso` y las `ReglaAusencia`); si una regla cambia su JSON, hay que cambiar también el lector. Las discrepancias salen de `discrepancia_alerta`, ordenadas por código.
 - **Sin carreras:** asumir y resolver son un `INSERT … ON CONFLICT … WHERE` en `AtencionAlertasJdbc`. De dos personas a la vez, la segunda no afecta filas y recibe 409.
 - **Resolver:** si nadie la asumió, se guarda a quien resuelve como responsable, con la hora de toma igual a la del cierre. Por eso la línea de tiempo omite `CASO_ASUMIDO` cuando ambas horas coinciden.
 - **Aviso al reloj:** al resolver una alerta con origen `RELOJ`, la misma transacción deja en `aviso_fcm` una fila `ALERTA_RESUELTA` sin fecha de envío, que toma `EnviarAvisosReloj`.
@@ -467,12 +512,15 @@ En `app/src/main/resources/application.properties`:
 | `bloqueo.intentos` / `bloqueo.ventana` | 5 / 15 min | |
 | `activacion.url` | `${DASHBOARD_URL}/activar` | Por defecto, `http://localhost:5173/activar` |
 | `activacion.vigencia` | 48 h | |
+| `alertacuida.administrador-inicial.*` | variables `ADMIN_INICIAL_RUN`, `_NOMBRE` y `_CORREO` | Vacías por defecto. Ver "Administrador inicial" en Cuentas del personal |
 
 Sin las claves, el backend no arranca. El perfil `dev` trae claves de desarrollo y lee la base desde el `.env`.
 
 `server.forward-headers-strategy=native` hace que el backend tome la IP real de `X-Forwarded-For`, que nginx reemplaza con la dirección de quien se conecta. Solo se le cree a un proxy de la red interna, así que en producción el puerto del backend no debe quedar expuesto: la entrada debe ser nginx.
 
 `docker-compose.yml` levanta el backend (`app/Dockerfile`) con el perfil `dev`. Recibe las credenciales por variables de entorno, y `SPRING_DATASOURCE_URL` reemplaza la dirección del perfil porque dentro de Docker la base está en `postgres` y no en `localhost`. El dashboard (`frontend/Dockerfile`) se sirve con nginx, que reenvía `/api` al backend (`frontend/nginx.conf`). Mailpit recibe los correos del backend y los muestra en http://localhost:8025, sin enviarlos. Esta configuración es solo para desarrollo y demos: producción necesita sus propias claves y no debe cargar los datos de ejemplo.
+
+El servidor público usa `docker-compose.servidor.yml`: perfil normal, claves propias en el `.env` del servidor (plantilla `.env.servidor.example`), correo por Gmail y Caddy (`servidor/Caddyfile`) como única entrada, con HTTPS. Caddy manda `/api/*` directo al backend, con la IP real del navegador en `X-Forwarded-For`, y el resto al nginx del dashboard; la base y el backend no publican puertos. Paso a paso en [despliegue.md](despliegue.md).
 
 Valores base del Anexo B (`alertacuida.clinica.*`), **provisionales** hasta que los valide el equipo clínico. Cambiarlos cambia la configuración de todos los relojes que no tienen ajustes propios:
 

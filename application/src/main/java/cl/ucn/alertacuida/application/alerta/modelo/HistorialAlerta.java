@@ -12,9 +12,12 @@ import java.util.List;
  * @param observaciones ya descifradas
  * @param intentos      en el orden en que se hicieron
  * @param seguimientos  en orden de fecha
+ * @param evidencia     lo que explica la alerta; {@link EvidenciaAlerta#VACIA} si no trae
+ * @param discrepancias lo que no calzó con la configuración vigente al recibirla; vacía si nada
  */
 public record HistorialAlerta(FilaAlerta alerta, Instant agravamiento, Instant cancelacion, Instant sinRespuesta,
 		Instant toma, String responsable, Instant cierre, String resolutor, ClasificacionAlerta clasificacion,
 		String observaciones, Instant cierreSeguimiento, List<IntentoRegistrado> intentos,
-		List<AvisoRelojRegistrado> avisosReloj, List<AccionSeguimiento> seguimientos) {
+		List<AvisoRelojRegistrado> avisosReloj, List<AccionSeguimiento> seguimientos, EvidenciaAlerta evidencia,
+		List<Discrepancia> discrepancias) {
 }

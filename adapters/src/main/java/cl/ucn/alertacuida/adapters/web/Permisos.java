@@ -36,6 +36,9 @@ public final class Permisos {
 	/** Asumir y resolver alertas, y cerrar su seguimiento. */
 	public static final String ALERTAS_EDITAR = "hasAuthority('ALERTAS:EDITAR')";
 
+	/** Ver los reportes, entre ellos los hallazgos de la red de seguridad. */
+	public static final String REPORTES_VER = "hasAuthority('REPORTES:VER')";
+
 	/** Solo constantes: no se crean objetos de esta clase. */
 	private Permisos() {
 	}

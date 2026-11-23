@@ -45,7 +45,7 @@ public class ConsultarAlertas {
 	}
 
 	/**
-	 * @return la alerta con su línea de tiempo
+	 * @return la alerta con su línea de tiempo, su evidencia y sus discrepancias
 	 * @throws NoEncontrado si no existe
 	 */
 	public DetalleAlerta detalle(UUID idAlerta) {
@@ -53,7 +53,8 @@ public class ConsultarAlertas {
 				.orElseThrow(() -> new NoEncontrado("No existe esa alerta"));
 		LocalDate hoy = LocalDate.now(reloj.withZone(ZonaHoraria.CHILE));
 		return DetalleAlerta.de(resumen(historial.alerta(), hoy), cierre(historial),
-				LineaTiempoAlerta.de(historial, reintentosAvisoReloj, reloj.instant()));
+				LineaTiempoAlerta.de(historial, reintentosAvisoReloj, reloj.instant()), historial.evidencia(),
+				historial.discrepancias());
 	}
 
 	/** @return la fila lista para mostrar, con la edad calculada */

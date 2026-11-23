@@ -50,11 +50,17 @@ class EquipoYPermisosApiTest {
 	private UUID admin;
 	private UUID coordinador;
 
-	/** Un administrador y un coordinador activos, con contraseña "Clave-de-" + nombre + "1". */
+	/**
+	 * Un administrador y un coordinador activos, con contraseña "Clave-de-" + nombre + "1". Antes borra pacientes
+	 * y relojes (con ellos, en cascada, las alertas que otras pruebas dejaron asumidas por alguna cuenta) y los
+	 * contactos internos: si no, esas filas impiden borrar las cuentas.
+	 */
 	@BeforeEach
 	void crearUsuarios() {
-		jdbc.sql("DELETE FROM registro_auditoria").update();
-		jdbc.sql("DELETE FROM usuario").update();
+		for (String tabla : new String[] {"asignacion_reloj", "smartwatch", "paciente", "contacto",
+				"registro_auditoria", "usuario"}) {
+			jdbc.sql("DELETE FROM " + tabla).update();
+		}
 		admin = crear("11.111.111-1", "ADMINISTRADOR", "Admin", "admin@muni.cl");
 		coordinador = crear("22.222.222-2", "COORDINADOR", "Coord", "coord@muni.cl");
 	}
@@ -169,6 +175,40 @@ class EquipoYPermisosApiTest {
 		poner(token, "/api/personal/" + UUID.randomUUID() + "/recibe-avisos", "{\"recibeAvisos\": true}")
 				.andExpect(status().isNotFound());
 		poner(token, "/api/personal/" + coordinador + "/recibe-avisos", "{}").andExpect(status().isBadRequest());
+	}
+
+	/**
+	 * El teléfono de una cuenta ya creada se cambia cifrado y con su opt-in (decisión del 19-11-2026); un
+	 * coordinador no queda sin teléfono, otra cuenta sí; el coordinador no puede cambiarlo (sin ADMINISTRACION).
+	 */
+	@Test
+	void elTelefonoDeUnaCuentaYaCreadaSeCambia() throws Exception {
+		String token = tokenAdmin();
+		UUID ana = crear("12.345.678-5", "PERSONAL", "Ana", "ana@muni.cl");
+
+		poner(token, "/api/personal/" + ana + "/telefono", "{\"telefono\": \"9 1234 5678\", \"aceptaWhatsapp\": true}")
+				.andExpect(status().isNoContent());
+		assertThat(jdbc.sql("SELECT telefono FROM usuario WHERE id_usuario = :id").param("id", ana)
+				.query(String.class).single()).startsWith("v1:").doesNotContain("12345678");
+		assertThat(jdbc.sql("SELECT fecha_opt_in IS NOT NULL FROM usuario WHERE id_usuario = :id").param("id", ana)
+				.query(Boolean.class).single()).isTrue();
+
+		poner(token, "/api/personal/" + ana + "/telefono", "{\"telefono\": null, \"aceptaWhatsapp\": false}")
+				.andExpect(status().isNoContent());
+		assertThat(jdbc.sql("SELECT telefono IS NULL AND fecha_opt_in IS NULL FROM usuario WHERE id_usuario = :id")
+				.param("id", ana).query(Boolean.class).single()).isTrue();
+
+		poner(token, "/api/personal/" + coordinador + "/telefono", "{\"telefono\": \"\", \"aceptaWhatsapp\": false}")
+				.andExpect(status().isBadRequest());
+		poner(token, "/api/personal/" + UUID.randomUUID() + "/telefono",
+				"{\"telefono\": \"9 1234 5678\", \"aceptaWhatsapp\": false}").andExpect(status().isNotFound());
+		poner(token("22.222.222-2", "Clave-de-Coord1"), "/api/personal/" + ana + "/telefono",
+				"{\"telefono\": \"9 1234 5678\", \"aceptaWhatsapp\": false}").andExpect(status().isForbidden());
+		assertThat(jdbc.sql("""
+				SELECT count(*) FROM registro_auditoria
+				WHERE accion = 'MODIFICAR' AND entidad = 'USUARIO' AND id_entidad = :id
+					AND detalle::text NOT LIKE '%12345678%'""")
+				.param("id", ana.toString()).query(Integer.class).single()).isEqualTo(2);
 	}
 
 	/** Los roles vienen con sus permisos y el administrador primero. */

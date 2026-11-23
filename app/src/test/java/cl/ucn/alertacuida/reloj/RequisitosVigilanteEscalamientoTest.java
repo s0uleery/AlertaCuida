@@ -115,8 +115,8 @@ class RequisitosVigilanteEscalamientoTest {
 				.filter(c -> c.proposito() == Proposito.VIGILANTE).toList();
 		assertThat(pendientes).allSatisfy(c -> assertThat(c.alEquipo()).isTrue());
 		assertThat(pendientes).extracting(CorreoPendiente::destinatario)
-				.contains("coord1@muni.cl", "coord2@muni.cl")
-				.doesNotContain("coord-inactivo@muni.cl", "ana@muni.cl");
+				.contains("coord1@vigilante.muni.cl", "coord2@vigilante.muni.cl")
+				.doesNotContain("coord-inactivo@vigilante.muni.cl", "ana@vigilante.muni.cl");
 	}
 
 	/** R2: correr el vigilante otra vez no repite el aviso. */
@@ -224,13 +224,16 @@ class RequisitosVigilanteEscalamientoTest {
 				.param("a", alerta).query(Integer.class).single();
 	}
 
-	/** Crea una cuenta del equipo con el correo nombre@muni.cl. */
+	/**
+	 * Crea una cuenta del equipo con el correo nombre@vigilante.muni.cl: un dominio propio de esta prueba, para no
+	 * chocar con las cuentas que otras pruebas dejan en la base (el correo es único).
+	 */
 	private void cuenta(String rol, String nombre, boolean activa) {
 		jdbc.sql("""
 				INSERT INTO usuario (codigo_rol, rut, rut_hash, nombre_profesional, correo, telefono, hash_contrasena,
 				activo) VALUES (:rol, 'cifrado', :hash, :nombre, :correo, 'cifrado', 'clave', :activa)""")
 				.param("rol", rol).param("hash", "hash-vigilante-" + nombre).param("nombre", nombre)
-				.param("correo", nombre + "@muni.cl").param("activa", activa)
+				.param("correo", nombre + "@vigilante.muni.cl").param("activa", activa)
 				.update();
 	}
 

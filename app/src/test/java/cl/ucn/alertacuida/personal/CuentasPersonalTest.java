@@ -45,11 +45,17 @@ class CuentasPersonalTest {
 	@Autowired
 	private PasswordEncoder encoder;
 
-	/** Un administrador y un coordinador activos, con contraseña "Clave-de-" + nombre + "1". */
+	/**
+	 * Un administrador y un coordinador activos, con contraseña "Clave-de-" + nombre + "1". Antes borra pacientes
+	 * y relojes (con ellos, en cascada, las alertas que otras pruebas dejaron asumidas por alguna cuenta) y los
+	 * contactos internos: si no, esas filas impiden borrar las cuentas.
+	 */
 	@BeforeEach
 	void crearUsuarios() {
-		jdbc.sql("DELETE FROM registro_auditoria").update();
-		jdbc.sql("DELETE FROM usuario").update();
+		for (String tabla : new String[] {"asignacion_reloj", "smartwatch", "paciente", "contacto",
+				"registro_auditoria", "usuario"}) {
+			jdbc.sql("DELETE FROM " + tabla).update();
+		}
 		crear("11.111.111-1", "ADMINISTRADOR", "Admin", "admin@muni.cl");
 		crear("22.222.222-2", "COORDINADOR", "Coord", "coord@muni.cl");
 	}

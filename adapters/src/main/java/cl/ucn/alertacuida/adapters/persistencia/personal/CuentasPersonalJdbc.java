@@ -50,6 +50,14 @@ public class CuentasPersonalJdbc implements CuentasPersonal {
 				.single();
 	}
 
+	/** Cuenta cualquier estado: una cuenta pendiente o desactivada también evita crear otro administrador. */
+	@Override
+	public boolean existeAdministrador() {
+		return jdbc.sql("SELECT EXISTS (SELECT 1 FROM usuario WHERE codigo_rol = 'ADMINISTRADOR')")
+				.query(Boolean.class)
+				.single();
+	}
+
 	@Override
 	public boolean rolActivo(String codigoRol) {
 		return jdbc.sql("SELECT EXISTS (SELECT 1 FROM rol WHERE codigo = :rol AND activo)")

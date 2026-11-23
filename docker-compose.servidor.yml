@@ -1,0 +1,108 @@
+# Servidor público (Azure for Students): base de datos, backend, dashboard y Caddy, que da el HTTPS.
+# A diferencia de docker-compose.yml (desarrollo), aquí NO va el perfil dev: sin datos de ejemplo, con claves
+# propias del servidor, correo real por Gmail y solo los puertos 80 y 443 abiertos. Guía: docs/despliegue.md.
+#
+# Primera vez: copiar .env.servidor.example como .env y completarlo (nunca se sube al repositorio).
+# Como .env trae COMPOSE_FILE, basta con "docker compose ..." sin -f:
+# Levantar o actualizar:  docker compose up -d --build
+# Ver si está listo:      docker compose ps                  (estado "healthy")
+# Ver los registros:      docker compose logs -f backend
+# Detener:                docker compose down                (los datos se conservan; NUNCA usar -v aquí)
+
+name: alertacuida
+
+services:
+  postgres:
+    # Misma versión que desarrollo y que las pruebas (PostgresDePrueba.java)
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NOMBRE:-alertacuida}
+      POSTGRES_USER: ${DB_USUARIO:-alertacuida}
+      POSTGRES_PASSWORD: "${DB_CLAVE:?Falta DB_CLAVE en .env}"
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C.UTF-8
+    # Sin "ports": la base solo se alcanza desde los otros contenedores, nunca desde internet
+    volumes:
+      - datos-postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  backend:
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+    restart: unless-stopped
+    environment:
+      # Sin SPRING_PROFILES_ACTIVE: perfil normal, sin datos de ejemplo ni claves de desarrollo
+      DB_URL: jdbc:postgresql://postgres:5432/${DB_NOMBRE:-alertacuida}
+      DB_USUARIO: ${DB_USUARIO:-alertacuida}
+      DB_CLAVE: "${DB_CLAVE:?Falta DB_CLAVE en .env}"
+      # Claves propias del servidor (docs/despliegue.md explica cómo generarlas). Si se pierde CIFRADO_CLAVE,
+      # los datos personales cifrados no se pueden leer: guardar una copia fuera del servidor.
+      RUN_CLAVE: "${RUN_CLAVE:?Falta RUN_CLAVE en .env}"
+      JWT_CLAVE: "${JWT_CLAVE:?Falta JWT_CLAVE en .env}"
+      CIFRADO_CLAVE: "${CIFRADO_CLAVE:?Falta CIFRADO_CLAVE en .env}"
+      RESPUESTA_CLAVE: "${RESPUESTA_CLAVE:?Falta RESPUESTA_CLAVE en .env}"
+      # Dirección pública: va en los enlaces de activación y en los correos
+      DASHBOARD_URL: https://${DOMINIO:?Falta DOMINIO en .env}
+      # Correo real por Gmail (contraseña de aplicación, no la contraseña normal de la cuenta)
+      CORREO_CANAL: SMTP
+      CORREO_REMITENTE: "${SMTP_USUARIO:?Falta SMTP_USUARIO en .env}"
+      SMTP_HOST: smtp.gmail.com
+      SMTP_PUERTO: 587
+      SMTP_USUARIO: "${SMTP_USUARIO}"
+      SMTP_CLAVE: "${SMTP_CLAVE:?Falta SMTP_CLAVE en .env}"
+      SMTP_AUTH: "true"
+      SMTP_TLS: "true"
+      # Avisos al reloj: SIMULADO los anota en el log hasta tener el proyecto de Firebase
+      FCM_CANAL: ${FCM_CANAL:-SIMULADO}
+      # Primer administrador: se crea al arrancar solo si no hay ninguno; el enlace queda en el log
+      ADMIN_INICIAL_RUN: ${ADMIN_INICIAL_RUN:-}
+      ADMIN_INICIAL_NOMBRE: ${ADMIN_INICIAL_NOMBRE:-}
+      ADMIN_INICIAL_CORREO: ${ADMIN_INICIAL_CORREO:-}
+      # Hora de Chile en los registros (las reglas de negocio ya usan ZonaHoraria por su cuenta)
+      TZ: America/Santiago
+    # Sin "ports": Caddy le reenvía /api por la red interna de Docker
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 90s
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    # Sin "ports": Caddy le reenvía todo lo que no es /api
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  # Única puerta de entrada desde internet: saca y renueva solo el certificado HTTPS (Let's Encrypt)
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    environment:
+      DOMINIO: ${DOMINIO:?Falta DOMINIO en .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./servidor/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Los certificados se guardan aquí: así no se piden de nuevo en cada reinicio
+      - datos-caddy:/data
+      - config-caddy:/config
+    depends_on:
+      - backend
+      - frontend
+
+volumes:
+  datos-postgres:
+  datos-caddy:
+  config-caddy:
