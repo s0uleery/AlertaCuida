@@ -1,4 +1,4 @@
-# Compila y prueba el backend en cada push y en cada PR hacia main o develop
+# Compila y prueba el backend y el dashboard en cada push y en cada PR hacia main o develop.
 name: CI
 
 on:
@@ -32,3 +32,29 @@ jobs:
 
       - name: Compilar y correr pruebas
         run: ./mvnw -B verify
+
+  frontend:
+    name: Dashboard (React)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      # Misma versión mayor de Node que frontend/Dockerfile y Versiones.md
+      - name: Instalar Node 26
+        uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      # tsc revisa los tipos y vite arma el dashboard, igual que en el servidor
+      - name: Revisar tipos y compilar
+        run: npm run build
