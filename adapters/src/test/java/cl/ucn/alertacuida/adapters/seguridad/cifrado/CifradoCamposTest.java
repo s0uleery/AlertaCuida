@@ -90,7 +90,8 @@ class CifradoCamposTest {
 				new PropiedadesSeguridad.Sesion(Duration.ofHours(10), Duration.ofMinutes(15), Duration.ofSeconds(10),
 						true),
 				new PropiedadesSeguridad.Bloqueo(5, Duration.ofMinutes(15)),
-				new PropiedadesSeguridad.Activacion("http://localhost/activar", Duration.ofHours(48))));
+				new PropiedadesSeguridad.Activacion("http://localhost/activar", Duration.ofHours(48)),
+				new PropiedadesSeguridad.Recuperacion("http://localhost/restablecer", Duration.ofHours(1), 3)));
 	}
 
 }

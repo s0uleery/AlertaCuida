@@ -1,9 +1,88 @@
 @import "tailwindcss";
 
-/* Colores del mockup del PRLAC; generan clases como bg-marino o text-prlac. */
+/*
+ * Sistema de diseño de AlertaCuida, tomado del mockup del PRLAC (Manual de Marca PRLAC N°09). Cada color genera
+ * clases de Tailwind: bg-navy, text-teal, border-linea, etc. Detalle en docs/diseno.md.
+ */
 @theme {
-  --color-marino: #022b50;
-  --color-tinta: #0a2a4d;
-  --color-prlac: #0072b5;
-  --color-prlac-oscuro: #005c94;
+  /* Tipografía: Roboto para el texto y Roboto Mono para cifras (horas, RUN, folios, indicadores) */
+  --font-sans: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "Roboto Mono", ui-monospace, monospace;
+
+  /* Paleta institucional PRLAC */
+  --color-navy: #003349;
+  --color-navy-hover: #002333;
+  --color-teal: #00a3ad;
+  --color-teal-hover: #00828a;
+  --color-teal-oscuro: #00666c;
+  --color-teal-tinte: #eef9fa;
+  --color-teal-borde: #99dce0;
+  --color-naranja: #e87722;
+  --color-naranja-texto: #8c3f06;
+  --color-naranja-tinte: #fff6ed;
+  --color-naranja-borde: #fad2b0;
+  --color-verde: #00843d;
+  --color-verde-texto: #006630;
+  --color-verde-tinte: #eef9f2;
+  --color-verde-borde: #b5e4c8;
+  --color-magenta: #960051;
+  --color-magenta-hover: #75003f;
+  --color-magenta-tinte: #fdf2f7;
+  --color-magenta-borde: #f5c2dc;
+  --color-purpura: #483698;
+  --color-gob-azul: #0051a8;
+  --color-gob-rojo: #d62828;
+
+  /* Neutros */
+  --color-fondo: #f6f8f9;
+  --color-superficie: #ffffff;
+  --color-superficie-sub: #eff3f5;
+  --color-texto: #2c3e4c;
+  --color-apagado: #5c7080;
+  --color-linea: #dce4e8;
+  --color-linea-oscura: #c2cfd6;
+
+  /* Nombres anteriores, ahora con la paleta nueva (los usa el código existente) */
+  --color-marino: #003349;
+  --color-tinta: #003349;
+  --color-prlac: #003349;
+  --color-prlac-oscuro: #002333;
+
+  --radius-panel: 6px;
+  --shadow-menu: 0 8px 20px rgb(0 51 73 / 0.12);
+  --shadow-modal: 0 20px 40px rgb(0 51 73 / 0.22);
+  --shadow-toast: 0 10px 25px rgb(0 51 73 / 0.25);
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    background-color: var(--color-fondo);
+    color: var(--color-texto);
+    font-size: 13.5px;
+    line-height: 1.45;
+  }
+  h1,
+  h2,
+  h3 {
+    color: var(--color-navy);
+  }
+  /* Foco visible en todo lo que se usa con teclado */
+  :focus-visible {
+    outline: 2px solid var(--color-teal);
+    outline-offset: 2px;
+  }
+  input,
+  select,
+  textarea {
+    accent-color: var(--color-teal);
+  }
+}
+
+/* Cifras alineadas: horas, RUN, folios e indicadores */
+@utility cifra {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }

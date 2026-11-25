@@ -7,6 +7,7 @@ import cl.ucn.alertacuida.adapters.web.auditoria.LecturaAuditada;
 import cl.ucn.alertacuida.application.reloj.ConsultarEstadoRelojes;
 import cl.ucn.alertacuida.application.reloj.ConsultarRelojes;
 import cl.ucn.alertacuida.application.reloj.EditarReloj;
+import cl.ucn.alertacuida.application.reloj.EliminarReloj;
 import cl.ucn.alertacuida.application.reloj.RegistrarReloj;
 import cl.ucn.alertacuida.application.reloj.modelo.EstadoTecnicoReloj;
 import cl.ucn.alertacuida.application.reloj.modelo.RelojConPaciente;
@@ -18,6 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -36,14 +38,16 @@ public class RelojesController {
 	private final RegistrarReloj registrar;
 	private final EditarReloj editar;
 	private final ConsultarEstadoRelojes estados;
+	private final EliminarReloj eliminar;
 
 	/** Recibe los casos de uso desde ConfiguracionCasosDeUso. */
 	public RelojesController(ConsultarRelojes consultar, RegistrarReloj registrar, EditarReloj editar,
-			ConsultarEstadoRelojes estados) {
+			ConsultarEstadoRelojes estados, EliminarReloj eliminar) {
 		this.consultar = consultar;
 		this.registrar = registrar;
 		this.editar = editar;
 		this.estados = estados;
+		this.eliminar = eliminar;
 	}
 
 	/**
@@ -87,6 +91,18 @@ public class RelojesController {
 	public void editar(@PathVariable UUID id, @Valid @RequestBody SolicitudReloj solicitud,
 			@AuthenticationPrincipal Jwt jwt, HttpServletRequest peticion) {
 		editar.editar(id, solicitud.datos(), TokenJwt.leer(jwt).id(), peticion.getRemoteAddr());
+	}
+
+
+	/**
+	 * Borra un reloj que nunca tuvo paciente. 204 sin cuerpo; 404 si no existe; 409 con {@code codigo}
+	 * EN_USO si está vinculado o CON_HISTORIAL si tuvo paciente (se puede pasar a RETIRADO con el PUT).
+	 */
+	@DeleteMapping("/{id}")
+	@PreAuthorize(Permisos.USUARIOS_ELIMINAR)
+	@ResponseStatus(HttpStatus.NO_CONTENT)
+	public void eliminar(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt, HttpServletRequest peticion) {
+		eliminar.eliminar(id, TokenJwt.leer(jwt).id(), peticion.getRemoteAddr());
 	}
 
 }

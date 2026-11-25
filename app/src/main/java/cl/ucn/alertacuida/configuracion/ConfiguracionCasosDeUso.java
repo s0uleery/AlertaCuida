@@ -11,21 +11,29 @@ import cl.ucn.alertacuida.application.comun.puerto.HashRun;
 import cl.ucn.alertacuida.application.comun.puerto.SecretosUnSoloUso;
 import cl.ucn.alertacuida.application.comun.puerto.Transacciones;
 import cl.ucn.alertacuida.application.personal.ActivarCuenta;
+import cl.ucn.alertacuida.application.personal.CambiarContrasena;
 import cl.ucn.alertacuida.application.personal.CambiarRecibeAvisos;
 import cl.ucn.alertacuida.application.personal.CambiarRolPersonal;
 import cl.ucn.alertacuida.application.personal.CambiarTelefonoPersonal;
 import cl.ucn.alertacuida.application.personal.ConsultarEquipo;
+import cl.ucn.alertacuida.application.personal.ConsultarMiCuenta;
 import cl.ucn.alertacuida.application.personal.CrearAdministradorInicial;
 import cl.ucn.alertacuida.application.personal.CrearCuentaPersonal;
 import cl.ucn.alertacuida.application.personal.EmisorEnlacesActivacion;
 import cl.ucn.alertacuida.application.personal.EnviarEnlaceActivacion;
 import cl.ucn.alertacuida.application.personal.GuardarPermisosRol;
 import cl.ucn.alertacuida.application.personal.NuevoEnlaceActivacion;
+import cl.ucn.alertacuida.application.personal.RestablecerContrasena;
+import cl.ucn.alertacuida.application.personal.SolicitarRecuperacion;
+import cl.ucn.alertacuida.application.personal.puerto.ContrasenasGuardadas;
 import cl.ucn.alertacuida.application.personal.puerto.CuentasPersonal;
+import cl.ucn.alertacuida.application.personal.puerto.CuentasPropias;
+import cl.ucn.alertacuida.application.personal.puerto.CuentasRecuperacion;
 import cl.ucn.alertacuida.application.personal.puerto.EquipoPersonal;
 import cl.ucn.alertacuida.application.personal.puerto.HashContrasena;
 import cl.ucn.alertacuida.application.personal.puerto.RolesPermisos;
 import cl.ucn.alertacuida.application.personal.puerto.TokensActivacion;
+import cl.ucn.alertacuida.application.personal.puerto.TokensRecuperacion;
 import cl.ucn.alertacuida.application.sesion.AperturaSesion;
 import cl.ucn.alertacuida.application.sesion.CerrarSesion;
 import cl.ucn.alertacuida.application.sesion.IniciarSesion;
@@ -174,11 +182,46 @@ public class ConfiguracionCasosDeUso {
 		return new CambiarTelefonoPersonal(equipo, auditoria, transacciones, reloj);
 	}
 
+	/** Cambio de la contraseña propia desde "Mi perfil", con el mismo bloqueo por intentos que el login. */
+	@Bean
+	CambiarContrasena cambiarContrasena(CuentasRecuperacion cuentas, ContrasenasGuardadas guardadas,
+			VerificadorContrasena verificador, HashContrasena hashContrasena, HashRun hashRun, RegistroAccesos accesos,
+			PropiedadesSeguridad propiedades, RegistroAuditoria auditoria, Transacciones transacciones, Clock reloj) {
+		PropiedadesSeguridad.Bloqueo bloqueo = propiedades.bloqueo();
+		return new CambiarContrasena(cuentas, guardadas, verificador, hashContrasena, hashRun, accesos,
+				new PoliticaBloqueo(bloqueo.intentos(), bloqueo.ventana()), auditoria, transacciones, reloj);
+	}
+
+	/** Datos de la cuenta propia, para "Mi cuenta". */
+	@Bean
+	ConsultarMiCuenta consultarMiCuenta(CuentasPropias cuentas) {
+		return new ConsultarMiCuenta(cuentas);
+	}
+
 	/** Permisos de los roles. */
 	@Bean
 	GuardarPermisosRol guardarPermisosRol(RolesPermisos roles, RegistroAuditoria auditoria,
 			Transacciones transacciones, Clock reloj) {
 		return new GuardarPermisosRol(roles, auditoria, transacciones, reloj);
+	}
+
+	/** Envío del enlace para recuperar la contraseña, con la plantilla "recuperacion" de correos.yml. */
+	@Bean
+	SolicitarRecuperacion solicitarRecuperacion(CuentasRecuperacion cuentas, TokensRecuperacion tokens,
+			SecretosUnSoloUso secretos, HashRun hashRun, PlantillasCorreo plantillas, CanalNotificacion canalCorreo,
+			Transacciones transacciones, Clock reloj, PropiedadesSeguridad propiedades) {
+		PropiedadesSeguridad.Recuperacion recuperacion = propiedades.recuperacion();
+		return new SolicitarRecuperacion(cuentas, tokens, secretos, hashRun, plantillas, canalCorreo, transacciones,
+				reloj, recuperacion.url(), recuperacion.vigencia(), recuperacion.maximoPorHora());
+	}
+
+	/** Cambio de la contraseña con el enlace de recuperación. */
+	@Bean
+	RestablecerContrasena restablecerContrasena(TokensRecuperacion tokens, SecretosUnSoloUso secretos,
+			CuentasRecuperacion cuentas, HashRun hashRun, HashContrasena hashContrasena, RegistroAuditoria auditoria,
+			Transacciones transacciones, Clock reloj) {
+		return new RestablecerContrasena(tokens, secretos, cuentas, hashRun, hashContrasena, auditoria, transacciones,
+				reloj);
 	}
 
 	/** Activación de la cuenta con el enlace. */

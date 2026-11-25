@@ -99,7 +99,7 @@ export function FormularioCuenta({ alCrear }: { alCrear: (enlace: RespuestaEnlac
 
       <label className="block">
         <span className={CLASE_ETIQUETA}>
-          Cargo <span className="font-normal text-slate-400">(opcional)</span>
+          Cargo <span className="font-normal text-apagado">(opcional)</span>
         </span>
         <input
           value={datos.cargo}
@@ -117,7 +117,7 @@ export function FormularioCuenta({ alCrear }: { alCrear: (enlace: RespuestaEnlac
             <label
               key={rol.valor}
               className={`cursor-pointer rounded-md border px-3 py-2 ${
-                datos.rol === rol.valor ? 'border-sky-600 bg-sky-50' : 'border-slate-300'
+                datos.rol === rol.valor ? 'border-teal bg-teal-tinte' : 'border-linea-oscura'
               }`}
             >
               <input
@@ -128,8 +128,8 @@ export function FormularioCuenta({ alCrear }: { alCrear: (enlace: RespuestaEnlac
                 onChange={() => cambiar('rol', rol.valor)}
                 className="mr-2"
               />
-              <span className="font-medium text-slate-800">{rol.etiqueta}</span>
-              <span className="block text-xs text-slate-500">{rol.descripcion}</span>
+              <span className="font-medium text-texto">{rol.etiqueta}</span>
+              <span className="block text-xs text-apagado">{rol.descripcion}</span>
             </label>
           ))}
         </div>
@@ -138,7 +138,7 @@ export function FormularioCuenta({ alCrear }: { alCrear: (enlace: RespuestaEnlac
       <label className="block">
         <span className={CLASE_ETIQUETA}>
           Teléfono con WhatsApp{' '}
-          {!pideTelefono && <span className="font-normal text-slate-400">(opcional)</span>}
+          {!pideTelefono && <span className="font-normal text-apagado">(opcional)</span>}
         </span>
         <input
           type="tel"
@@ -157,7 +157,7 @@ export function FormularioCuenta({ alCrear }: { alCrear: (enlace: RespuestaEnlac
           className={CLASE_CAMPO}
         />
         {pideTelefono && (
-          <span className="mt-1 block text-xs text-slate-500">
+          <span className="mt-1 block text-xs text-apagado">
             Los coordinadores reciben por WhatsApp los avisos de la oficina PRLAC en horario laboral.
           </span>
         )}
@@ -173,7 +173,7 @@ export function FormularioCuenta({ alCrear }: { alCrear: (enlace: RespuestaEnlac
         />
         <span>
           La persona aceptó recibir avisos por WhatsApp
-          <span className="block text-xs text-slate-500">Sin esta aceptación, Meta no permite enviarle mensajes.</span>
+          <span className="block text-xs text-apagado">Sin esta aceptación, Meta no permite enviarle mensajes.</span>
         </span>
       </label>
 
@@ -186,7 +186,7 @@ export function FormularioCuenta({ alCrear }: { alCrear: (enlace: RespuestaEnlac
         />
         <span>
           Recibe avisos técnicos por correo
-          <span className="block text-xs text-slate-500">
+          <span className="block text-xs text-apagado">
             Cuando un reloj deja de enviar datos, tiene la batería baja, no se lo ponen o envía demasiadas alertas. Solo
             en horario laboral. Se puede cambiar después en la lista de perfiles.
           </span>

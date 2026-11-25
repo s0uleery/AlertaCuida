@@ -36,7 +36,7 @@ Nadie llama automáticamente al SAMU. En las alertas graves, el mensaje le indic
 
 Las de salud (de `CAIDA` a `BOTON_AYUDA`) escalan a los contactos del paciente, y además se avisan a la oficina PRLAC. Las técnicas (las cuatro últimas) solo se avisan por correo a las cuentas con `recibe_avisos`. En el dashboard van en pestañas separadas (Salud y Reloj).
 
-El servidor solo puede crear alertas técnicas y simulacros: lo impide un `CHECK` de la base. Por eso hoy no puede crear una `INACTIVIDAD`. El contrato todavía permite que el reloj envíe `BATERIA_BAJA` y `RELOJ_NO_PUESTO` (pregunta 2 de [api-reloj.md](api-reloj.md)).
+El servidor solo puede crear alertas técnicas y simulacros: lo impide un `CHECK` de la base. Por eso hoy no puede crear una `INACTIVIDAD`. Al revés, el reloj solo envía alertas de salud: si envía una técnica, la API responde 400 `MENSAJE_INVALIDO` (`TipoEvento.loDetectaElReloj()`, 24-11-2026). La base no lo impide, para no romper alertas ya guardadas.
 
 ## Gravedad y a quién se avisa
 
@@ -48,7 +48,8 @@ La regla está fija en el código (`ReglaEnrutamiento`). El horario de cada cont
 | `MEDIA` | Avisa a los contactos | Avisa a los contactos disponibles a esa hora |
 | `GRAVE` | Avisa a los contactos | Avisa a los contactos disponibles a esa hora |
 
-- **Horario hábil:** lunes a jueves de 08:30 a 17:30 y viernes de 08:30 a 16:30, hora de Chile, sin feriados nacionales. El inicio cuenta y el fin no: a las 17:30 en punto ya es fuera de horario.
+- **Horario hábil:** al inicio, lunes a jueves de 08:30 a 17:30 y viernes de 08:30 a 16:30, hora de Chile, sin feriados nacionales. El inicio cuenta y el fin no: a las 17:30 en punto ya es fuera de horario. Desde el 25-11-2026 la jornada se edita en Calendario > Jornada hábil y feriados (`ADMINISTRACION:EDITAR`) y rige al tiro, también para el reloj; queda en la auditoría. Los feriados no se editan desde el dashboard.
+- **Simulador de canales** (Calendario, 25-11-2026): con un día, una hora, una gravedad y, si se quiere, un usuario, muestra qué haría el sistema con estas mismas reglas: si espera al día hábil, si avisa a la oficina PRLAC y a qué contactos avisaría el reloj, en orden. No avisa a nadie.
 - Cada paciente debe tener contactos disponibles a toda hora, porque las medias y las graves avisan siempre.
 - Con el botón de ayuda van primero los contactos `VECINO`, por prioridad, y después el resto, por prioridad.
 
@@ -161,6 +162,8 @@ Programado el 10-11-2026. Detalle técnico en [backend.md](backend.md#correo-ins
   - "Voy" confirma la alerta y deja el aviso `ALERTA_CONFIRMADA` al reloj para que deje de escalar. "No puedo" queda registrado y el reloj sigue con el siguiente.
   - El correo al contacto sale cuando el reloj pide avisarle por correo, o como respaldo de su WhatsApp fallido.
   - El aviso a la oficina y el de agravamiento a los coordinadores también llevan el enlace (16-11-2026). El correo del vigilante y los de las técnicas no lo llevan: no piden confirmar.
+  - **Llamar al paciente (24-11-2026):** mientras la alerta está abierta, lo primero en la página es "Llamar al paciente", que llama al número de la SIM del reloj (`smartwatch.numero_sim`). Si el reloj no tiene número, no aparece. El clic queda registrado (`registro_intento.fecha_hora_llamada`, solo el primero) y en la línea de tiempo; no se sabe si contestaron.
+  - **Llegué donde el paciente (24-11-2026):** quien respondió "Voy en camino" avisa al llegar. Queda en `fecha_hora_llegada` (V17 exige que antes haya dicho que iba) y, si la alerta seguía abierta, **la resuelve el sistema**: sin responsable nuevo, clasificación ni observaciones, con el aviso `ALERTA_RESUELTA` al reloj. Si el equipo ya la había resuelto, solo se registra la llegada. La ficha muestra "Resuelta por la llegada de …" y el botón **Completar cierre**, donde el equipo agrega la clasificación y las observaciones; con `POSITIVA`, quien completa queda como responsable y se abre el seguimiento.
 - **Registro:** cada correo queda en `registro_intento`. Las cuentas del equipo figuran como **contacto interno**, que es solo un enlace a su cuenta y nunca entra en la lista que recorre el reloj. Estos avisos no cambian el estado de contacto de la alerta.
 
 ## Estado y cierre
@@ -207,7 +210,8 @@ Los de `application.properties` requieren reiniciar el backend.
 | Sin noticias del reloj antes de que avise el vigilante del escalamiento | 15 minutos | `alertacuida.escalamiento.plazo` |
 | Qué alertas van por correo a `recibe_avisos` | Las técnicas | `TipoEvento.tecnicas()` |
 | Texto de los correos | Ver arriba | `app/src/main/resources/correos.yml` |
-| Horario hábil y feriados | Ver arriba | `app/src/main/resources/calendario.yml` |
+| Horario hábil | Ver arriba | Calendario > Jornada hábil y feriados (tabla `horario_habil`); el valor inicial en `calendario.yml` |
+| Feriados | Ver arriba | `app/src/main/resources/calendario.yml` |
 | Gravedad de cada técnica | Tabla de tipos | Código de cada regla (`ReglaSilencioDatos`, `ReglaBateriaBaja`, `ReglaRelojNoPuesto`) y `RecibirAlerta` |
 | Atraso del semáforo de relojes (amarillo) | Más de 2 h 30 min sin sincronizar | `alertacuida.relojes.atraso` |
 | Aviso de plan de datos por vencer (semáforo) | 30 días | `alertacuida.relojes.aviso-plan-dias` |
@@ -303,6 +307,11 @@ Los de `application.properties` requieren reiniciar el backend.
 | 19-11-2026 | Los correos y WhatsApp fallidos se revisan en la ficha de cada alerta; no hay lista aparte por ahora | | Confirmada |
 | 19-11-2026 | Bandeja de día hábil (3.7): "marcar como revisada" es Resolver; muestra las abiertas `PENDIENTE_DIA_HABIL`, la más antigua primero | Sin estado nuevo que guardar | Confirmada |
 | 19-11-2026 | Panel de la portada: "alerta abierta" igual que la lista (en seguimiento cuenta; sin canceladas ni simulacros; salud y técnicas); lo ve `ALERTAS:VER` | | Confirmada |
+| 24-11-2026 | `BATERIA_BAJA` y `RELOJ_NO_PUESTO` las crea solo el servidor con la sincronización; el reloj no las envía (400 si lo hace) | Una enviada por el reloj no se cerraría sola y bloquearía las del servidor | Confirmada |
+| 24-11-2026 | El reloj no avisa a la oficina PRLAC: recorre solo los contactos del paciente, y el servidor avisa a los coordinadores en paralelo | Respuesta a quien desarrolla el reloj | Confirmada |
+| 24-11-2026 | En la página del enlace, primero "Llamar al paciente", al número de la SIM del reloj, solo con la alerta abierta; el clic queda en la línea de tiempo | El paciente no tiene teléfono guardado; el reloj tiene SIM | Confirmada |
+| 24-11-2026 | WhatsApp real (2.9) según la guía de webhooks de Meta: plantillas aprobadas (leve, grave, simulacro) con botones de payload `VOY_EN_CAMINO`/`NO_PUEDO`; un 4xx de Meta no se reintenta y sale el correo; la baja del opt-in sigue manual y no se guarda el contenido de los webhooks | Lo más simple que cumple con Meta; las plantillas se leen de Meta en vez de copiarlas | Confirmada |
+| 24-11-2026 | "Llegué donde el paciente", solo para quien dijo "Voy en camino": resuelve la alerta por el sistema, y el equipo completa la clasificación y las observaciones después | Que la llegada cierre el caso sin esperar al equipo, sin perder la clasificación | Confirmada |
 
 ## Qué falta
 
@@ -316,13 +325,12 @@ Los de `application.properties` requieren reiniciar el backend.
 
 1. Con quien desarrolla el reloj: si al terminar la lista sin respuesta (`SIN_RESPUESTA`) vuelve a empezarla, y que `confirmadaPor.idContacto` puede ser un coordinador que no está en su lista (pregunta 12 de [api-reloj.md](api-reloj.md)).
 2. Inactividad como respaldo del servidor (pregunta 11 de [api-reloj.md](api-reloj.md)).
-3. Quién envía `BATERIA_BAJA` y `RELOJ_NO_PUESTO`. Una enviada por el reloj no se cierra sola y, mientras siga abierta, el servidor no crea otra (pregunta 2).
-4. Con quien desarrolla el reloj: cada cuánto revisa el GPS, cuántas posiciones fuera del círculo exige, si vuelve a alertar al regresar, y dónde va el botón y cómo evitar presionarlo por error (preguntas 9 y 10).
-5. Matriz FC × SpO2, pendiente del Anexo B, y validación clínica de todos los valores provisionales.
+3. Con quien desarrolla el reloj: cada cuánto revisa el GPS, cuántas posiciones fuera del círculo exige, si vuelve a alertar al regresar, y dónde va el botón y cómo evitar presionarlo por error (preguntas 9 y 10).
+4. Matriz FC × SpO2, pendiente del Anexo B, y validación clínica de todos los valores provisionales.
 
 ## Pruebas
 
 - `RecibirAlertaTest`, `RevisionDiscrepanciasTest`, `VigilarRelojesTest`, `PlantillasCorreoTest`, `EncolarCorreosTest`, `EnviarCorreosPendientesTest`, `AvisarOficinaTest` y `SolicitarAvisoTest`: unitarias, sin base de datos.
-- `RequisitosRecepcionAlertasTest`, `RequisitosReglasAusenciaTest`, `RequisitosCorreoTest`, `RequisitosSolicitudAvisoTest`, `RequisitosVigilanteEscalamientoTest`, `RequisitosAvisoOficinaTest`, `RequisitosRespuestaContactoTest`, `RequisitosAvisosRelojTest` y `RequisitosAtencionAlertasTest`: contra PostgreSQL real, diseñadas desde los requisitos. La del correo usa GreenMail, sin enviar correos reales. Sin Docker se omiten.
+- `RequisitosRecepcionAlertasTest`, `RequisitosReglasAusenciaTest`, `RequisitosCorreoTest`, `RequisitosSolicitudAvisoTest`, `RequisitosVigilanteEscalamientoTest`, `RequisitosAvisoOficinaTest`, `RequisitosRespuestaContactoTest`, `RequisitosAvisosRelojTest`, `RequisitosAtencionAlertasTest` y `RequisitosLlamadaYLlegadaTest`: contra PostgreSQL real, diseñadas desde los requisitos. La del correo usa GreenMail, sin enviar correos reales. Sin Docker se omiten.
 - `RequisitosEscalamientoCompletoTest` recorre el escalamiento de punta a punta (incluido un coordinador que confirma y un reloj sin señal), y `RequisitosReinicioEscalamientoTest` reinicia el servidor de verdad a mitad del recorrido.
 - `ApiRelojTest` cubre la API del reloj, y `ModeloDatosTest` las reglas de la base.

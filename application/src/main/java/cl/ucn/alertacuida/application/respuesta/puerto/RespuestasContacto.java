@@ -25,4 +25,30 @@ public interface RespuestasContacto {
 	/** Deja pendiente el aviso ALERTA_CONFIRMADA al reloj; si ya existe, no hace nada. */
 	void dejarAvisoConfirmadaPendiente(UUID idAlerta);
 
+	/**
+	 * Guarda que el contacto presionó "Llamar al paciente", solo la primera vez.
+	 *
+	 * @return si la guardó; false si ya estaba
+	 */
+	boolean registrarLlamada(UUID idIntento, Instant fecha);
+
+	/**
+	 * Guarda que el contacto llegó donde el paciente, solo si respondió "Voy en camino" y aún no lo había
+	 * avisado. Debe llamarse dentro de una transacción.
+	 *
+	 * @return si la guardó
+	 */
+	boolean registrarLlegada(UUID idIntento, Instant fecha);
+
+	/**
+	 * Resuelve la alerta por el sistema (sin responsable nuevo, clasificación ni observaciones), solo si sigue
+	 * abierta. El equipo completa el cierre después.
+	 *
+	 * @return si la resolvió; false si ya estaba cerrada
+	 */
+	boolean resolverPorLlegada(UUID idAlerta, Instant fecha);
+
+	/** Deja pendiente el aviso ALERTA_RESUELTA al reloj; si ya existe, no hace nada. */
+	void dejarAvisoResueltaPendiente(UUID idAlerta);
+
 }

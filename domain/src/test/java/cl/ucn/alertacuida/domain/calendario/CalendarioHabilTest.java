@@ -106,6 +106,24 @@ class CalendarioHabilTest {
 		assertThatThrownBy(() -> new Feriado(navidad, " ")).isInstanceOf(IllegalArgumentException.class);
 	}
 
+	/**
+	 * Al cambiar la jornada, rige al tiro: un día que deja de estar no es hábil y uno nuevo sí. Los feriados
+	 * siguen igual. Una jornada sin días se rechaza y deja la anterior.
+	 */
+	@Test
+	void cambiarLaJornadaRigeAlTiro() {
+		CalendarioHabil propio = CalendarioHabil.de(Map.of(DiaSemana.LUNES, SEMANA),
+				List.of(new Feriado(LocalDate.parse("2026-10-12"), "Encuentro de Dos Mundos")));
+
+		propio.cambiarHorario(Map.of(DiaSemana.SABADO, new TramoHabil(hora("09:00"), hora("13:00"))));
+
+		assertThat(propio.esHabil(enChile("2026-10-26T10:00"))).isFalse();
+		assertThat(propio.esHabil(enChile("2026-10-31T10:00"))).isTrue();
+		assertThat(propio.esFeriado(LocalDate.parse("2026-10-12"))).isTrue();
+		assertThatThrownBy(() -> propio.cambiarHorario(Map.of())).isInstanceOf(IllegalArgumentException.class);
+		assertThat(propio.horario()).containsOnlyKeys(DiaSemana.SABADO);
+	}
+
 	/** Los días en español corresponden a los de Java. */
 	@Test
 	void losDiasCorrespondenALosDeJava() {

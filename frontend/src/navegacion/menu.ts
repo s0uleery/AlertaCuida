@@ -20,17 +20,17 @@ export interface Seccion {
   pagina?: ComponentType;
 }
 
-/** Secciones en el orden en que aparecen en el menú. */
+/** Secciones en el orden en que aparecen en el menú (el del mockup; Inicio lo agrega la plantilla). */
 export const SECCIONES: Seccion[] = [
   { ruta: '/alertas', etiqueta: 'Alertas', permiso: 'ALERTAS:VER', pagina: PaginaAlertas },
+  // Horario hábil, feriados y simulador: lo ve todo el equipo, para entender por qué una alerta leve espera
+  { ruta: '/calendario', etiqueta: 'Calendario', pagina: PaginaCalendario },
   // "Usuarios" son los usuarios del programa (pacientes), como se les llama en el PRLAC
   { ruta: '/usuarios', etiqueta: 'Usuarios', permiso: 'USUARIOS:VER', pagina: PaginaUsuarios },
   // Los relojes usan los permisos de USUARIOS: quien inscribe al usuario le entrega el reloj
   { ruta: '/relojes', etiqueta: 'Relojes', permiso: 'USUARIOS:VER', pagina: PaginaRelojes },
-  // Horario hábil y feriados: lo ve todo el equipo, para entender por qué una alerta leve espera
-  { ruta: '/calendario', etiqueta: 'Calendario', pagina: PaginaCalendario },
   // La lista de reportes lee /api/pacientes, que exige USUARIOS:VER (hoy lo tienen los mismos roles)
-  { ruta: '/reportes', etiqueta: 'Reportes', permiso: 'REPORTES:VER', pagina: PaginaReportes },
+  { ruta: '/reportes', etiqueta: 'Reportería', permiso: 'REPORTES:VER', pagina: PaginaReportes },
   // Aquí van las cuentas del equipo
   { ruta: '/administracion', etiqueta: 'Administración', permiso: 'ADMINISTRACION:VER', pagina: PaginaAdministracion },
 ];

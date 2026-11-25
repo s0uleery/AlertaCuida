@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react';
-import { CLASE_CAMPO, CLASE_ERROR, CLASE_ETIQUETA } from '../../comun/estilos';
+import { CLASE_CAMPO, CLASE_ETIQUETA } from '../../comun/estilos';
 import { formatearFechaHora, formatearHoraReciente } from '../../comun/fechas';
+import { Aviso, Cargando, Vacio } from '../../comun/ui/Aviso';
+import { Panel } from '../../comun/ui/Panel';
+import { Paginacion, usePaginacion } from '../../comun/ui/Tabla';
 import { useDatos } from '../../comun/useDatos';
 import { auditoriaApi } from './auditoriaApi';
 import type { AccionAuditoria, EntidadAuditoria, RegistroAuditoria } from './tipos';
@@ -41,6 +44,7 @@ const ENTIDAD: Record<EntidadAuditoria, { nombre: string; categoria: Categoria }
   ROL: { nombre: 'rol', categoria: 'Administración' },
   PERMISO_ROL: { nombre: 'permisos de un rol', categoria: 'Administración' },
   REPORTE: { nombre: 'reporte', categoria: 'Reportes' },
+  CALENDARIO: { nombre: 'jornada hábil', categoria: 'Administración' },
 };
 
 /** Tipo de acción de un registro: el inicio de sesión no tiene entidad. */
@@ -96,6 +100,8 @@ export function Auditoria() {
     [datos, filtro, busqueda],
   );
 
+  const paginacion = usePaginacion(visibles, 20);
+
   /** Abre o cierra el detalle de un registro. */
   function alternar(id: string) {
     setAbiertos((anteriores) => {
@@ -107,14 +113,14 @@ export function Auditoria() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3">
+    <Panel titulo="Registro de auditoría">
+      <div className="mb-4 flex flex-wrap items-end gap-3">
         <label className="block w-52">
           <span className={CLASE_ETIQUETA}>Tipo de acción</span>
           <select
             value={filtro}
             onChange={(e) => setFiltro(e.target.value as Categoria | '')}
-            className="mt-1 w-full rounded-sm border border-slate-300 bg-white px-3 py-2"
+            className={CLASE_CAMPO}
           >
             <option value="">Todas</option>
             {(Object.keys(ICONO) as Categoria[]).map((c) => (
@@ -131,7 +137,7 @@ export function Auditoria() {
             className={CLASE_CAMPO}
           />
         </label>
-        <label className="flex items-center gap-2 py-2">
+        <label className="flex items-center gap-2 py-2 text-[13px] text-apagado">
           <input
             type="checkbox"
             checked={incluirLecturas}
@@ -141,51 +147,51 @@ export function Auditoria() {
         </label>
       </div>
 
-      {error && <p className={CLASE_ERROR}>{error}</p>}
-      {cargando && <p className="text-slate-500">Cargando…</p>}
+      {error && <Aviso tono="error">{error}</Aviso>}
+      {cargando && !datos && <Cargando />}
 
       {datos && (
         <>
-          <h2 className="text-lg font-medium text-tinta">
-            {visibles.length} {visibles.length === 1 ? 'acción' : 'acciones'}
-          </h2>
+          <p className="mb-1 text-[12.5px] text-apagado">
+            <b className="cifra text-navy">{visibles.length}</b> {visibles.length === 1 ? 'acción' : 'acciones'}
+          </p>
           <ul>
-            {visibles.map((registro) => {
+            {paginacion.visibles.map((registro) => {
               const abierto = abiertos.has(registro.id);
               return (
-                <li key={registro.id} className="flex items-start gap-3.5 border-t border-slate-300 px-1 py-3.5">
+                <li key={registro.id} className="flex items-start gap-3.5 border-t border-linea px-1 py-3">
                   <span
                     aria-hidden="true"
-                    className="grid size-8.5 flex-none place-items-center rounded-full bg-slate-100 font-bold text-prlac"
+                    className="grid size-8.5 flex-none place-items-center rounded-full bg-teal-tinte font-bold text-teal-oscuro"
                   >
                     {ICONO[categoria(registro)]}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="font-bold text-tinta">{titulo(registro)}</div>
-                    <div className="mt-0.5">
-                      <span className="font-medium text-prlac">{autor(registro)}</span> •{' '}
-                      <time dateTime={registro.fechaHora} title={formatearFechaHora(registro.fechaHora)}>
+                    <div className="text-[13px] font-bold text-navy">{titulo(registro)}</div>
+                    <div className="mt-0.5 text-[12.5px] text-apagado">
+                      <span className="font-medium text-teal-oscuro">{autor(registro)}</span> ·{' '}
+                      <time dateTime={registro.fechaHora} title={formatearFechaHora(registro.fechaHora)} className="cifra">
                         {formatearHoraReciente(registro.fechaHora)}
                       </time>
                     </div>
                     {abierto && (
-                      <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-sm bg-slate-100 px-3 py-2 text-[13px]">
+                      <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 rounded-panel bg-superficie-sub px-3 py-2 text-[12.5px]">
                         {registro.idEntidad && (
                           <>
-                            <dt className="text-slate-500">{rotuloObjeto(registro)}</dt>
-                            <dd className="font-mono break-all">{registro.idEntidad}</dd>
+                            <dt className="text-apagado">{rotuloObjeto(registro)}</dt>
+                            <dd className="cifra break-all">{registro.idEntidad}</dd>
                           </>
                         )}
                         {Object.entries(registro.detalle ?? {}).map(([clave, valor]) => (
                           <div key={clave} className="contents">
-                            <dt className="text-slate-500">{clave}</dt>
+                            <dt className="text-apagado">{clave}</dt>
                             <dd className="break-all">{comoTexto(valor)}</dd>
                           </div>
                         ))}
                         {registro.ip && (
                           <>
-                            <dt className="text-slate-500">IP</dt>
-                            <dd className="font-mono">{registro.ip}</dd>
+                            <dt className="text-apagado">IP</dt>
+                            <dd className="cifra">{registro.ip}</dd>
                           </>
                         )}
                       </dl>
@@ -195,21 +201,22 @@ export function Auditoria() {
                     onClick={() => alternar(registro.id)}
                     aria-expanded={abierto}
                     aria-label={abierto ? 'Ocultar detalle' : 'Ver detalle'}
-                    className={`px-2 py-1 text-slate-500 hover:text-tinta ${abierto ? 'rotate-180' : ''}`}
+                    className={`rounded px-2 py-1 text-apagado hover:bg-superficie-sub hover:text-navy ${abierto ? 'rotate-180' : ''}`}
                   >
                     ⌄
                   </button>
                 </li>
               );
             })}
-            {visibles.length === 0 && (
-              <li className="border-t border-slate-300 px-1 py-3.5 text-slate-500">
-                {datos.length === 0 ? 'Todavía no hay acciones registradas.' : 'No hay acciones con esos filtros.'}
-              </li>
-            )}
           </ul>
+          {visibles.length === 0 && (
+            <Vacio>
+              {datos.length === 0 ? 'Todavía no hay acciones registradas.' : 'No hay acciones con esos filtros.'}
+            </Vacio>
+          )}
+          <Paginacion estado={paginacion} opciones={[20, 50, 100]} />
         </>
       )}
-    </div>
+    </Panel>
   );
 }

@@ -4,10 +4,13 @@
 export class ErrorApi extends Error {
   /** Código HTTP: 400 dato inválido, 401 sin sesión, 403 sin permiso, 409 duplicado… */
   readonly estado: number;
+  /** Código propio del backend cuando hay que distinguir casos con el mismo estado (ej. "CON_HISTORIAL") */
+  readonly codigo: string | null;
 
-  constructor(estado: number, mensaje: string) {
+  constructor(estado: number, mensaje: string, codigo: string | null = null) {
     super(mensaje);
     this.estado = estado;
+    this.codigo = codigo;
   }
 }
 
@@ -24,8 +27,12 @@ const RUTAS_PUBLICAS = new Set([
   '/auth/renovar',
   '/auth/salir',
   '/auth/activar',
+  '/auth/recuperar',
+  '/auth/restablecer',
   '/respuestas-contacto',
   '/respuestas-contacto/consulta',
+  '/respuestas-contacto/llamada',
+  '/respuestas-contacto/llegada',
 ]);
 
 let tokenActual: ProveedorToken = () => null;
@@ -59,7 +66,8 @@ export async function pedir<T>(ruta: string, opciones: RequestInit = {}): Promis
     }
   }
   if (!respuesta.ok) {
-    throw new ErrorApi(respuesta.status, await mensajeDeError(respuesta));
+    const { mensaje, codigo } = await leerError(respuesta);
+    throw new ErrorApi(respuesta.status, mensaje, codigo);
   }
   if (respuesta.status === 204) {
     return undefined as T;
@@ -67,10 +75,41 @@ export async function pedir<T>(ruta: string, opciones: RequestInit = {}): Promis
   return (await respuesta.json()) as T;
 }
 
+/**
+ * Descarga un archivo del backend (por ejemplo, un reporte en Excel o PDF) con el token de la sesión, y lo guarda
+ * con el nombre que propone el servidor.
+ *
+ * @param ruta        sin el prefijo /api
+ * @param nombrePorDefecto si el servidor no propone uno
+ * @throws ErrorApi si el backend responde con error
+ */
+export async function descargar(ruta: string, nombrePorDefecto: string): Promise<void> {
+  const opciones: RequestInit = { headers: { Accept: '*/*' } };
+  let respuesta = await enviar(ruta, opciones, true);
+  if (respuesta.status === 401 && tokenActual()) {
+    if (await renovarToken()) respuesta = await enviar(ruta, opciones, true);
+    if (respuesta.status === 401) alExpirar();
+  }
+  if (!respuesta.ok) {
+    const { mensaje, codigo } = await leerError(respuesta);
+    throw new ErrorApi(respuesta.status, mensaje, codigo);
+  }
+  const disposicion = respuesta.headers.get('Content-Disposition') ?? '';
+  const nombre = /filename="?([^";]+)"?/.exec(disposicion)?.[1] ?? nombrePorDefecto;
+  const url = URL.createObjectURL(await respuesta.blob());
+  const enlace = document.createElement('a');
+  enlace.href = url;
+  enlace.download = nombre;
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+  URL.revokeObjectURL(url);
+}
+
 /** Hace la petición con las cabeceras de la API y, si corresponde, con el token actual. */
 function enviar(ruta: string, opciones: RequestInit, conToken: boolean): Promise<Response> {
   const cabeceras = new Headers(opciones.headers);
-  cabeceras.set('Accept', 'application/json');
+  if (!cabeceras.has('Accept')) cabeceras.set('Accept', 'application/json');
   if (opciones.body) {
     cabeceras.set('Content-Type', 'application/json');
   }
@@ -81,19 +120,24 @@ function enviar(ruta: string, opciones: RequestInit, conToken: boolean): Promise
   return fetch(`/api${ruta}`, { ...opciones, headers: cabeceras });
 }
 
-/** Los errores del backend vienen como ProblemDetail ({ detail: "..." }). */
-async function mensajeDeError(respuesta: Response): Promise<string> {
+/** Los errores del backend vienen como ProblemDetail ({ detail: "...", codigo?: "..." }). */
+async function leerError(respuesta: Response): Promise<{ mensaje: string; codigo: string | null }> {
   try {
     const cuerpo = await respuesta.json();
     if (typeof cuerpo?.detail === 'string') {
-      return cuerpo.detail;
+      return { mensaje: cuerpo.detail, codigo: typeof cuerpo.codigo === 'string' ? cuerpo.codigo : null };
     }
   } catch {
     // Sin cuerpo JSON: se usa el mensaje genérico
   }
+  return { mensaje: mensajeGenerico(respuesta.status), codigo: null };
+}
+
+/** @returns el mensaje para un error sin texto propio del backend */
+function mensajeGenerico(estado: number): string {
   // 404 o 405 sin mensaje propio: el backend todavía no tiene ese endpoint
-  if (respuesta.status === 404 || respuesta.status === 405) {
+  if (estado === 404 || estado === 405) {
     return 'Esta función todavía no está disponible en el servidor.';
   }
-  return respuesta.status >= 500 ? 'El servidor no respondió. Intenta de nuevo.' : 'No se pudo completar la acción.';
+  return estado >= 500 ? 'El servidor no respondió. Intenta de nuevo.' : 'No se pudo completar la acción.';
 }

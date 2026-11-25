@@ -1,7 +1,14 @@
 package cl.ucn.alertacuida.configuracion;
 
+import cl.ucn.alertacuida.application.auditoria.puerto.RegistroAuditoria;
 import cl.ucn.alertacuida.application.calendario.ConsultarCalendario;
+import cl.ucn.alertacuida.application.calendario.GuardarHorarioHabil;
 import cl.ucn.alertacuida.application.calendario.ReglaEnrutamiento;
+import cl.ucn.alertacuida.application.calendario.SimularEscalamiento;
+import cl.ucn.alertacuida.application.calendario.puerto.HorariosHabiles;
+import cl.ucn.alertacuida.application.comun.puerto.Transacciones;
+import cl.ucn.alertacuida.application.contacto.puerto.ListaDelPaciente;
+import java.time.Clock;
 import cl.ucn.alertacuida.domain.calendario.CalendarioHabil;
 import cl.ucn.alertacuida.domain.calendario.DiaSemana;
 import cl.ucn.alertacuida.domain.calendario.Feriado;
@@ -32,17 +39,37 @@ public class ConfiguracionCalendario {
 	 *                                  propiedad que hay que revisar
 	 */
 	@Bean
-	CalendarioHabil calendarioHabil(PropiedadesCalendario propiedades) {
-		Map<DiaSemana, TramoHabil> horario = new EnumMap<>(DiaSemana.class);
+	CalendarioHabil calendarioHabil(PropiedadesCalendario propiedades, HorariosHabiles horarios) {
+		Map<DiaSemana, TramoHabil> delArchivo = new EnumMap<>(DiaSemana.class);
 		propiedades.horario().forEach((dia, tramo) -> {
 			String propiedad = "alertacuida.calendario.horario." + dia;
-			horario.put(dia(dia, propiedad), new TramoHabil(hora(tramo.inicio(), propiedad + ".inicio"),
+			delArchivo.put(dia(dia, propiedad), new TramoHabil(hora(tramo.inicio(), propiedad + ".inicio"),
 					hora(tramo.fin(), propiedad + ".fin")));
 		});
 		List<Feriado> feriados = propiedades.feriados().entrySet().stream()
 				.map(feriado -> new Feriado(fecha(feriado.getKey()), feriado.getValue()))
 				.toList();
-		return CalendarioHabil.de(horario, feriados);
+		// Desde el 25-11-2026 el horario lo edita el equipo y vive en la base; calendario.yml solo la siembra
+		Map<DiaSemana, TramoHabil> guardado = horarios.leer();
+		if (guardado.isEmpty()) {
+			horarios.guardar(delArchivo);
+			guardado = delArchivo;
+		}
+		return CalendarioHabil.de(guardado, feriados);
+	}
+
+	/** Simulador de canales del Calendario: las mismas reglas que aplica el reloj. */
+	@Bean
+	SimularEscalamiento simularEscalamiento(ReglaEnrutamiento regla, CalendarioHabil calendario,
+			ListaDelPaciente contactos) {
+		return new SimularEscalamiento(regla, calendario, contactos);
+	}
+
+	/** Cambio de la jornada hábil desde el Calendario del dashboard. */
+	@Bean
+	GuardarHorarioHabil guardarHorarioHabil(HorariosHabiles horarios, CalendarioHabil calendario,
+			RegistroAuditoria auditoria, Transacciones transacciones, Clock reloj) {
+		return new GuardarHorarioHabil(horarios, calendario, auditoria, transacciones, reloj);
 	}
 
 	/** Regla de gravedad y horario hábil. */

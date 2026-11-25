@@ -7,9 +7,6 @@
 /** Zona horaria del programa: los horarios de los contactos y el calendario hábil van en hora de Chile. */
 export const ZONA = 'America/Santiago';
 
-/** Alertas técnicas: el reloj las informa, pero no escala a los contactos (las ve el equipo por correo). */
-export const TECNICAS = new Set(['BATERIA_BAJA', 'RELOJ_NO_PUESTO']);
-
 /** Días de la semana como los nombra el calendario de la configuración (0 = domingo, como Date). */
 const DIAS = ['DOMINGO', 'LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SABADO'];
 

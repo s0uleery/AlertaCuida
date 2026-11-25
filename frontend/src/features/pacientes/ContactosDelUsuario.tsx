@@ -60,7 +60,7 @@ export function ContactosDelUsuario({ idPaciente }: Props) {
   }
 
   if (error) return <p className={CLASE_ERROR}>{error}</p>;
-  if (!datos || !tipos) return <p className="text-slate-500">Cargando…</p>;
+  if (!datos || !tipos) return <p className="text-apagado">Cargando…</p>;
 
   const activos = datos.contactos.filter((contacto) => contacto.activo);
   const inactivos = datos.contactos.filter((contacto) => !contacto.activo);
@@ -83,9 +83,9 @@ export function ContactosDelUsuario({ idPaciente }: Props) {
       )}
 
       {activos.length === 0 ? (
-        <p className="text-sm text-slate-500">Sin contactos. El reloj no tendrá a quién avisar.</p>
+        <p className="text-sm text-apagado">Sin contactos. El reloj no tendrá a quién avisar.</p>
       ) : (
-        <ol className="divide-y divide-slate-100">
+        <ol className="divide-y divide-linea">
           {activos.map((contacto, indice) =>
             editando === contacto.id ? (
               <li key={contacto.id} className="py-3">
@@ -110,7 +110,7 @@ export function ContactosDelUsuario({ idPaciente }: Props) {
                     <button
                       onClick={() => mover(indice, -1)}
                       disabled={indice === 0}
-                      className="px-1 text-slate-600 disabled:opacity-30"
+                      className="px-1 text-apagado disabled:opacity-30"
                       aria-label={`Subir a ${contacto.nombre}`}
                     >
                       ↑
@@ -118,7 +118,7 @@ export function ContactosDelUsuario({ idPaciente }: Props) {
                     <button
                       onClick={() => mover(indice, 1)}
                       disabled={indice === activos.length - 1}
-                      className="px-1 text-slate-600 disabled:opacity-30"
+                      className="px-1 text-apagado disabled:opacity-30"
                       aria-label={`Bajar a ${contacto.nombre}`}
                     >
                       ↓
@@ -135,12 +135,12 @@ export function ContactosDelUsuario({ idPaciente }: Props) {
                             );
                           }
                         }}
-                        className="text-sky-700 hover:underline"
+                        className="text-teal-oscuro hover:underline"
                       >
                         {contacto.optInVigente ? 'Revocar WhatsApp' : 'Aceptó WhatsApp'}
                       </button>
                     )}
-                    <button onClick={() => setEditando(contacto.id)} className="text-sky-700 hover:underline">
+                    <button onClick={() => setEditando(contacto.id)} className="text-teal-oscuro hover:underline">
                       Editar
                     </button>
                     <button
@@ -153,7 +153,7 @@ export function ContactosDelUsuario({ idPaciente }: Props) {
                         });
                         if (confirmado) cambiar(() => pacientesApi.desactivarContacto(idPaciente, contacto.id));
                       }}
-                      className="text-red-700 hover:underline"
+                      className="text-magenta hover:underline"
                     >
                       Desactivar
                     </button>
@@ -184,17 +184,17 @@ export function ContactosDelUsuario({ idPaciente }: Props) {
 
       {inactivos.length > 0 && (
         <details className="text-sm">
-          <summary className="cursor-pointer text-slate-500">Desactivados ({inactivos.length})</summary>
-          <ul className="mt-2 divide-y divide-slate-100">
+          <summary className="cursor-pointer text-apagado">Desactivados ({inactivos.length})</summary>
+          <ul className="mt-2 divide-y divide-linea">
             {inactivos.map((contacto) => (
               <li key={contacto.id} className="flex items-center justify-between gap-2 py-2">
-                <span className="text-slate-600">
+                <span className="text-apagado">
                   {contacto.nombre} · {nombreTipo(contacto.tipo)}
                 </span>
                 {editable && (
                   <button
                     onClick={() => cambiar(() => pacientesApi.reactivarContacto(idPaciente, contacto.id))}
-                    className="text-sky-700 hover:underline"
+                    className="text-teal-oscuro hover:underline"
                   >
                     Reactivar
                   </button>
@@ -211,7 +211,7 @@ export function ContactosDelUsuario({ idPaciente }: Props) {
 /** Aviso en rojo con los tramos del día sin ningún contacto disponible. */
 function AvisoCobertura({ sinCobertura }: { sinCobertura: Tramo[] }) {
   if (sinCobertura.length === 0) {
-    return <p className="text-sm text-emerald-700">Hay al menos un contacto disponible a toda hora.</p>;
+    return <p className="text-sm text-verde-texto">Hay al menos un contacto disponible a toda hora.</p>;
   }
   const tramos = sinCobertura.map((tramo) =>
     tramo.inicio === tramo.fin ? 'todo el día' : `${tramo.inicio} a ${tramo.fin}`,
@@ -235,40 +235,40 @@ function FilaContacto({ contacto, nombreTipo }: PropsFila) {
   const horario = contacto.horaInicio ? `${contacto.horaInicio} a ${contacto.horaFin}` : 'Todo el día';
   return (
     <div className="flex gap-3">
-      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sky-100 text-sm font-semibold text-sky-800">
+      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-tinte text-sm font-semibold text-teal-oscuro">
         {contacto.prioridad}
       </span>
       <div className="space-y-0.5">
-        <p className="font-medium text-slate-900">
+        <p className="font-medium text-navy">
           {contacto.nombre}
           {contacto.cuidadorPrincipal && (
-            <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800">
+            <span className="ml-2 rounded bg-naranja-tinte px-1.5 py-0.5 text-xs font-medium text-naranja-texto">
               Cuidador principal
             </span>
           )}
         </p>
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-apagado">
           {nombreTipo}
           {contacto.parentesco && ` (${contacto.parentesco})`} · {horario}
         </p>
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-apagado">
           {contacto.whatsapp && (
             <span className="mr-3">
               WhatsApp {contacto.whatsapp}{' '}
               {contacto.optInVigente ? (
-                <span className="text-emerald-700">(aceptado el {formatearFechaHora(contacto.fechaOptIn!)})</span>
+                <span className="text-verde-texto">(aceptado el {formatearFechaHora(contacto.fechaOptIn!)})</span>
               ) : (
-                <span className="text-amber-700">(sin aceptar: no se le envía)</span>
+                <span className="text-naranja-texto">(sin aceptar: no se le envía)</span>
               )}
             </span>
           )}
           {contacto.correo && <span>Correo {contacto.correo}</span>}
         </p>
         {contacto.canales.length === 0 && (
-          <p className="text-sm text-red-700">No se le puede avisar: falta el correo o que acepte WhatsApp.</p>
+          <p className="text-sm text-magenta">No se le puede avisar: falta el correo o que acepte WhatsApp.</p>
         )}
         {contacto.otrosPacientes > 0 && (
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-apagado">
             También es contacto de {contacto.otrosPacientes}{' '}
             {contacto.otrosPacientes === 1 ? 'usuario más' : 'usuarios más'}.
           </p>
@@ -327,7 +327,7 @@ function FormularioContacto({ inicial, tipos, compartido, alCancelar, alGuardar 
   }
 
   return (
-    <form onSubmit={enviar} className="space-y-3 rounded-lg border border-slate-200 p-4">
+    <form onSubmit={enviar} className="space-y-3 rounded-lg border border-linea p-4">
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block">
           <span className={CLASE_ETIQUETA}>Nombre</span>
@@ -383,7 +383,7 @@ function FormularioContacto({ inicial, tipos, compartido, alCancelar, alGuardar 
           </label>
         )}
       </div>
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-apagado">
         Ingresa al menos un WhatsApp o un correo. El SAMU no se agrega: el mensaje de una alerta grave ya pide llamar
         al 131.
       </p>
@@ -413,7 +413,7 @@ function FormularioContacto({ inicial, tipos, compartido, alCancelar, alGuardar 
               className={`${CLASE_CAMPO} mt-0 w-auto`}
               aria-label="Hasta"
             />
-            <span className="text-slate-500">(si termina antes de empezar, cruza la medianoche)</span>
+            <span className="text-apagado">(si termina antes de empezar, cruza la medianoche)</span>
           </div>
         )}
       </fieldset>
@@ -428,7 +428,7 @@ function FormularioContacto({ inicial, tipos, compartido, alCancelar, alGuardar 
       </label>
 
       {compartido > 0 && (
-        <p className="text-sm text-amber-700">
+        <p className="text-sm text-naranja-texto">
           Nombre, WhatsApp y correo también cambiarán para {compartido === 1 ? 'el otro usuario' : 'los otros usuarios'}{' '}
           de esta persona. Si cambia el WhatsApp, deberá volver a aceptar recibir mensajes.
         </p>

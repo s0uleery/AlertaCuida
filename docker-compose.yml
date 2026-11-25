@@ -58,6 +58,16 @@ services:
       # (simulador-reloj/), que corre en este computador, fuera de Docker. Se elige con FCM_CANAL en .env
       FCM_CANAL: ${FCM_CANAL:-SIMULADO}
       FCM_SIMULADOR_URL: http://host.docker.internal:${SIM_PUERTO:-9090}/avisos
+      # WhatsApp: NO_CONFIGURADO o SIMULADOR (simulador-whatsapp/, también fuera de Docker). Valores de juguete
+      WHATSAPP_CANAL: ${WHATSAPP_CANAL:-NO_CONFIGURADO}
+      WHATSAPP_SIMULADOR_URL: http://host.docker.internal:${SIM_WHATSAPP_PUERTO:-9091}
+      WHATSAPP_TOKEN: ${WHATSAPP_TOKEN:-}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
+      WHATSAPP_APP_SECRET: ${WHATSAPP_APP_SECRET:-}
+      WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN:-}
+      WHATSAPP_PLANTILLA_LEVE: ${WHATSAPP_PLANTILLA_LEVE:-}
+      WHATSAPP_PLANTILLA_GRAVE: ${WHATSAPP_PLANTILLA_GRAVE:-}
+      WHATSAPP_PLANTILLA_SIMULACRO: ${WHATSAPP_PLANTILLA_SIMULACRO:-}
     # En Linux host.docker.internal no existe por defecto; en Windows y Mac ya existe
     extra_hosts:
       - "host.docker.internal:host-gateway"

@@ -51,7 +51,13 @@ curl -X POST localhost:9091/v21.0/123/messages -H "Authorization: Bearer x" -H "
   -d '{"messaging_product":"whatsapp","to":"56912345671","type":"template","template":{"name":"alerta_leve","language":{"code":"es"}}}'
 ```
 
-**Pendiente con la 2.9:** el webhook del backend y el canal que envía al simulador en vez de a Meta (como `FCM_CANAL=SIMULADOR` en el reloj). Hasta entonces el simulador anota "el webhook no contestó".
+**Con el backend (desde el 24-11-2026):** en el `.env` poner `WHATSAPP_CANAL=SIMULADOR` (los demás `WHATSAPP_*` de `.env.example` sirven tal cual), levantar con `docker compose up -d` y correr el simulador con el mismo secreto y el webhook del backend:
+
+```bash
+node simulador-whatsapp/simulador.mjs --secreto secreto-del-simulador --token token-del-simulador
+```
+
+El backend le envía las plantillas a `WHATSAPP_SIMULADOR_URL` (`http://host.docker.internal:9091` desde Docker) y el simulador responde por `/api/webhooks/whatsapp`. En la ficha de la alerta se ven el envío, la entrega, la lectura y la respuesta.
 
 ## Lo que no imita
 

@@ -30,10 +30,14 @@ public class ManejadorErrores {
 		return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, error.getMessage());
 	}
 
-	/** @return 409: choca con lo guardado (RUN repetido, reloj ya vinculado, …) */
+	/** @return 409: choca con lo guardado (RUN repetido, reloj ya vinculado, …), con su código si lo trae */
 	@ExceptionHandler(Conflicto.class)
 	ProblemDetail conflicto(Conflicto error) {
-		return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, error.getMessage());
+		ProblemDetail problema = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, error.getMessage());
+		if (error.codigo() != null) {
+			problema.setProperty("codigo", error.codigo());
+		}
+		return problema;
 	}
 
 	/** @return 400: el enlace de activación no sirve (mismo mensaje para cualquier causa) */

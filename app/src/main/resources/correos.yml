@@ -80,7 +80,7 @@ alertacuida:
         cuerpo: |
           Hay una {alerta}{deQuien}. El reloj ya está avisando a sus contactos.
 
-          Si usted va a atenderla, confírmelo aquí:
+          Si usted va a atenderla, confírmelo aquí. En el mismo enlace puede llamar al usuario y avisar cuando llegue:
           {responder}
 
           Revísela en el dashboard: {dashboard}
@@ -92,8 +92,9 @@ alertacuida:
       #   {folio} folio de la alerta, ej. #142
       #   {grave} el texto "grave" si la alerta es grave; vacío en las demás (solo en el cuerpo)
       #   {pie}   pie-contacto (solo en el cuerpo)
-      #   {responder} enlace a la página donde elige "Confirmo que voy" o "No puedo asistir" (obligatorio en
-      #               el cuerpo). Abrirlo no responde por la persona: responde al presionar un botón.
+      #   {responder} enlace a la página donde puede llamar al paciente, elegir "Confirmo que voy" o "No puedo
+      #               asistir" y, si va, avisar "Llegué donde el paciente" (obligatorio en el cuerpo). Abrirlo no
+      #               responde por la persona: responde al presionar un botón.
       contacto:
         asunto: "AlertaCuida: se solicita verificar cómo está {quien} (alerta {folio})"
         cuerpo: |
@@ -103,7 +104,7 @@ alertacuida:
 
           {grave}
 
-          En el siguiente enlace encontrará el detalle de la alerta y podrá indicar si puede atenderla:
+          En el siguiente enlace puede llamar a {quien}, indicar si puede atender la alerta y, si va, avisar cuando llegue:
           {responder}
 
           {pie}
@@ -164,7 +165,7 @@ alertacuida:
         cuerpo: |
           La alerta {folio}{deQuien} pasó a grave y sigue abierta.
 
-          Si usted va a atenderla, confírmelo aquí:
+          Si usted va a atenderla, confírmelo aquí. En el mismo enlace puede llamar al usuario y avisar cuando llegue:
           {responder}
 
           Revísela en el dashboard: {dashboard}
@@ -188,6 +189,22 @@ alertacuida:
           El enlace sirve una sola vez y vence el {vence}. Si vence, pida uno nuevo a quien administra AlertaCuida.
 
           Si no esperaba este correo, ignórelo: sin elegir una contraseña, nadie puede entrar con su cuenta.
+
+          {pie}
+
+      # A la persona del equipo que olvidó su contraseña y la pidió desde el inicio de sesión. Mismos marcadores
+      # que activacion. Solo le llega si su cuenta está activa; el enlace sirve una vez y vence en 1 hora.
+      recuperacion:
+        asunto: "AlertaCuida: elija una contraseña nueva, {nombre}"
+        cuerpo: |
+          Hola, {nombre}:
+
+          Recibimos una solicitud para cambiar la contraseña de su cuenta en AlertaCuida. Para elegir una nueva, abra este enlace:
+          {enlace}
+
+          El enlace sirve una sola vez y vence el {vence}. Si vence, vuelva a pedirlo desde el inicio de sesión.
+
+          Si usted no lo pidió, ignore este correo: su contraseña actual sigue sirviendo y nadie puede cambiarla sin este enlace.
 
           {pie}
 

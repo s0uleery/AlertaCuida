@@ -3,7 +3,8 @@ package cl.ucn.alertacuida.adapters.web.personal;
 import jakarta.validation.constraints.NotBlank;
 
 /**
- * Cuerpo de {@code POST /api/auth/activar}.
+ * Cuerpo de {@code POST /api/auth/activar} y de {@code POST /api/auth/restablecer}: los dos eligen una
+ * contraseña con el token de un enlace.
  *
  * @param token      lo que viene después de "#" en el enlace
  * @param contrasena la que eligió la persona

@@ -69,12 +69,12 @@ export function EvidenciaDeAlerta({ evidencia, discrepancias, tipoEvento }: Prop
 
   return (
     <div className="space-y-4">
-      {vacia && <p className="text-slate-500">Esta alerta no trae evidencia.</p>}
+      {vacia && <p className="text-apagado">Esta alerta no trae evidencia.</p>}
 
       {lecturas.length > 0 && (
-        <div className="overflow-x-auto rounded-lg border border-slate-200">
+        <div className="overflow-x-auto rounded-lg border border-linea">
           <table className="w-full border-collapse text-left text-sm">
-            <thead className="bg-slate-50 text-slate-700">
+            <thead className="bg-superficie-sub text-texto">
               <tr>
                 <th className="px-3 py-2 font-medium">Lectura</th>
                 <th className="px-3 py-2 font-medium">Valor</th>
@@ -83,12 +83,12 @@ export function EvidenciaDeAlerta({ evidencia, discrepancias, tipoEvento }: Prop
             </thead>
             <tbody>
               {lecturas.map((lectura, i) => (
-                <tr key={`${lectura.fechaHoraMedicion}-${lectura.tipo}-${i}`} className="border-t border-slate-200">
+                <tr key={`${lectura.fechaHoraMedicion}-${lectura.tipo}-${i}`} className="border-t border-linea">
                   <td className="px-3 py-2">{LECTURA[lectura.tipo].nombre}</td>
                   <td className="px-3 py-2 font-medium tabular-nums">
                     {numero(lectura.valor)} {LECTURA[lectura.tipo].unidad}
                   </td>
-                  <td className="px-3 py-2 text-slate-600">{formatearFechaHoraExacta(lectura.fechaHoraMedicion)}</td>
+                  <td className="px-3 py-2 text-apagado">{formatearFechaHoraExacta(lectura.fechaHoraMedicion)}</td>
                 </tr>
               ))}
             </tbody>
@@ -100,7 +100,7 @@ export function EvidenciaDeAlerta({ evidencia, discrepancias, tipoEvento }: Prop
         <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-1 text-sm">
           {sueltos.map(([etiqueta, valor]) => (
             <div key={etiqueta} className="contents">
-              <dt className="text-slate-500">{etiqueta}</dt>
+              <dt className="text-apagado">{etiqueta}</dt>
               <dd className="text-tinta">{valor}</dd>
             </div>
           ))}
@@ -109,17 +109,17 @@ export function EvidenciaDeAlerta({ evidencia, discrepancias, tipoEvento }: Prop
 
       {ubicacion && (
         <div className="text-sm">
-          <p className="text-slate-500">Ubicación</p>
+          <p className="text-apagado">Ubicación</p>
           <p className="text-tinta tabular-nums">
             {ubicacion.latitud.toFixed(5)}, {ubicacion.longitud.toFixed(5)}
             {ubicacion.precisionMetros !== null && ` (± ${numero(ubicacion.precisionMetros)} m)`}
           </p>
-          <p className="text-xs text-slate-500">Medida el {formatearFechaHora(ubicacion.fechaHoraMedicion)}</p>
+          <p className="text-xs text-apagado">Medida el {formatearFechaHora(ubicacion.fechaHoraMedicion)}</p>
           <a
             href={enlaceMapa(ubicacion)}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sky-700 hover:underline"
+            className="text-teal-oscuro hover:underline"
           >
             Ver en el mapa ↗
           </a>
@@ -127,13 +127,13 @@ export function EvidenciaDeAlerta({ evidencia, discrepancias, tipoEvento }: Prop
       )}
 
       {discrepancias.length > 0 && (
-        <div className="rounded-lg border border-[#e8c66a] bg-[#fffaf0] p-3 text-sm">
-          <p className="font-medium text-[#7a4e00]">Revisar: la alerta no calza con la configuración vigente</p>
+        <div className="rounded-lg border border-naranja-borde bg-naranja-tinte p-3 text-sm">
+          <p className="font-medium text-naranja-texto">Revisar: la alerta no calza con la configuración vigente</p>
           <ul className="mt-1 list-disc space-y-1 pl-5 text-tinta">
             {discrepancias.map((d) => (
               <li key={d.codigo}>
                 {DISCREPANCIA[d.codigo]}
-                {d.detalle && <span className="text-slate-600">: {d.detalle}</span>}
+                {d.detalle && <span className="text-apagado">: {d.detalle}</span>}
               </li>
             ))}
           </ul>

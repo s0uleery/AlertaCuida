@@ -11,8 +11,6 @@ import cl.ucn.alertacuida.application.personal.modelo.TokenActivacion;
 import cl.ucn.alertacuida.application.personal.puerto.CuentasPersonal;
 import cl.ucn.alertacuida.application.personal.puerto.HashContrasena;
 import cl.ucn.alertacuida.application.personal.puerto.TokensActivacion;
-import cl.ucn.alertacuida.domain.comun.Run;
-import cl.ucn.alertacuida.domain.personal.PoliticaContrasena;
 import java.time.Clock;
 import java.time.Instant;
 
@@ -58,12 +56,7 @@ public class ActivarCuenta {
 				.filter(encontrado -> ahora.isBefore(encontrado.expiraEn()))
 				.orElseThrow(EnlaceInvalido::new);
 		CuentaPendiente cuenta = cuentas.buscarPendiente(activacion.idUsuario()).orElseThrow(EnlaceInvalido::new);
-		PoliticaContrasena.problema(contrasena).ifPresent(problema -> {
-			throw new SolicitudRechazada(problema);
-		});
-		if (esSuRun(contrasena, cuenta)) {
-			throw new SolicitudRechazada("La contraseña no puede ser tu RUN");
-		}
+		ContrasenaNueva.revisar(contrasena, cuenta.runHash(), hashRun);
 		String hash = hashContrasena.de(contrasena);
 		transacciones.ejecutar(() -> {
 			// Ambas condicionadas: si dos pestañas usan el mismo enlace a la vez, solo una gana
@@ -73,15 +66,6 @@ public class ActivarCuenta {
 			auditoria.registrar(cuenta.id(), "MODIFICAR", "USUARIO", cuenta.id().toString(), ip, ahora);
 			return null;
 		});
-	}
-
-	/** Se compara por el hash: no hace falta descifrar el RUN guardado. */
-	private boolean esSuRun(String contrasena, CuentaPendiente cuenta) {
-		try {
-			return hashRun.de(Run.de(contrasena)).equals(cuenta.runHash());
-		} catch (IllegalArgumentException noEsRun) {
-			return false;
-		}
 	}
 
 }

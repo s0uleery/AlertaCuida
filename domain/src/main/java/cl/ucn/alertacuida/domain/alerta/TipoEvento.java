@@ -18,7 +18,9 @@ public enum TipoEvento {
 	BOTON_AYUDA,
 	/** El reloj dejó de sincronizar: solo lo detecta el servidor. */
 	SILENCIO_DATOS,
+	/** La batería sigue baja en dos sincronizaciones: solo lo detecta el servidor. */
 	BATERIA_BAJA,
+	/** El reloj sigue sin ponerse durante el día: solo lo detecta el servidor. */
 	RELOJ_NO_PUESTO,
 	/** El reloj envió demasiadas alertas en poco tiempo (posible falla): solo lo detecta el servidor. */
 	EXCESO_ALERTAS;
@@ -27,9 +29,12 @@ public enum TipoEvento {
 	private static final Set<TipoEvento> TECNICAS = Collections.unmodifiableSet(
 			EnumSet.of(SILENCIO_DATOS, BATERIA_BAJA, RELOJ_NO_PUESTO, EXCESO_ALERTAS));
 
-	/** @return si el reloj puede informarlo (todos menos el silencio de datos y el exceso de alertas) */
+	/**
+	 * @return si el reloj puede informarlo: solo las de salud. Las técnicas las crea el servidor; la batería
+	 *         baja y el reloj no puesto, con los datos de cada sincronización (decisión del 24-11-2026)
+	 */
 	public boolean loDetectaElReloj() {
-		return this != SILENCIO_DATOS && this != EXCESO_ALERTAS;
+		return !esTecnica();
 	}
 
 	/**

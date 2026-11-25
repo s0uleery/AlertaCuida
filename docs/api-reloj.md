@@ -128,7 +128,7 @@ Si nadie confirma, el reloj recorre la lista dos veces y termina con `POST /aler
 ## Preguntas para la revisión con quien desarrolla el reloj (0.4.8)
 
 1. **Simulacro:** propuesta: el servidor crea la alerta de prueba y manda el aviso FCM `SIMULACRO` con su `eventIdAlerta`; el reloj muestra "PRUEBA" y escala como siempre con ese `eventId`, y el servidor usa la plantilla "PRUEBA". ¿Le sirve, o el servidor debe avisar solo, sin pasar por el reloj?
-2. ¿El reloj puede enviar alertas `BATERIA_BAJA` y `RELOJ_NO_PUESTO`, o esas las detecta solo el servidor con la sincronización (2.2.4)?
+2. **Resuelta (24-11-2026):** `BATERIA_BAJA` y `RELOJ_NO_PUESTO` las detecta solo el servidor con `estado.nivelBateria` y `estado.relojPuesto` de cada sincronización (2.2.4). El reloj no las envía; si lo hace, 400 `MENSAJE_INVALIDO`. En la misma revisión se agregó `BLUETOOTH` a `tipoConexion`, y se aclaró que el reloj no avisa a la oficina PRLAC: recorre solo los contactos del paciente, y el servidor avisa a los coordinadores en paralelo.
 3. ¿Cuánto tarda en llegar un aviso FCM por LTE en la prueba de factibilidad? Define el plazo para reintentarlo. Hoy, provisional: 1, 1 y 2 minutos desde el envío anterior, y un mismo `idAviso` puede llegar más de una vez.
 4. ¿El reloj puede guardar la cola y los temporizadores de forma que sobrevivan a un reinicio (Room)?
 5. ¿Los rangos válidos de las lecturas (FC de 20 a 250 y SpO2 de 50 a 100) calzan con lo que entrega el Samsung Health Sensor SDK?

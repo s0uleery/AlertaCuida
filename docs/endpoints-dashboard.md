@@ -33,6 +33,13 @@ Los tipos de TypeScript de cada respuesta ya están en `frontend/src/features/*/
 | `POST /api/auth/salir` | público | 204 |
 | `GET /api/auth/yo` | token | 200 `Usuario` |
 | `POST /api/auth/activar` | público | 204 |
+| `POST /api/auth/recuperar` | público | 202 |
+| `POST /api/auth/restablecer` | público | 204 |
+| `GET /api/mi-cuenta` | token | 200 `MiCuenta` |
+| `PUT /api/mi-cuenta/whatsapp` | token | 204 |
+| `POST /api/mi-cuenta/contrasena` | token | 204; 400 si la actual no calza o la nueva no sirve |
+| `POST /api/respuestas-contacto/llamada` | público (token del enlace) | 204 |
+| `POST /api/respuestas-contacto/llegada` | público (token del enlace) | 200 `VistaRespuesta` |
 | **Cuentas del equipo** | | |
 | `POST /api/personal` | `ADMINISTRACION:CREAR` | 201 `RespuestaEnlace` |
 | `POST /api/personal/{id}/enlace-activacion` | `ADMINISTRACION:CREAR` | 200 `RespuestaEnlace` |
@@ -50,6 +57,7 @@ Los tipos de TypeScript de cada respuesta ya están en `frontend/src/features/*/
 | `GET /api/alertas/{id}` | `ALERTAS:VER` | 200 `DetalleAlerta` |
 | `POST /api/alertas/{id}/asumir` | `ALERTAS:EDITAR` | 204 |
 | `POST /api/alertas/{id}/resolver` | `ALERTAS:EDITAR` | 204 |
+| `POST /api/alertas/{id}/completar-cierre` | `ALERTAS:EDITAR` | 204 |
 | `POST /api/alertas/{id}/seguimiento/cerrar` | `ALERTAS:EDITAR` | 204 |
 | `POST /api/alertas/{id}/seguimiento` | `ALERTAS:EDITAR` | 201 `{ id }` |
 | `GET /api/destinos-derivacion` | `ALERTAS:VER` | 200 `DestinoDerivacion[]` |
@@ -58,6 +66,8 @@ Los tipos de TypeScript de cada respuesta ya están en `frontend/src/features/*/
 | `GET /api/pacientes/{id}/tendencias?desde&hasta` | `REPORTES:VER` | 200 `TendenciasPaciente` |
 | `GET /api/pacientes/{id}/reportes/diario?dia` | `REPORTES:VER` | 200 `ReporteUsuario` |
 | `GET /api/pacientes/{id}/reportes/semanal?dia` | `REPORTES:VER` | 200 `ReporteUsuario` |
+| `GET /api/pacientes/{id}/reportes/{diario|semanal}.{xlsx|pdf}?dia` | `REPORTES:EXPORTAR` | 200 archivo |
+| `GET /api/reportes/gestion.{xlsx|pdf}?desde&hasta` | `REPORTES:EXPORTAR` | 200 archivo; 400 período al revés o de más de 93 días |
 | **Portada** | | |
 | `GET /api/panel` | `ALERTAS:VER` | 200 `Panel` |
 | **Pacientes** | | |
@@ -96,8 +106,11 @@ Los tipos de TypeScript de cada respuesta ya están en `frontend/src/features/*/
 | `GET /api/relojes/estado` | `USUARIOS:VER` | 200 `EstadoTecnicoReloj[]` |
 | `POST /api/relojes` | `USUARIOS:CREAR` | 201 `{id}` |
 | `PUT /api/relojes/{id}` | `USUARIOS:EDITAR` | 204 |
+| `DELETE /api/relojes/{id}` | `USUARIOS:ELIMINAR` | 204; 409 `EN_USO` o `CON_HISTORIAL` |
 | **Calendario** | | |
 | `GET /api/calendario` | solo sesión | 200 `Calendario` |
+| `PUT /api/calendario/horario` | `ADMINISTRACION:EDITAR` | 204; 400 si un tramo está al revés o no queda ningún día |
+| `GET /api/calendario/simulacion?fecha&hora&gravedad&idPaciente` | `ALERTAS:VER` | 200 `Simulacion` |
 
 ## Sesión
 
@@ -138,6 +151,12 @@ La persona llega desde el enlace de activación (`/activar?token=…`) y elige s
 { "token": "el-del-enlace", "contrasena": "una-contraseña-larga" }
 ```
 400 si el enlace no sirve o venció.
+
+### `POST /api/auth/recuperar` y `POST /api/auth/restablecer`
+Desde "¿Olvidaste tu contraseña?": `{ "run": "12.345.678-5" }` responde 202 siempre. Si la cuenta está activa, le llega un correo con `/restablecer#<token>` (sirve una vez, vence en 1 hora, máximo 3 por hora). Después, `restablecer` recibe `{ "token", "contrasena" }` igual que la activación: 204, o 400 si el enlace no sirve o la contraseña no cumple.
+
+### `GET /api/mi-cuenta` y `PUT /api/mi-cuenta/whatsapp`
+La cuenta de la sesión, sin permisos: `{ "nombre", "correo", "telefono", "whatsapp" }`. El PUT recibe `{ "telefono": "+56 9 1234 5678", "aceptaWhatsapp": true }`, con las mismas reglas que `PUT /api/personal/{id}/telefono`. El correo llega siempre.
 
 ## Cuentas del equipo
 
@@ -592,3 +611,32 @@ Panel general (3.4.1). Exige `ALERTAS:VER`: lo ve todo el equipo, también el ro
 Por ahora no queda ningún endpoint del dashboard pendiente fuera de los que dependen de WhatsApp (2.9) y del simulacro (2.8).
 
 La bandeja de alertas pendientes de día hábil (3.7) no tiene endpoint propio: usa `GET /api/alertas` (las abiertas con `estadoContacto` `PENDIENTE_DIA_HABIL`) y "revisar" es `POST /api/alertas/{id}/resolver` (decisión del 19-11-2026).
+
+### `POST /api/mi-cuenta/contrasena`
+
+```json
+{ "actual": "la-de-hoy", "nueva": "una frase larga y nueva" }
+```
+
+204. La actual incorrecta: 400 y cuenta como intento fallido (varias seguidas bloquean la cuenta un rato). La nueva sigue la misma política que al activar la cuenta (12 caracteres o más, no el RUN) y no puede ser igual a la actual.
+
+### `PUT /api/calendario/horario`
+
+```json
+{ "horarioHabil": [ { "dia": "LUNES", "inicio": "08:30", "fin": "17:30" }, { "dia": "VIERNES", "inicio": "08:30", "fin": "16:30" } ] }
+```
+
+Reemplaza la jornada: los días que no van dejan de ser hábiles. Rige al tiro y queda en la auditoría (`MODIFICAR CALENDARIO`). 400 si un día termina antes de empezar, se repite, una hora está mal escrita o la lista viene vacía.
+
+### `GET /api/calendario/simulacion?fecha=2026-11-28&hora=15:00&gravedad=GRAVE&idPaciente=…`
+
+```json
+{ "habil": false, "feriado": false, "esperaDiaHabil": false, "avisoOficina": false,
+  "contactos": [ { "orden": 1, "nombre": "Hija", "tipo": "FAMILIA", "parentesco": "Hija", "cuidadorPrincipal": true, "canales": ["WHATSAPP", "CORREO"] } ] }
+```
+
+Con las reglas que el sistema aplica hoy. `idPaciente` es opcional: sin él, `contactos` va vacía. Una leve fuera de horario responde `esperaDiaHabil: true` y sin contactos. No guarda nada.
+
+### Exportar reportes
+
+`GET /api/pacientes/{id}/reportes/semanal.xlsx?dia=2026-11-25`, `…/diario.pdf`, `GET /api/reportes/gestion.pdf?desde=2026-11-01&hasta=2026-11-25`: responden el archivo con `Content-Disposition: attachment; filename="alertacuida-…"`. Cada descarga queda como `EXPORTAR REPORTE`. 404 si el formato o el período no existen.

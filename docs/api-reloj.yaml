@@ -166,6 +166,8 @@ paths:
         El servidor nunca descarta una alerta por su contenido: si la evidencia no calza con la
         configuración vigente, la acepta y marca la discrepancia para el equipo. Solo responde 400
         si el mensaje está mal formado; en ese caso el reloj debe mostrar "No se pudo avisar".
+        Solo alertas de salud (`TipoEvento`): la batería baja y el reloj no puesto no se envían por aquí,
+        las crea el servidor con el `estado` de cada sincronización y las avisa al equipo.
       requestBody:
         required: true
         content:
@@ -392,7 +394,7 @@ paths:
     post:
       tags: [Webhook de WhatsApp]
       operationId: recibirWebhook
-      summary: "[Pendiente 2.9] Respuestas de los contactos (botones) y estados de entrega"
+      summary: Respuestas de los contactos (botones) y estados de entrega
       description: |
         Formato definido por Meta (Cloud API, objeto `whatsapp_business_account`). Los avisos se envían
         con plantillas, y Meta informa el botón de una plantilla como `messages[].type = "button"` con
@@ -400,7 +402,9 @@ paths:
         cada botón al enviar). `messages[].interactive.button_reply.id` solo aparece si se envía un
         mensaje interactivo. También lee `statuses[]` (`sent`, `delivered`, `read`, `failed`). Cada
         respuesta se vincula a su intento por `messages[].context.id` y cada estado por
-        `statuses[].id`, el id del mensaje de Meta. Un mensaje repetido no se procesa dos veces.
+        `statuses[].id`, el id del mensaje de Meta. Un mensaje repetido no se procesa dos veces: cada fecha
+        se guarda solo si estaba vacía y vale la primera respuesta. Un POST puede traer varias entradas.
+        Lo que no es de un aviso de AlertaCuida se ignora con 200 (24-11-2026).
       security: []
       parameters:
         - name: X-Hub-Signature-256
@@ -416,8 +420,10 @@ paths:
               type: object
               description: Ver la documentación de webhooks de la Cloud API de Meta.
       responses:
-        '200': { description: Recibido. Se responde rápido; el procesamiento sigue aparte. }
+        '200': { description: Recibido y procesado (son pocas escrituras en la base). }
+        '400': { description: La firma es válida pero el cuerpo no es JSON. }
         '401': { description: Firma ausente o inválida. }
+        '500': { description: La base falló; Meta lo reintenta. }
 
 components:
   securitySchemes:
@@ -520,11 +526,14 @@ components:
     TipoEvento:
       type: string
       description: |
-        Lo que detectó el reloj. `SILENCIO_DATOS` no existe aquí: solo lo detecta el servidor.
+        Lo que detectó el reloj: solo alertas de salud. Las técnicas (`SILENCIO_DATOS`, `BATERIA_BAJA`,
+        `RELOJ_NO_PUESTO`, `EXCESO_ALERTAS`) no existen aquí: las crea el servidor. La batería baja y el reloj
+        no puesto salen de `estado.nivelBateria` y `estado.relojPuesto` de cada sincronización (24-11-2026);
+        si el reloj las envía, la respuesta es 400 `MENSAJE_INVALIDO`.
         `ZONA_SEGURA`: la persona salió del círculo de `zonaSegura`, con la severidad indicada ahí.
         `BOTON_AYUDA`: la persona presionó el botón de ayuda; siempre `LEVE` (si llega con otra severidad,
         el servidor la guarda como `LEVE`). Tiene la misma ventana de 30 s para cancelar que las demás.
-      enum: [CAIDA, FC, SPO2, FC_SPO2, TENDENCIA, INACTIVIDAD, ZONA_SEGURA, BOTON_AYUDA, BATERIA_BAJA, RELOJ_NO_PUESTO]
+      enum: [CAIDA, FC, SPO2, FC_SPO2, TENDENCIA, INACTIVIDAD, ZONA_SEGURA, BOTON_AYUDA]
 
     Severidad:
       type: string
@@ -563,7 +572,10 @@ components:
             nivelBateria: { type: integer, minimum: 0, maximum: 100 }
             relojPuesto: { type: boolean, description: Si estaba puesto al armar el lote. }
             minutosPuesto: { type: integer, minimum: 0, description: Minutos puesto desde el lote anterior. }
-            tipoConexion: { type: string, enum: [LTE, WIFI] }
+            tipoConexion:
+              type: string
+              enum: [LTE, WIFI, BLUETOOTH]
+              description: '`BLUETOOTH`: a través del teléfono emparejado (24-11-2026).'
             versionApp: { type: string, maxLength: 40 }
             versionConfiguracion:
               type: [string, 'null']

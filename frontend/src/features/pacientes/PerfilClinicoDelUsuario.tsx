@@ -71,7 +71,7 @@ export function PerfilClinicoDelUsuario({ idPaciente }: Props) {
   }
 
   if (error) return <p className={CLASE_ERROR}>{error}</p>;
-  if (!datos) return <p className="text-slate-500">Cargando…</p>;
+  if (!datos) return <p className="text-apagado">Cargando…</p>;
 
   return (
     <div className="space-y-6">
@@ -105,7 +105,7 @@ export function PerfilClinicoDelUsuario({ idPaciente }: Props) {
         editable={editable}
         alGuardar={(zona) => cambiar(() => pacientesApi.definirZonaSegura(idPaciente, zona))}
       />
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-apagado">
         Los valores base son provisionales hasta que los valide el equipo clínico.
       </p>
     </div>
@@ -152,7 +152,7 @@ function FormularioAjustes({ perfil, editable, alGuardar }: PropsAjustes) {
             ))}
           </div>
           {!ajustes.modulos.zonaSegura && (!perfil.zonaSegura || !ajustes.gpsActivo) && (
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-apagado">
               Para activar la zona segura, primero define la zona (abajo) y activa el GPS.
             </p>
           )}
@@ -214,7 +214,7 @@ function FormularioAjustes({ perfil, editable, alGuardar }: PropsAjustes) {
             {guardando ? 'Guardando…' : 'Guardar ajustes'}
           </button>
         )}
-        <span className="text-sm text-slate-500">
+        <span className="text-sm text-apagado">
           {perfil.ajustesDesde
             ? `Último cambio: ${formatearFechaHora(perfil.ajustesDesde)}${perfil.ajustes.motivo ? ` (${perfil.ajustes.motivo})` : ''}`
             : 'Sin cambios: rigen los valores por defecto.'}
@@ -266,10 +266,10 @@ function TarjetaUmbral({ variable, vigente, editable, alAjustar, alVolverAlBase 
   }
 
   return (
-    <div className="rounded-lg border border-slate-200 p-4">
+    <div className="rounded-lg border border-linea p-4">
       <div className="mb-2 flex items-center justify-between">
-        <h3 className="font-medium text-slate-800">{conAltos ? 'Frecuencia cardíaca' : 'Saturación de oxígeno'}</h3>
-        <span className={`text-xs ${vigente.propio ? 'text-sky-700' : 'text-slate-500'}`}>
+        <h3 className="font-medium text-texto">{conAltos ? 'Frecuencia cardíaca' : 'Saturación de oxígeno'}</h3>
+        <span className={`text-xs ${vigente.propio ? 'text-teal-oscuro' : 'text-apagado'}`}>
           {vigente.propio ? 'Ajustado para este usuario' : 'Valor base'}
         </span>
       </div>
@@ -292,21 +292,21 @@ function TarjetaUmbral({ variable, vigente, editable, alAjustar, alVolverAlBase 
         </form>
       ) : (
         <>
-          <p className="text-sm text-slate-700">
+          <p className="text-sm text-texto">
             Normal: {normalMin}
             {conAltos ? ` a ${normalMax}` : ' o más'} {unidad}
           </p>
-          <p className="text-sm text-slate-700">
+          <p className="text-sm text-texto">
             Grave: bajo {graveBajo}
             {conAltos && ` o sobre ${graveAlto}`} {unidad}
           </p>
-          <p className="text-xs text-slate-500">Entre lo normal y lo grave, la lectura es leve.</p>
+          <p className="text-xs text-apagado">Entre lo normal y lo grave, la lectura es leve.</p>
           {vigente.propio && vigente.desde && (
-            <p className="text-xs text-slate-500">Desde {formatearFechaHora(vigente.desde)}</p>
+            <p className="text-xs text-apagado">Desde {formatearFechaHora(vigente.desde)}</p>
           )}
           {editable && (
             <div className="mt-3 flex gap-3 text-sm">
-              <button onClick={() => setEditando(true)} className="text-sky-700 hover:underline">
+              <button onClick={() => setEditando(true)} className="text-teal-oscuro hover:underline">
                 Ajustar
               </button>
               {vigente.propio && (
@@ -320,7 +320,7 @@ function TarjetaUmbral({ variable, vigente, editable, alAjustar, alVolverAlBase 
                     });
                     if (confirmado) alVolverAlBase();
                   }}
-                  className="text-red-700 hover:underline"
+                  className="text-magenta hover:underline"
                 >
                   Volver al valor base
                 </button>
@@ -395,10 +395,10 @@ function TarjetaZona({ perfil, editable, alGuardar }: PropsZona) {
   }
 
   return (
-    <div className="rounded-lg border border-slate-200 p-4">
+    <div className="rounded-lg border border-linea p-4">
       <div className="mb-2 flex items-center justify-between">
-        <h3 className="font-medium text-slate-800">Zona segura</h3>
-        <span className={`text-xs ${activa ? 'text-sky-700' : 'text-slate-500'}`}>
+        <h3 className="font-medium text-texto">Zona segura</h3>
+        <span className={`text-xs ${activa ? 'text-teal-oscuro' : 'text-apagado'}`}>
           {activa ? 'Activa' : guardada ? 'Definida, sin activar' : 'Sin definir'}
         </span>
       </div>
@@ -423,7 +423,7 @@ function TarjetaZona({ perfil, editable, alGuardar }: PropsZona) {
               </select>
             </label>
           </div>
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-apagado">
             Las coordenadas se copian desde un mapa (por ejemplo, el domicilio). Se guardan cifradas.
           </p>
           <div className="flex gap-2">
@@ -439,23 +439,23 @@ function TarjetaZona({ perfil, editable, alGuardar }: PropsZona) {
         <>
           {guardada ? (
             <>
-              <p className="text-sm text-slate-700">
+              <p className="text-sm text-texto">
                 Centro: {guardada.latitud}, {guardada.longitud}
               </p>
-              <p className="text-sm text-slate-700">
+              <p className="text-sm text-texto">
                 Radio: {guardada.radioMetros} m · Al salir: alerta {guardada.severidad.toLowerCase()}
               </p>
               {perfil.zonaSegura && (
-                <p className="text-xs text-slate-500">Desde {formatearFechaHora(perfil.zonaSegura.vigenteDesde)}</p>
+                <p className="text-xs text-apagado">Desde {formatearFechaHora(perfil.zonaSegura.vigenteDesde)}</p>
               )}
             </>
           ) : (
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-apagado">
               Sin zona: el reloj no alerta si la persona se aleja. Defínela y luego actívala junto con el GPS.
             </p>
           )}
           {editable && (
-            <button onClick={() => setEditando(true)} className="mt-3 text-sm text-sky-700 hover:underline">
+            <button onClick={() => setEditando(true)} className="mt-3 text-sm text-teal-oscuro hover:underline">
               {guardada ? 'Cambiar zona' : 'Definir zona'}
             </button>
           )}

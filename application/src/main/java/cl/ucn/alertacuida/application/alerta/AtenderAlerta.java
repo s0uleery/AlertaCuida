@@ -82,6 +82,33 @@ public class AtenderAlerta {
 	}
 
 	/**
+	 * Completa el cierre de una alerta de salud que resolvió el sistema sin clasificar, como cuando un contacto
+	 * avisa que llegó donde el paciente (decisión del 24-11-2026). Una POSITIVA abre su seguimiento.
+	 *
+	 * @param clasificacion obligatoria
+	 * @param observaciones obligatorias
+	 * @throws NoEncontrado       si la alerta no existe
+	 * @throws Conflicto          si no la cerró el sistema o ya está clasificada
+	 * @throws SolicitudRechazada si falta un dato o la alerta es técnica
+	 */
+	public void completarCierre(UUID idAlerta, ClasificacionAlerta clasificacion, String observaciones,
+			UUID idUsuario, String ip) {
+		AlertaAtendible alerta = alertaNoCancelada(idAlerta);
+		if (alerta.tipo().esTecnica()) {
+			throw new SolicitudRechazada("Una alerta técnica no se clasifica");
+		}
+		validarResolucion(alerta, clasificacion, observaciones);
+		Instant ahora = reloj.instant();
+		transacciones.ejecutar(() -> {
+			if (!atencion.completarCierre(idAlerta, idUsuario, clasificacion, observaciones.strip())) {
+				throw new Conflicto("Esa alerta no está esperando que se complete su cierre");
+			}
+			auditoria.registrar(idUsuario, MODIFICAR, ENTIDAD, idAlerta.toString(), ip, ahora);
+			return null;
+		});
+	}
+
+	/**
 	 * Termina el seguimiento de una alerta POSITIVA.
 	 *
 	 * @throws NoEncontrado si la alerta no existe

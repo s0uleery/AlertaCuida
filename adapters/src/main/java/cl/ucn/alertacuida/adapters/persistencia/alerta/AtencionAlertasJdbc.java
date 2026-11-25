@@ -105,4 +105,24 @@ public class AtencionAlertasJdbc implements AtencionAlertas {
 				.update();
 	}
 
+	/**
+	 * Cerrada por el sistema = con cierre y sin resolutor. El resolutor sigue vacío: el cierre fue del sistema, y
+	 * quién completó queda en la auditoría. La toma a la hora del cierre respeta atencion_orden.
+	 */
+	@Override
+	public boolean completarCierre(UUID idAlerta, UUID idUsuario, ClasificacionAlerta clasificacion,
+			String observaciones) {
+		return jdbc.sql("""
+				UPDATE atencion_alerta SET clasificacion = :clasificacion, observaciones_cierre = :observaciones,
+					id_usuario_responsable = COALESCE(id_usuario_responsable, :usuario),
+					fecha_hora_toma = COALESCE(fecha_hora_toma, fecha_hora_cierre)
+				WHERE id_alerta = :id AND fecha_hora_cierre IS NOT NULL AND id_usuario_resolutor IS NULL
+					AND clasificacion IS NULL""")
+				.param("clasificacion", clasificacion.name())
+				.param("observaciones", cifrado.cifrar(observaciones, ColumnaCifrada.ATENCION_OBSERVACIONES))
+				.param("usuario", idUsuario)
+				.param("id", idAlerta)
+				.update() == 1;
+	}
+
 }

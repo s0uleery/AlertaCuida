@@ -12,6 +12,10 @@ public enum TipoPaso {
 	AVISO_LEIDO,
 	AVISO_FALLIDO,
 	RESPUESTA_CONTACTO,
+	/** El contacto presionó "Llamar al paciente" en la página de su enlace (no se sabe si contestaron). */
+	LLAMADA_PACIENTE,
+	/** El contacto avisó que llegó donde el paciente; resuelve la alerta si seguía abierta. */
+	LLEGADA_CONTACTO,
 	/** El reloj recorrió la lista dos veces sin que nadie confirmara. */
 	SIN_RESPUESTA,
 	CASO_ASUMIDO,

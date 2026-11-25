@@ -329,6 +329,8 @@ Depende de: 1.5. Listo cuando: la regla de enrutamiento está configurada, cada 
 | [x] | 1.9.1 | Regla de enrutamiento base (Anexo B): una alerta leve fuera del horario hábil queda pendiente; una media o grave avisa siempre a los contactos disponibles a esa hora, por prioridad | 4 |
 | [x] | 1.9.2 | Calendario hábil (horario y feriados nacionales del año en curso y el siguiente) en la configuración del backend (`calendario.yml`), en zona `America/Santiago`; cambiarlo requiere reiniciar el backend. Solo lectura en el dashboard | 3 |
 | [x] | 1.9.3 | Pruebas, incluidos los días de cambio de hora | 3 |
+
+Nota (25-11-2026): la jornada hábil pasó a la base (V18, `horario_habil`) y se edita en Calendario con `ADMINISTRACION:EDITAR`; rige sin reiniciar y queda en la auditoría. Los feriados siguen en `calendario.yml`. Se agregó un simulador de canales en Calendario que muestra, con las reglas de hoy, qué pasaría con una alerta en un día, una hora y una gravedad dadas. Pruebas en `RequisitosCalendarioTest`. El nuevo flujo de escalamiento (PRLAC, tercero significativo, CESFAM o Carabineros) es una tarea aparte, después del rediseño.
  
 ---
 
@@ -468,14 +470,16 @@ Depende de: 0.7, 0.9, 2.4.1. Listo cuando: el servidor envía una plantilla con 
 
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
-| [ ] | 2.9.1 | Cliente de la Cloud API de Meta, con el token como secreto | 4 |
-| [ ] | 2.9.2 | Envío de plantillas con botones de respuesta rápida ("Voy en camino", "No puedo") | 4 |
-| [ ] | 2.9.3 | Webhook: verificación inicial de Meta y validación de la firma de cada mensaje | 4 |
-| [ ] | 2.9.4 | Recepción de los botones y vínculo con la alerta y el contacto | 4 |
-| [ ] | 2.9.5 | Estados de entrega de Meta (enviado, entregado, leído, fallido) en la línea de tiempo | 3 |
-| [ ] | 2.9.6 | Respetar el opt-in: sin opt-in vigente no se envía, se responde al reloj para que pase al siguiente contacto y se marca en el dashboard | 3 |
-| [ ] | 2.9.7 | Manejo de errores, reintentos y límites de Meta; si WhatsApp falla, respaldo por correo | 4 |
+| [x] | 2.9.1 | Cliente de la Cloud API de Meta, con el token como secreto | 4 |
+| [x] | 2.9.2 | Envío de plantillas con botones de respuesta rápida ("Voy en camino", "No puedo") | 4 |
+| [x] | 2.9.3 | Webhook: verificación inicial de Meta y validación de la firma de cada mensaje | 4 |
+| [x] | 2.9.4 | Recepción de los botones y vínculo con la alerta y el contacto | 4 |
+| [x] | 2.9.5 | Estados de entrega de Meta (enviado, entregado, leído, fallido) en la línea de tiempo | 3 |
+| [x] | 2.9.6 | Respetar el opt-in: sin opt-in vigente no se envía, se responde al reloj para que pase al siguiente contacto y se marca en el dashboard | 3 |
+| [x] | 2.9.7 | Manejo de errores, reintentos y límites de Meta; si WhatsApp falla, respaldo por correo | 4 |
 | [ ] | 2.9.8 | Usar el simulador de contactos (0.9) en local y probar con el número de prueba de Meta | 4 |
+
+Nota (24-11-2026): 2.9.1 a 2.9.7 programadas siguiendo la guía de webhooks de Meta, con pruebas unitarias, un servidor HTTP falso y la base real (`RequisitosWebhookWhatsappTest`); 2.9.6 ya estaba en `SolicitarAviso`. Falta la 2.9.8: el recorrido con los simuladores y con Meta real, que espera la lista de plantillas aprobadas ([despliegue.md](despliegue.md#11-activar-whatsapp)). Fuera de alcance por decisión: la baja del opt-in por webhook (sigue manual) y guardar el contenido de los webhooks.
 
 ### 2.10 Escalamiento dirigido por el reloj: lado del servidor (25 h). Cambia en v8.
 El reloj decide a quién avisar, espera y pasa al siguiente contacto (ver la app del reloj). El servidor envía cada aviso que el reloj pide, le informa cuando un contacto confirma y registra el recorrido completo. Reemplaza al motor de escalamiento del servidor de la v6.
@@ -487,7 +491,7 @@ Depende de: 1.9, 2.1, 2.3, 2.9. Listo cuando: con el simulador de reloj, una ale
 | [x] | 2.10.1 | Máquina de estados de la alerta en el servidor según lo que informa el reloj (recibida, avisando al contacto n, confirmada, sin respuesta, resuelta, pendiente de día hábil, cancelada) | 4 |
 | [x] | 2.10.2 | Endpoint de solicitud de aviso: el reloj pide avisar a un contacto; el servidor verifica que sea del paciente y tenga opt-in, y envía por WhatsApp o correo. Una solicitud repetida no envía dos veces | 5 |
 | [x] | 2.10.3 | Endpoint de estado de la alerta, que el reloj consulta antes de pasar al siguiente contacto (respaldo si FCM se atrasa) | 2 |
-| [ ] | 2.10.4 | Al recibir la confirmación por webhook: marcar la alerta como confirmada y avisar al reloj por FCM | 2 |
+| [x] | 2.10.4 | Al recibir la confirmación por webhook: marcar la alerta como confirmada y avisar al reloj por FCM | 2 |
 | [x] | 2.10.5 | WhatsApp simultáneo a todos los coordinadores con opt-in, en paralelo al escalamiento del reloj, solo en horario laboral y para todas las gravedades; correo de respaldo si el WhatsApp falla. Medias y graves destacadas en el dashboard | 3 |
 | [x] | 2.10.6 | Registrar el fin de la lista informado por el reloj (`SIN_RESPUESTA`), y vigilante: alerta abierta sin noticias del reloj en un plazo → correo a los profesionales | 3 |
 | [x] | 2.10.7 | Pruebas, incluidos un reloj sin señal y un reinicio del servidor a mitad de un escalamiento | 4 |
@@ -599,6 +603,8 @@ Depende de: 3.5. Listo cuando: cada día y cada semana se genera solo un reporte
 | [ ] | 3.6.6 | Pruebas y revisión con el PRLAC | 5 |
 
 Nota (19-11-2026): los reportes se calculan al pedirlos, sin tabla ni tarea programada, como dice el modelo de datos (reemplaza lo que decían 3.6.2 y 3.6.3). Indicadores decididos el 19-11-2026: FC y SpO2 (promedio, mínimo, máximo y lecturas), uso del reloj (minutos puesto y sincronizaciones), batería mínima y alertas por tipo y gravedad (sin simulacros; canceladas aparte). Semanal de lunes a domingo, comparado con la semana anterior. Backend programado (`GET /api/pacientes/{id}/reportes/diario` y `/semanal`), sin marcar hasta correr las pruebas con Docker; falta la vista (3.6.4) y revisarlo con el PRLAC.
+
+Nota (25-11-2026): rediseño del dashboard con el mockup del PRLAC. La vista del reporte (3.6.4) y la comparación (3.6.5) ya están en el front: indicadores contra el período anterior, curvas de FC y SpO2 con la banda normal del usuario y las alertas marcadas, e historial de alertas. Se agregó la pestaña Gestión operativa (totales, gravedad y carga por profesional) y la exportación a Excel y PDF (`REPORTES:EXPORTAR`, auditada como `EXPORTAR REPORTE`; cumple lo pendiente de la 1.6.2). Falta revisarlo con el PRLAC (3.6.6).
 
 ### 3.7 Bandeja de alertas pendientes de día hábil (4 h)
 Reúne las alertas leves llegadas fuera de horario para revisarlas a primera hora del siguiente día hábil.

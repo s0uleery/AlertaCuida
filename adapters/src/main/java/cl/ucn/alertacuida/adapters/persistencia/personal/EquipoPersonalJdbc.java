@@ -90,7 +90,10 @@ public class EquipoPersonalJdbc implements EquipoPersonal {
 	/** Un número nuevo reemplaza también la fecha del opt-in: el consentimiento es por número. */
 	@Override
 	public void guardarTelefono(UUID id, String telefono, Instant fechaOptIn) {
-		jdbc.sql("UPDATE usuario SET telefono = :telefono, fecha_opt_in = :optIn WHERE id_usuario = :id")
+		// Un opt-in nuevo (o quitado) deja atrás una revocación anterior: la base no admite revocación sin opt-in
+		jdbc.sql("""
+				UPDATE usuario SET telefono = :telefono, fecha_opt_in = :optIn, fecha_revocacion_opt_in = NULL
+				WHERE id_usuario = :id""")
 				.param("telefono", cifrado.cifrar(telefono, ColumnaCifrada.USUARIO_TELEFONO))
 				.param("optIn", fechaOptIn == null ? null : Timestamp.from(fechaOptIn))
 				.param("id", id)

@@ -9,7 +9,7 @@ export function RutaProtegida({ permiso, children }: { permiso?: Permiso; childr
   const ubicacion = useLocation();
 
   if (cargando) {
-    return <p className="p-8 text-slate-500">Cargando…</p>;
+    return <p className="p-8 text-apagado">Cargando…</p>;
   }
   if (!usuario) {
     return <Navigate to="/login" replace state={{ desde: ubicacion.pathname }} />;

@@ -74,6 +74,10 @@ CLAUDE.local.md
 ### Llave de Firebase (cuenta de servicio): va fuera del repositorio, ver docs/backend.md ###
 *firebase-adminsdk*.json
 firebase*.json
+# Carpeta del servidor con las llaves que monta docker-compose.servidor.yml
+secretos/
+# Configuración de la app Android del reloj: es de ese proyecto, no de este
+google-services.json
 
 # Tokens que guarda el simulador de reloj al emparejarse (como la memoria del reloj real)
 simulador-reloj/.tokens/

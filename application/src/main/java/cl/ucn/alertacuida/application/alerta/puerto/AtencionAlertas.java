@@ -33,4 +33,13 @@ public interface AtencionAlertas {
 	/** Deja registrado, sin fecha de envío, el aviso al reloj de que la alerta se resolvió. */
 	void dejarAvisoResueltaPendiente(UUID idAlerta);
 
+	/**
+	 * Agrega la clasificación y las observaciones a una alerta que cerró el sistema sin clasificar (por ejemplo,
+	 * al llegar un contacto). Si nadie la tenía a cargo, quien completa queda como responsable, tomada a la hora
+	 * del cierre: así una POSITIVA abre su seguimiento con responsable.
+	 *
+	 * @return false si la alerta no está cerrada por el sistema o ya tiene clasificación
+	 */
+	boolean completarCierre(UUID idAlerta, UUID idUsuario, ClasificacionAlerta clasificacion, String observaciones);
+
 }

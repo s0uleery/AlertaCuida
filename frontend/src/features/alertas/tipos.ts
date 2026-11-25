@@ -74,6 +74,8 @@ export type TipoPaso =
   | 'AVISO_LEIDO'
   | 'AVISO_FALLIDO'
   | 'RESPUESTA_CONTACTO'
+  | 'LLAMADA_PACIENTE'
+  | 'LLEGADA_CONTACTO'
   | 'SIN_RESPUESTA'
   | 'CASO_ASUMIDO'
   | 'SEGUIMIENTO'
@@ -163,4 +165,13 @@ export interface DetalleAlerta extends ResumenAlerta {
   lineaTiempo: PasoAlerta[];
   evidencia: EvidenciaAlerta;
   discrepancias: Discrepancia[];
+}
+
+/** Gestión que el equipo registra en la bitácora del caso. */
+export type TipoSeguimiento = 'LLAMADA' | 'VISITA' | 'DERIVACION' | 'NOTA';
+
+/** Adónde se puede derivar un caso (GET /api/destinos-derivacion). */
+export interface DestinoDerivacion {
+  codigo: string;
+  nombre: string;
 }

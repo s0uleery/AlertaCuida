@@ -11,7 +11,10 @@ import java.util.UUID;
  * @param contacto  nombre de la persona o de la cuenta
  * @param ronda     null en los avisos al equipo
  * @param respuesta botón que pulsó el contacto; null si no respondió
+ * @param llamada   cuándo presionó "Llamar al paciente"; null si no lo hizo
+ * @param llegada   cuándo avisó que llegó donde el paciente; null si no lo hizo
  */
 public record IntentoRegistrado(UUID vinculo, String contacto, Canal canal, Integer ronda, Instant envio,
-		Instant entrega, Instant lectura, Instant fallo, String motivoFallo, String respuesta, Instant fechaRespuesta) {
+		Instant entrega, Instant lectura, Instant fallo, String motivoFallo, String respuesta, Instant fechaRespuesta,
+		Instant llamada, Instant llegada) {
 }

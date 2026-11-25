@@ -57,14 +57,29 @@ services:
       SMTP_CLAVE: "${SMTP_CLAVE:?Falta SMTP_CLAVE en .env}"
       SMTP_AUTH: "true"
       SMTP_TLS: "true"
-      # Avisos al reloj: SIMULADO los anota en el log hasta tener el proyecto de Firebase
+      # Avisos al reloj: SIMULADO los anota en el log; FIREBASE envía de verdad y exige FCM_CREDENCIALES,
+      # la ruta DENTRO del contenedor de la llave de la cuenta de servicio (/run/secretos/firebase-llave.json)
       FCM_CANAL: ${FCM_CANAL:-SIMULADO}
+      FCM_CREDENCIALES: ${FCM_CREDENCIALES:-}
+      # WhatsApp: NO_CONFIGURADO hasta completar las credenciales de Meta (docs/despliegue.md, "Activar WhatsApp")
+      WHATSAPP_CANAL: ${WHATSAPP_CANAL:-NO_CONFIGURADO}
+      WHATSAPP_TOKEN: ${WHATSAPP_TOKEN:-}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
+      WHATSAPP_APP_SECRET: ${WHATSAPP_APP_SECRET:-}
+      WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN:-}
+      WHATSAPP_PLANTILLA_LEVE: ${WHATSAPP_PLANTILLA_LEVE:-}
+      WHATSAPP_PLANTILLA_GRAVE: ${WHATSAPP_PLANTILLA_GRAVE:-}
+      WHATSAPP_PLANTILLA_SIMULACRO: ${WHATSAPP_PLANTILLA_SIMULACRO:-}
       # Primer administrador: se crea al arrancar solo si no hay ninguno; el enlace queda en el log
       ADMIN_INICIAL_RUN: ${ADMIN_INICIAL_RUN:-}
       ADMIN_INICIAL_NOMBRE: ${ADMIN_INICIAL_NOMBRE:-}
       ADMIN_INICIAL_CORREO: ${ADMIN_INICIAL_CORREO:-}
       # Hora de Chile en los registros (las reglas de negocio ya usan ZonaHoraria por su cuenta)
       TZ: America/Santiago
+    # Llaves que no van en el .env (hoy, la de Firebase). Carpeta fuera del repositorio (.gitignore): se monta
+    # la carpeta y no el archivo, porque si el archivo aún no existe Docker crearía una carpeta con su nombre
+    volumes:
+      - ./secretos:/run/secretos:ro
     # Sin "ports": Caddy le reenvía /api por la red interna de Docker
     depends_on:
       postgres:

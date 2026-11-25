@@ -58,6 +58,7 @@ Enum estado_reloj {
 Enum tipo_conexion {
   LTE
   WIFI
+  BLUETOOTH [note: 'A través del teléfono emparejado (V16)']
 }
 
 Enum variable_vital {
@@ -621,6 +622,8 @@ Table REGISTRO_INTENTO {
   motivo_fallo varchar
   respuesta respuesta_contacto [note: 'Botón de respuesta rápida de WhatsApp o enlace del correo']
   fecha_hora_respuesta timestamptz
+  fecha_hora_llamada timestamptz [note: 'Primer clic en Llamar al paciente desde el enlace del correo (V17)']
+  fecha_hora_llegada timestamptz [note: 'Llegué donde el paciente: resuelve la alerta si seguía abierta (V17)']
   Indexes {
     (id_alerta, id_contacto_paciente, canal, ronda) [unique, note: 'Un aviso por contacto, canal y ronda, aunque el reloj genere otro event_id (ej. tras reiniciarse)']
     (id_contacto_paciente) [note: 'Lo revisa la clave diferida al borrar vínculos']
@@ -644,6 +647,7 @@ Table REGISTRO_INTENTO {
   El estado de entrega no se guarda: es la fecha más avanzada (fallo > lectura > entrega > envío).
   CHECK (ronda IN (1, 2)).
   CHECK ((respuesta IS NULL) = (fecha_hora_respuesta IS NULL)).
+  CHECK (fecha_hora_llegada IS NULL OR coalesce(respuesta = 'VOY_EN_CAMINO' AND fecha_hora_llegada >= fecha_hora_respuesta, false)) (V17).
   CHECK (motivo_fallo IS NULL OR fecha_hora_fallo IS NOT NULL).
   CHECK (fecha_hora_lectura IS NULL OR canal = 'WHATSAPP').
   Lo valida el backend: el vínculo es del paciente de la alerta; la persona tiene el canal pedido
@@ -869,3 +873,10 @@ Ref: CODIGO_RESPALDO.id_usuario > USUARIO.id_usuario [delete: cascade]
 Ref: TOKEN_SESION.id_usuario > USUARIO.id_usuario [delete: cascade]
 Ref: TOKEN_ACCION.id_usuario > USUARIO.id_usuario [delete: cascade]
 Ref: REGISTRO_AUDITORIA.id_usuario > USUARIO.id_usuario
+
+Table HORARIO_HABIL {
+  dia_semana varchar [pk, note: 'LUNES … DOMINGO; los días sin fila no son hábiles']
+  inicio time [not null, note: 'Hora de Chile, incluida']
+  fin time [not null, note: 'Hora de Chile, sin incluirla']
+  Note: 'Jornada hábil del PRLAC (V18). CHECK inicio < fin. Sin relaciones a propósito: es del programa entero. Se edita desde el dashboard (ADMINISTRACION:EDITAR) y rige sin reiniciar; los feriados siguen en calendario.yml.'
+}

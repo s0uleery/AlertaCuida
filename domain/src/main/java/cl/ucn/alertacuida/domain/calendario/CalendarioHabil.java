@@ -14,7 +14,9 @@ import java.util.Set;
 
 /**
  * Horario hábil del PRLAC y feriados, en hora de Chile. Decide si una alerta leve avisa o espera al
- * día hábil. Viene de calendario.yml: cambiarlo requiere reiniciar el backend.
+ * día hábil. Los feriados vienen de calendario.yml. El horario, desde el 25-11-2026, se guarda en la base y lo
+ * cambia el equipo desde el dashboard ({@link #cambiarHorario}): rige al tiro, sin reiniciar, para todos los que
+ * comparten este calendario (enrutamiento, aviso a la oficina, vigilante y correos).
  *
  * <p>Un momento es hábil si su día tiene horario, no es feriado y la hora cae dentro del horario.
  * La hora se calcula en {@link ZonaHoraria#CHILE}, así que los cambios de hora de abril y
@@ -22,12 +24,13 @@ import java.util.Set;
  */
 public final class CalendarioHabil {
 
-	private final Map<DiaSemana, TramoHabil> horario;
+	/** Se reemplaza entero (nunca se modifica), así que quien lo lee ve un horario completo. */
+	private volatile Map<DiaSemana, TramoHabil> horario;
 	private final List<Feriado> feriados;
 	private final Set<LocalDate> fechasFeriado;
 
 	private CalendarioHabil(Map<DiaSemana, TramoHabil> horario, List<Feriado> feriados) {
-		this.horario = Collections.unmodifiableMap(new EnumMap<>(horario));
+		this.horario = copia(horario);
 		this.feriados = feriados.stream().sorted(Comparator.comparing(Feriado::fecha)).toList();
 		this.fechasFeriado = Set.copyOf(feriados.stream().map(Feriado::fecha).toList());
 	}
@@ -39,9 +42,7 @@ public final class CalendarioHabil {
 	 * @throws IllegalArgumentException si no hay ningún día hábil o se repite la fecha de un feriado
 	 */
 	public static CalendarioHabil de(Map<DiaSemana, TramoHabil> horario, List<Feriado> feriados) {
-		if (horario.isEmpty()) {
-			throw new IllegalArgumentException("El calendario necesita al menos un día hábil");
-		}
+		exigirDiaHabil(horario);
 		Set<LocalDate> vistas = new HashSet<>();
 		for (Feriado feriado : feriados) {
 			if (!vistas.add(feriado.fecha())) {
@@ -49,6 +50,17 @@ public final class CalendarioHabil {
 			}
 		}
 		return new CalendarioHabil(horario, feriados);
+	}
+
+	/**
+	 * Reemplaza el horario hábil. Los feriados no cambian.
+	 *
+	 * @param nuevo tramo de cada día hábil; los días que no aparecen dejan de ser hábiles
+	 * @throws IllegalArgumentException si no queda ningún día hábil
+	 */
+	public void cambiarHorario(Map<DiaSemana, TramoHabil> nuevo) {
+		exigirDiaHabil(nuevo);
+		this.horario = copia(nuevo);
 	}
 
 	/** @return si ese momento está dentro del horario hábil y no es feriado */
@@ -74,6 +86,18 @@ public final class CalendarioHabil {
 	/** @return los feriados, ordenados por fecha */
 	public List<Feriado> feriados() {
 		return feriados;
+	}
+
+	/** @throws IllegalArgumentException si el horario no tiene ningún día hábil */
+	private static void exigirDiaHabil(Map<DiaSemana, TramoHabil> horario) {
+		if (horario == null || horario.isEmpty()) {
+			throw new IllegalArgumentException("El calendario necesita al menos un día hábil");
+		}
+	}
+
+	/** @return una copia que no se puede modificar, ordenada de lunes a domingo */
+	private static Map<DiaSemana, TramoHabil> copia(Map<DiaSemana, TramoHabil> horario) {
+		return Collections.unmodifiableMap(new EnumMap<>(horario));
 	}
 
 }

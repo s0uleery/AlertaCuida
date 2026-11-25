@@ -20,7 +20,9 @@ import cl.ucn.alertacuida.application.panel.puerto.PanelUsuarios;
 import cl.ucn.alertacuida.application.reloj.ConsultarEstadoRelojes;
 import cl.ucn.alertacuida.application.reloj.ConsultarRelojes;
 import cl.ucn.alertacuida.application.reloj.EditarReloj;
+import cl.ucn.alertacuida.application.reloj.EliminarReloj;
 import cl.ucn.alertacuida.application.reloj.RegistrarReloj;
+import cl.ucn.alertacuida.application.reloj.puerto.BajaRelojes;
 import cl.ucn.alertacuida.application.reloj.puerto.EstadosTecnicos;
 import cl.ucn.alertacuida.application.reloj.puerto.Relojes;
 import java.time.Clock;
@@ -102,6 +104,13 @@ public class ConfiguracionPacientesYRelojes {
 	EditarReloj editarReloj(Relojes relojes, Asignaciones asignaciones, RegistroAuditoria auditoria,
 			Transacciones transacciones, Clock reloj) {
 		return new EditarReloj(relojes, asignaciones, auditoria, transacciones, reloj);
+	}
+
+	/** Borrado de relojes que nunca tuvieron paciente. */
+	@Bean
+	EliminarReloj eliminarReloj(Relojes relojes, Asignaciones asignaciones, BajaRelojes baja,
+			RegistroAuditoria auditoria, Transacciones transacciones, Clock reloj) {
+		return new EliminarReloj(relojes, asignaciones, baja, auditoria, transacciones, reloj);
 	}
 
 	/** Vincular, reemplazar y desvincular relojes. */

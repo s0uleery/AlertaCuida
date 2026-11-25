@@ -78,6 +78,8 @@ final class LineaTiempoAlerta {
 		agregarDeAviso(pasos, intento.lectura(), TipoPaso.AVISO_LEIDO, intento, null);
 		agregarDeAviso(pasos, intento.fallo(), TipoPaso.AVISO_FALLIDO, intento, intento.motivoFallo());
 		agregarDeAviso(pasos, intento.fechaRespuesta(), TipoPaso.RESPUESTA_CONTACTO, intento, intento.respuesta());
+		agregarDeAviso(pasos, intento.llamada(), TipoPaso.LLAMADA_PACIENTE, intento, null);
+		agregarDeAviso(pasos, intento.llegada(), TipoPaso.LLEGADA_CONTACTO, intento, null);
 	}
 
 	/**
@@ -95,9 +97,26 @@ final class LineaTiempoAlerta {
 		}
 		if (historial.cierre() != null) {
 			String clasificacion = historial.clasificacion() == null ? null : historial.clasificacion().name();
-			pasos.add(new PasoAlerta(historial.cierre(), TipoPaso.ALERTA_RESUELTA, null, null, null, clasificacion,
-					historial.resolutor()));
+			pasos.add(new PasoAlerta(historial.cierre(), TipoPaso.ALERTA_RESUELTA, quienLlego(historial), null, null,
+					clasificacion, historial.resolutor()));
 		}
+	}
+
+	/**
+	 * Una llegada que cerró la alerta se guarda a la misma hora que el cierre, en la misma transacción.
+	 *
+	 * @return el contacto cuya llegada resolvió la alerta; null si la resolvió una persona del equipo o el sistema
+	 *         por otro motivo
+	 */
+	private static String quienLlego(HistorialAlerta historial) {
+		if (historial.resolutor() != null) {
+			return null;
+		}
+		return historial.intentos().stream()
+				.filter(intento -> historial.cierre().equals(intento.llegada()))
+				.map(IntentoRegistrado::contacto)
+				.findFirst()
+				.orElse(null);
 	}
 
 	/** @return "TIPO a DESTINO: nota", con lo que tenga la acción */
