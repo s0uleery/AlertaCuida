@@ -226,6 +226,30 @@ paths:
         '404': { $ref: '#/components/responses/NoEncontrado' }
         '409': { $ref: '#/components/responses/Conflicto' }
 
+  /api/alertas/{id}/completar-cierre:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    post:
+      tags: [Alertas]
+      operationId: completarCierreAlerta
+      summary: Clasifica y anota una alerta que resolvió el sistema al llegar un contacto
+      description: >-
+        Exige `ALERTAS:EDITAR`. Solo alertas de salud cerradas por el sistema y sin clasificar; clasificación y
+        observaciones obligatorias. Con `POSITIVA`, quien completa queda como responsable (si no había) y se
+        abre el seguimiento (24-11-2026).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SolicitudResolucion' }
+      responses:
+        '204': { description: Completado. }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '409': { $ref: '#/components/responses/Conflicto' }
+
   /api/alertas/{id}/seguimiento/cerrar:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
@@ -461,6 +485,96 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problema' }
 
+  /api/auth/recuperar:
+    post:
+      tags: [Sesión]
+      operationId: recuperarContrasena
+      summary: Envía por correo un enlace para elegir una contraseña nueva
+      description: >-
+        Pública. Si el RUN es de una cuenta activa con correo, le llega un enlace a `/restablecer#<token>` que
+        sirve una vez y vence en 1 hora; pedir otro anula el anterior. Como máximo 3 correos por cuenta en una
+        hora: pasado el tope, se ignora sin avisar. Responde siempre igual, exista o no la cuenta (24-11-2026).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [run]
+              properties:
+                run: { type: string, examples: ['12.345.678-5'] }
+      responses:
+        '202': { description: Recibido (no dice si la cuenta existe). }
+        '400': { $ref: '#/components/responses/Invalido' }
+
+  /api/auth/restablecer:
+    post:
+      tags: [Sesión]
+      operationId: restablecerContrasena
+      summary: Cambia la contraseña con el token del correo de recuperación
+      description: >-
+        Pública. Misma política que la activación: al menos 12 caracteres y no el propio RUN. No reactiva una
+        cuenta desactivada. Queda en la auditoría como MODIFICAR USUARIO.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SolicitudActivacion' }
+      responses:
+        '204': { description: Contraseña cambiada. }
+        '400':
+          description: El enlace no sirve (usado, vencido, reemplazado) o la contraseña no cumple las reglas.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problema' }
+
+  /api/mi-cuenta:
+    get:
+      tags: [Sesión]
+      operationId: verMiCuenta
+      summary: Datos de la cuenta propia (Mi cuenta)
+      description: Cualquier sesión del equipo, sin permisos especiales. Siempre la cuenta del token.
+      responses:
+        '200':
+          description: La cuenta.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [nombre, whatsapp]
+                properties:
+                  nombre: { type: string }
+                  correo: { type: ['string', 'null'] }
+                  telefono: { type: ['string', 'null'], examples: ['+56912345678'] }
+                  whatsapp: { type: boolean, description: Opt-in vigente (aceptado y no revocado). }
+        '401': { $ref: '#/components/responses/SinToken' }
+
+  /api/mi-cuenta/whatsapp:
+    put:
+      tags: [Sesión]
+      operationId: cambiarMiWhatsapp
+      summary: Enciende o apaga el WhatsApp propio y cambia el teléfono
+      description: >-
+        Cualquier sesión del equipo, sobre su propia cuenta (24-11-2026). El correo sigue llegando siempre.
+        Encender guarda el opt-in con la hora; apagar lo quita y deja el teléfono. Mismas reglas que
+        `PUT /api/personal/{id}/telefono`: sin teléfono no hay WhatsApp, y un coordinador no queda sin teléfono.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [aceptaWhatsapp]
+              properties:
+                telefono: { type: ['string', 'null'], examples: ['+56 9 1234 5678'] }
+                aceptaWhatsapp: { type: boolean }
+      responses:
+        '204': { description: Guardado. }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+
   /api/respuestas-contacto/consulta:
     post:
       tags: [Respuesta del contacto]
@@ -515,6 +629,57 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problema' }
+
+  /api/respuestas-contacto/llamada:
+    post:
+      tags: [Respuesta del contacto]
+      operationId: registrarLlamadaAlPaciente
+      summary: Registra que el contacto presionó "Llamar al paciente"
+      description: >-
+        La página llama al número de la SIM del reloj (`telefonoPaciente` de la consulta) y antes deja registrado
+        el clic: solo el primero y solo con la alerta abierta. No se sabe si contestaron (24-11-2026).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SolicitudConsultaRespuesta' }
+      responses:
+        '204': { description: Registrado (o ya lo estaba). }
+        '400':
+          description: El enlace no sirve.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problema' }
+
+  /api/respuestas-contacto/llegada:
+    post:
+      tags: [Respuesta del contacto]
+      operationId: registrarLlegadaDelContacto
+      summary: Registra "Llegué donde el paciente" y resuelve la alerta
+      description: >-
+        Solo quien respondió `VOY_EN_CAMINO` con ese enlace. Se registra una vez; si la alerta seguía abierta, la
+        resuelve el sistema (sin responsable nuevo, clasificación ni observaciones) y deja el aviso FCM
+        `ALERTA_RESUELTA`. El equipo completa el cierre con `POST /api/alertas/{id}/completar-cierre`.
+        Repetirlo responde 200 sin cambios (24-11-2026).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SolicitudConsultaRespuesta' }
+      responses:
+        '200':
+          description: Cómo quedó, con `llegada`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VistaRespuesta' }
+        '400':
+          description: El enlace no sirve.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problema' }
+        '409': { $ref: '#/components/responses/Conflicto' }
 
   /api/personal:
     get:
@@ -1294,6 +1459,25 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problema' }
+    delete:
+      tags: [Inventario de relojes]
+      operationId: eliminarReloj
+      summary: Borra un reloj que nunca tuvo usuario
+      description: >-
+        Permiso: `USUARIOS:ELIMINAR`. Uno que tuvo usuario guarda lecturas y alertas: no se borra, y se saca de
+        servicio pasándolo a `RETIRADO` con el PUT. Queda en la auditoría (24-11-2026).
+      responses:
+        '204': { description: Borrado. }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '409':
+          description: >-
+            `codigo: EN_USO` si está vinculado a un usuario (desvincularlo antes), o `codigo: CON_HISTORIAL` si lo
+            tuvo (ofrecer pasarlo a RETIRADO).
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problema' }
 
   /api/calendario:
     get:
@@ -1590,7 +1774,7 @@ components:
                   motivos: { type: array, items: { type: string } }
                   ultimaSincronizacion: { type: string, format: date-time, nullable: true }
                   nivelBateria: { type: integer, nullable: true }
-                  tipoConexion: { type: string, enum: [LTE, WIFI], nullable: true }
+                  tipoConexion: { type: string, enum: [LTE, WIFI, BLUETOOTH], nullable: true }
                   configuracionPendiente: { type: boolean }
     SolicitudResolucion:
       type: object
@@ -1687,7 +1871,7 @@ components:
     VistaRespuesta:
       type: object
       required: [numero, tipo, severidad, fechaHora, cerrada]
-      description: Sin datos clínicos ni de contacto.
+      description: Sin datos clínicos. Solo el número del reloj, mientras la alerta siga abierta.
       properties:
         numero: { type: integer, format: int64, description: Folio de la alerta. }
         alias: { type: string, nullable: true, description: 'Sin alias, la página usa el folio.' }
@@ -1697,6 +1881,11 @@ components:
         respuesta: { type: string, enum: [VOY_EN_CAMINO, NO_PUEDO], nullable: true }
         fechaRespuesta: { type: string, format: date-time, nullable: true }
         cerrada: { type: boolean, description: La alerta fue resuelta o cancelada; ya no se registra. }
+        telefonoPaciente:
+          type: string
+          nullable: true
+          description: Número de la SIM del reloj, para "Llamar al paciente"; null con la alerta cerrada o sin número.
+        llegada: { type: string, format: date-time, nullable: true, description: Cuándo avisó que llegó. }
 
     Rol:
       type: string
@@ -2061,7 +2250,7 @@ components:
         ultimaSincronizacion: { type: ['string', 'null'], format: date-time, description: Del vínculo vigente. }
         nivelBateria: { type: ['integer', 'null'] }
         relojPuesto: { type: ['boolean', 'null'] }
-        tipoConexion: { type: ['string', 'null'], enum: [LTE, WIFI, null] }
+        tipoConexion: { type: ['string', 'null'], enum: [LTE, WIFI, BLUETOOTH, null] }
         versionApp: { type: ['string', 'null'] }
         configuracionPendiente: { type: boolean, description: La configuración informada no es la vigente. }
 

@@ -1,6 +1,7 @@
 package cl.ucn.alertacuida.application.aviso;
 
 import cl.ucn.alertacuida.application.aviso.error.CanalNoConfigurado;
+import cl.ucn.alertacuida.application.aviso.error.EnvioRechazado;
 import cl.ucn.alertacuida.application.aviso.modelo.PoliticaReintentos;
 import cl.ucn.alertacuida.application.aviso.modelo.WhatsappPendiente;
 import cl.ucn.alertacuida.application.aviso.puerto.BandejaWhatsapp;
@@ -13,7 +14,8 @@ import java.time.Instant;
  * Envía los WhatsApp de la bandeja de salida a los que les toca. Si un envío falla, lo reprograma según la
  * política de reintentos y, agotados, lo deja fallido; un WhatsApp fallido lo toma {@link EncolarCorreos}
  * para enviar el correo de respaldo. Si el canal no está configurado (antes de tener las credenciales de
- * Meta), falla de inmediato, sin reintentos, para que el respaldo salga enseguida.
+ * Meta) o Meta rechaza el mensaje de forma definitiva, falla de inmediato, sin reintentos, para que el respaldo
+ * salga enseguida.
  */
 public class EnviarWhatsappPendientes {
 
@@ -63,8 +65,9 @@ public class EnviarWhatsappPendientes {
 		String idExterno;
 		try {
 			idExterno = canal.enviar(aviso);
-		} catch (CanalNoConfigurado sinCanal) {
-			envios.marcarFallido(aviso.idIntento(), sinCanal.getMessage(), ahora);
+		} catch (CanalNoConfigurado | EnvioRechazado definitivo) {
+			// Reintentar daría lo mismo: falla al tiro y sale el correo de respaldo
+			envios.marcarFallido(aviso.idIntento(), definitivo.getMessage(), ahora);
 			return;
 		} catch (RuntimeException falla) {
 			reintentarOFallar(aviso, EnviarCorreosPendientes.motivo(falla), ahora);

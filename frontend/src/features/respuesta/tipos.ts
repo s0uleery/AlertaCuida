@@ -19,4 +19,8 @@ export interface VistaRespuesta {
   fechaRespuesta: string | null;
   /** Si el equipo ya resolvió o canceló la alerta: ya no hace falta responder. */
   cerrada: boolean;
+  /** Número de la SIM del reloj, para "Llamar al paciente"; null si la alerta está cerrada o no hay número. */
+  telefonoPaciente: string | null;
+  /** Cuándo avisó que llegó donde el paciente, en UTC; null si no lo ha hecho. */
+  llegada: string | null;
 }

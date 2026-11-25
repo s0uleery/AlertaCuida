@@ -22,11 +22,24 @@ function mensajeDe(e: unknown): string {
 function accionesPosibles(alerta: DetalleAlerta) {
   const cancelada = alerta.estadoContacto === 'CANCELADA';
   const abierta = alerta.estadoAtencion === 'SIN_ASIGNAR' || alerta.estadoAtencion === 'EN_ATENCION';
+  const { atencion } = alerta;
   return {
     asumir: !cancelada && alerta.estadoAtencion === 'SIN_ASIGNAR',
     resolver: !cancelada && abierta,
     cerrarSeguimiento: alerta.estadoAtencion === 'EN_SEGUIMIENTO',
+    // La cerró el sistema al llegar un contacto: falta que el equipo la clasifique (24-11-2026)
+    completarCierre:
+      !cancelada &&
+      alerta.categoria === 'SALUD' &&
+      atencion !== null &&
+      atencion.resolutor === null &&
+      atencion.clasificacion === null,
   };
+}
+
+/** @returns el contacto cuya llegada resolvió la alerta, según su línea de tiempo; null si no fue así */
+function quienLlego(alerta: DetalleAlerta): string | null {
+  return alerta.lineaTiempo.find((paso) => paso.tipo === 'ALERTA_RESUELTA')?.contacto ?? null;
 }
 
 /**
@@ -41,6 +54,7 @@ export function FichaAlerta() {
   const { datos: alerta, error, cargando, recargar } = useDatos(() => alertasApi.detalle(id), id);
   const [errorAccion, setErrorAccion] = useState<string | null>(null);
   const [resolviendo, setResolviendo] = useState(false);
+  const [completando, setCompletando] = useState(false);
   const [guardando, setGuardando] = useState(false);
 
   if (cargando && !alerta) return <p className="text-slate-500">Cargando…</p>;
@@ -70,8 +84,10 @@ export function FichaAlerta() {
 
   /** Resuelve con lo escrito en el diálogo; si falla, el diálogo sigue abierto con el error. */
   async function resolver(clasificacion: ClasificacionAlerta | null, observaciones: string) {
-    if (await ejecutar(() => alertasApi.resolver(idAlerta, clasificacion, observaciones))) {
+    const guardar = completando ? alertasApi.completarCierre : alertasApi.resolver;
+    if (await ejecutar(() => guardar(idAlerta, clasificacion, observaciones))) {
       setResolviendo(false);
+      setCompletando(false);
     }
   }
 
@@ -138,6 +154,20 @@ export function FichaAlerta() {
                 Resolver alerta
               </button>
             )}
+            {acciones.completarCierre && (
+              <button
+                type="button"
+                disabled={guardando}
+                onClick={() => {
+                  setErrorAccion(null);
+                  setCompletando(true);
+                  setResolviendo(true);
+                }}
+                className={CLASE_BOTON_PRINCIPAL}
+              >
+                Completar cierre
+              </button>
+            )}
             {acciones.cerrarSeguimiento && (
               <button type="button" disabled={guardando} onClick={cerrarSeguimiento} className={CLASE_BOTON_PRINCIPAL}>
                 Cerrar seguimiento
@@ -177,7 +207,12 @@ export function FichaAlerta() {
             {atencion && (
               <div className="mt-4 border-t border-slate-200 pt-4 text-sm">
                 <p className="font-medium text-tinta">
-                  {atencion.resolutor ? `Resuelta por ${atencion.resolutor}` : 'Cerrada por el sistema'} el{' '}
+                  {atencion.resolutor
+                    ? `Resuelta por ${atencion.resolutor}`
+                    : quienLlego(alerta)
+                      ? `Resuelta al llegar ${quienLlego(alerta)} donde el usuario`
+                      : 'Cerrada por el sistema'}{' '}
+                  el{' '}
                   {formatearFechaHora(atencion.fechaHora)}
                 </p>
                 {atencion.clasificacion && <p className="text-tinta">{CLASIFICACION[atencion.clasificacion]}</p>}
@@ -211,8 +246,10 @@ export function FichaAlerta() {
           error={errorAccion}
           guardando={guardando}
           alResolver={resolver}
+          completando={completando}
           alCancelar={() => {
             setResolviendo(false);
+            setCompletando(false);
             setErrorAccion(null);
           }}
         />

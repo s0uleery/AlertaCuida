@@ -1,8 +1,14 @@
 package cl.ucn.alertacuida.configuracion;
 
+import cl.ucn.alertacuida.adapters.seguridad.firma.FirmaWebhookMeta;
+import cl.ucn.alertacuida.adapters.web.whatsapp.TokenVerificacionWebhook;
+import cl.ucn.alertacuida.adapters.whatsapp.CanalWhatsappCloudApi;
 import cl.ucn.alertacuida.adapters.whatsapp.CanalWhatsappNoConfigurado;
 import cl.ucn.alertacuida.application.alerta.puerto.AlertasDelReloj;
 import cl.ucn.alertacuida.application.aviso.EnviarWhatsappPendientes;
+import cl.ucn.alertacuida.application.aviso.PlantillasWhatsapp;
+import cl.ucn.alertacuida.application.aviso.RecibirWebhookWhatsapp;
+import cl.ucn.alertacuida.application.aviso.puerto.EstadosWhatsapp;
 import cl.ucn.alertacuida.application.aviso.modelo.PoliticaReintentos;
 import cl.ucn.alertacuida.application.aviso.puerto.BandejaWhatsapp;
 import cl.ucn.alertacuida.application.aviso.puerto.CanalWhatsapp;
@@ -15,11 +21,14 @@ import cl.ucn.alertacuida.application.escalamiento.VigilarEscalamiento;
 import cl.ucn.alertacuida.application.escalamiento.puerto.AvisosOficina;
 import cl.ucn.alertacuida.application.escalamiento.puerto.EscalamientosTrabados;
 import cl.ucn.alertacuida.application.escalamiento.puerto.IntentosAviso;
+import cl.ucn.alertacuida.application.respuesta.ResponderAviso;
 import cl.ucn.alertacuida.domain.calendario.CalendarioHabil;
+import java.net.URI;
 import java.time.Clock;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Escalamiento dirigido por el reloj: la solicitud de aviso, el envío de los WhatsApp, el aviso de cada alerta
@@ -52,12 +61,65 @@ public class ConfiguracionEscalamiento {
 		return new SolicitarAviso(alertas, contactos, intentos, transacciones, reloj);
 	}
 
-	/** @return el canal elegido en alertacuida.whatsapp.canal */
+	/**
+	 * @return el canal elegido en alertacuida.whatsapp.canal. Con SIMULADOR o META, si falta una credencial o una
+	 *         plantilla, el backend no arranca y dice qué falta
+	 */
 	@Bean
-	CanalWhatsapp canalWhatsapp(PropiedadesWhatsapp propiedades) {
+	CanalWhatsapp canalWhatsapp(PropiedadesWhatsapp propiedades, ObjectMapper json) {
 		return switch (propiedades.canal()) {
 			case NO_CONFIGURADO -> new CanalWhatsappNoConfigurado();
+			case SIMULADOR -> cloudApi(propiedades, exigirSimulador(propiedades), json);
+			case META -> cloudApi(propiedades, URI.create("https://graph.facebook.com"), json);
 		};
+	}
+
+	/** Revisa la firma de los webhooks de Meta con el App Secret. */
+	@Bean
+	FirmaWebhookMeta firmaWebhookMeta(PropiedadesWhatsapp propiedades) {
+		return new FirmaWebhookMeta(propiedades.appSecret());
+	}
+
+	/** El Verify token del panel de Meta, para la verificación inicial del webhook. */
+	@Bean
+	TokenVerificacionWebhook tokenVerificacionWebhook(PropiedadesWhatsapp propiedades) {
+		return new TokenVerificacionWebhook(propiedades.verifyToken());
+	}
+
+	/** Estados de entrega y botones que llegan por el webhook; las respuestas siguen las reglas del correo. */
+	@Bean
+	RecibirWebhookWhatsapp recibirWebhookWhatsapp(EstadosWhatsapp estados, ResponderAviso responder,
+			Transacciones transacciones) {
+		return new RecibirWebhookWhatsapp(estados, responder::responderIntento, transacciones);
+	}
+
+	/** @return el canal de la Cloud API con esa dirección base, después de revisar las credenciales */
+	private static CanalWhatsapp cloudApi(PropiedadesWhatsapp propiedades, URI base, ObjectMapper json) {
+		String canal = "WHATSAPP_CANAL=" + propiedades.canal();
+		exigir(propiedades.token(), canal, "WHATSAPP_TOKEN");
+		exigir(propiedades.phoneNumberId(), canal, "WHATSAPP_PHONE_NUMBER_ID");
+		exigir(propiedades.appSecret(), canal, "WHATSAPP_APP_SECRET");
+		exigir(propiedades.verifyToken(), canal, "WHATSAPP_VERIFY_TOKEN");
+		PropiedadesWhatsapp.Plantillas plantillas = propiedades.plantillas();
+		PlantillasWhatsapp elegidas = new PlantillasWhatsapp(plantillas.leve(), plantillas.grave(),
+				plantillas.simulacro(), propiedades.quienSinAlias());
+		return new CanalWhatsappCloudApi(base, propiedades.versionApi(), propiedades.phoneNumberId(),
+				propiedades.token(), elegidas, json);
+	}
+
+	/** @return la dirección del simulador, que no puede faltar con canal SIMULADOR */
+	private static URI exigirSimulador(PropiedadesWhatsapp propiedades) {
+		if (propiedades.simuladorUrl() == null) {
+			throw new IllegalStateException("Con WHATSAPP_CANAL=SIMULADOR falta WHATSAPP_SIMULADOR_URL");
+		}
+		return propiedades.simuladorUrl();
+	}
+
+	/** @throws IllegalStateException si el valor falta, diciendo qué variable */
+	private static void exigir(String valor, String canal, String variable) {
+		if (valor == null || valor.isBlank()) {
+			throw new IllegalStateException("Con " + canal + " falta " + variable + " (ver docs/despliegue.md)");
+		}
 	}
 
 	/**

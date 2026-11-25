@@ -9,4 +9,11 @@ export const sesionApi = {
   renovar: () => pedir<RespuestaLogin>('/auth/renovar', { method: 'POST' }),
 
   salir: () => pedir<void>('/auth/salir', { method: 'POST' }),
+
+  /** Pide el correo de recuperación. Responde lo mismo exista o no la cuenta. */
+  recuperar: (run: string) => pedir<void>('/auth/recuperar', { method: 'POST', body: JSON.stringify({ run }) }),
+
+  /** Elige la contraseña nueva con el token del correo de recuperación. */
+  restablecer: (token: string, contrasena: string) =>
+    pedir<void>('/auth/restablecer', { method: 'POST', body: JSON.stringify({ token, contrasena }) }),
 };

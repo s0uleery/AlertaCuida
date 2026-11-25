@@ -238,6 +238,93 @@ enlace sirve una sola vez y vence en 48 horas. Si venció antes de usarlo, ver
 Desde ahí, el resto del equipo se crea en **Administración**, como siempre. Probar que el correo llega:
 crear una cuenta de prueba con un correo propio y revisar la bandeja (y la carpeta de spam).
 
+## 10. Activar Firebase (avisos al reloj)
+
+Mientras `FCM_CANAL=SIMULADO`, los avisos al reloj (alerta confirmada o resuelta, configuración nueva) solo
+quedan en el log. Para enviarlos de verdad se necesita un proyecto de Firebase.
+
+**En la consola de Firebase** (<https://console.firebase.google.com>, con la cuenta del proyecto):
+
+1. **Crear proyecto:** nombre `alertacuida`. Google Analytics no hace falta (se puede desactivar).
+2. **Registrar la app del reloj:** en el resumen del proyecto, **Agregar app → Android**. En *Nombre del
+   paquete* va el `applicationId` de la app del reloj: pedírselo a quien la desarrolla, porque debe ser
+   exactamente igual. Descargar **`google-services.json`** y enviárselo; va en la carpeta `app/` de su
+   proyecto Android, **no** en este repositorio. No es secreto, pero tampoco se publica.
+3. **Llave del servidor:** ⚙ **Configuración del proyecto → Cuentas de servicio → Generar nueva clave
+   privada**. Descarga un JSON que **sí es secreto**: permite enviar avisos a nombre del proyecto. No se manda
+   por chat ni por correo, y si se filtra se borra en la misma pantalla y se genera otra.
+4. En **Configuración del proyecto → Cloud Messaging**, revisar que la *API de Firebase Cloud Messaging (V1)*
+   esté **habilitada** (en los proyectos nuevos viene así).
+
+**En el servidor**, desde el computador donde quedó la llave (cambiar el nombre del archivo descargado):
+
+```bash
+ssh alertacuida "mkdir -p ~/alertacuida/secretos"
+scp alertacuida-firebase-adminsdk-xxxxx.json alertacuida:alertacuida/secretos/firebase-llave.json
+```
+
+Si `mkdir` falla por permisos (Docker ya creó la carpeta como `root`): `ssh alertacuida "sudo chown azureuser:azureuser ~/alertacuida/secretos"`.
+
+Luego, en el servidor (`ssh alertacuida`, `cd ~/alertacuida`):
+
+```bash
+# La llave solo la lee el usuario del contenedor del backend
+sudo chown "$(docker compose exec -T backend id -u)" secretos/firebase-llave.json
+sudo chmod 400 secretos/firebase-llave.json
+nano .env       # FCM_CANAL=FIREBASE  y  FCM_CREDENCIALES=/run/secretos/firebase-llave.json
+docker compose up -d backend
+docker compose logs -f backend   # debe arrancar sin errores; sin llave legible, no arranca
+```
+
+Borrar la llave del computador después de subirla (queda en el servidor y se puede generar otra).
+
+**Comprobar:** cuando el reloj registra su token (`PUT /api/reloj/v1/token-fcm`) y se resuelve una alerta suya,
+el log del backend ya no dice "Aviso al reloj simulado (no se envió)" y el reloj recibe `ALERTA_RESUELTA`. Para probar la llave sin reloj,
+desde un computador de desarrollo: `FCM_CREDENCIALES=ruta/a/la/llave.json` y correr `CanalAvisoRelojFirebaseTest`.
+
+**Volver a simular:** `FCM_CANAL=SIMULADO` en el `.env` y `docker compose up -d backend`.
+
+## 11. Activar WhatsApp
+
+Mientras `WHATSAPP_CANAL=NO_CONFIGURADO`, cada WhatsApp queda fallido al tiro y sale el correo de respaldo. Para
+enviarlos de verdad con la Cloud API de Meta, y recibir las respuestas y los estados por el webhook
+(`/api/webhooks/whatsapp`), según la guía de Meta "Create a webhook endpoint":
+
+1. **Credenciales en el `.env` del servidor** (`nano .env`; nunca por chat ni correo):
+   - `WHATSAPP_TOKEN`: el token **permanente** de un usuario del sistema de Meta Business (el temporal dura 24 h).
+   - `WHATSAPP_PHONE_NUMBER_ID`: el *Phone number ID* del número que envía (en WhatsApp → API Setup; no es el número).
+   - `WHATSAPP_APP_SECRET`: App Dashboard → App settings → Basic → App secret. Con él se revisa la firma de cada webhook.
+   - `WHATSAPP_VERIFY_TOKEN`: uno inventado, por ejemplo `openssl rand -hex 16`. Se escribe igual en el panel (paso 4).
+   - `WHATSAPP_WABA_ID`: el WhatsApp Business Account ID, solo para listar las plantillas.
+2. **Listar las plantillas aprobadas** (no muestra el token; el resultado no tiene claves y se puede pegar en el
+   chat para configurarlas):
+
+   ```bash
+   cd ~/alertacuida
+   set -a; . ./.env; set +a
+   curl -s -H "Authorization: Bearer $WHATSAPP_TOKEN" \
+     "https://graph.facebook.com/v23.0/$WHATSAPP_WABA_ID/message_templates?fields=name,language,status,components"
+   ```
+
+   Con eso se ajustan en `application.properties` el idioma, las variables y los botones de cada una
+   (`alertacuida.whatsapp.plantillas.*`), y en el `.env` sus nombres (`WHATSAPP_PLANTILLA_LEVE`, `_GRAVE` y
+   `_SIMULACRO`). Ese cambio llega al servidor con un merge a `main`.
+3. **Encender el canal:** `WHATSAPP_CANAL=META` en el `.env` y `docker compose up -d backend`. Si falta un dato, el
+   backend no arranca y el log dice cuál (`docker compose logs backend`).
+4. **Webhook en el panel de Meta:** App Dashboard → WhatsApp → Configuration (o Use cases → Customize →
+   Configuration):
+   - *Callback URL*: `https://alertacuida.app/api/webhooks/whatsapp`;
+   - *Verify token*: el mismo `WHATSAPP_VERIFY_TOKEN`;
+   - **Verify and save**: Meta llama al servidor en ese momento, así que el backend ya tiene que estar arriba con el
+     token cargado (paso 3);
+   - suscribir el campo **messages**;
+   - la app de Meta debe estar en modo **Live**: en Dev, Meta no envía todos los webhooks.
+5. **Probar** con un contacto de prueba con WhatsApp y opt-in: un simulacro o una alerta del simulador de reloj. En
+   la ficha de la alerta deben aparecer "enviado", "entregado" y "leído", y al presionar "Voy en camino" la alerta
+   queda confirmada.
+
+**Volver al correo:** `WHATSAPP_CANAL=NO_CONFIGURADO` y `docker compose up -d backend`.
+
 ## Actualizar a una versión nueva
 
 **Es automático:** cada merge a `main` se despliega solo si pasan las pruebas (ver
@@ -348,6 +435,10 @@ Además, Azure permite sacar una copia del disco completo (la máquina → Disks
 | Los correos quedan fallidos | Contraseña de aplicación mala o con espacios | Crear otra en Google, actualizar `SMTP_CLAVE` y `docker compose up -d` |
 | El enlace del administrador venció | Pasaron 48 horas | `docker compose exec postgres psql -U alertacuida -c "DELETE FROM usuario WHERE codigo_rol = 'ADMINISTRADOR' AND hash_contrasena IS NULL;"` y `docker compose restart backend`: se crea de nuevo con un enlace nuevo |
 | La máquina está detenida ("Stopped (deallocated)") | Auto-shutdown activo o se acabó el crédito | Desactivar el auto-shutdown (máquina → Auto-shutdown), revisar el saldo y **Start**; los contenedores vuelven solos |
+| El backend no arranca con `FCM_CANAL=FIREBASE` | La llave no está en `secretos/` o el contenedor no la puede leer | Repetir el `chown` y el `chmod` del paso 10; `FCM_CREDENCIALES` es la ruta **dentro** del contenedor (`/run/secretos/…`) |
+| El backend no arranca con `WHATSAPP_CANAL=META` | Falta un `WHATSAPP_*` o el nombre de una plantilla | `docker compose logs backend` dice cuál; completarlo en el `.env` (paso 11) |
+| Meta no verifica la Callback URL | El Verify token no coincide, o el backend no tiene `WHATSAPP_VERIFY_TOKEN` cargado | Revisar el `.env`, `docker compose up -d backend` y volver a guardar en el panel |
+| Los WhatsApp salen pero no llegan estados ni respuestas | Falta suscribir **messages**, la app está en Dev, o el App Secret no es el de esa app (el webhook responde 401) | Revisar el paso 11.4 y `WHATSAPP_APP_SECRET` |
 | La compilación del paso 8 se corta ("Killed" o "exit code 137") | Falta memoria | Revisar el swap del paso 2 (`free -h`) y repetir el paso 8 |
 
 **Nunca** correr `docker compose down -v` en el servidor: borra la base de datos y los certificados.

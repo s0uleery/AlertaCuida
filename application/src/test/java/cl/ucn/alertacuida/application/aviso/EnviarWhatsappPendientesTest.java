@@ -3,6 +3,7 @@ package cl.ucn.alertacuida.application.aviso;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import cl.ucn.alertacuida.application.aviso.error.CanalNoConfigurado;
+import cl.ucn.alertacuida.application.aviso.error.EnvioRechazado;
 import cl.ucn.alertacuida.application.aviso.error.EnvioFallido;
 import cl.ucn.alertacuida.application.aviso.modelo.PoliticaReintentos;
 import cl.ucn.alertacuida.application.aviso.modelo.WhatsappPendiente;
@@ -42,6 +43,21 @@ class EnviarWhatsappPendientesTest {
 		}, aviso);
 
 		assertThat(registro).containsExactly("fallido " + aviso.idIntento() + ": WhatsApp aún no está configurado");
+	}
+
+	/**
+	 * 24-11-2026: un rechazo definitivo de Meta (número inválido, plantilla mal armada) no se reintenta: queda
+	 * fallido al tiro, con el motivo, para que salga el correo de respaldo.
+	 */
+	@Test
+	void unRechazoDeMetaFallaAlTiroSinReintentos() {
+		WhatsappPendiente aviso = pendiente("+56911111111", 0);
+
+		enviarCon(m -> {
+			throw new EnvioRechazado("Meta rechazó el mensaje (131026)");
+		}, aviso);
+
+		assertThat(registro).containsExactly("fallido " + aviso.idIntento() + ": Meta rechazó el mensaje (131026)");
 	}
 
 	/** Con el canal real, lo enviado queda con el id del mensaje. */

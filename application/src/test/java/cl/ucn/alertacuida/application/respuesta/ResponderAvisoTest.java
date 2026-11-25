@@ -3,6 +3,7 @@ package cl.ucn.alertacuida.application.respuesta;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import cl.ucn.alertacuida.application.comun.error.Conflicto;
 import cl.ucn.alertacuida.application.comun.error.SolicitudRechazada;
 import cl.ucn.alertacuida.application.comun.puerto.Transacciones;
 import cl.ucn.alertacuida.application.respuesta.modelo.AvisoRespondible;
@@ -183,19 +184,77 @@ class ResponderAvisoTest {
 
 	}
 
+	/** 24-11-2026: con la alerta abierta, la página trae el número de la SIM del reloj; cerrada, no. */
+	@Test
+	void elNumeroParaLlamarSoloConLaAlertaAbierta() {
+		UUID abierta = respuestas.agregar(EstadoContacto.AVISANDO_CONTACTO);
+		UUID resuelta = respuestas.agregar(EstadoContacto.RESUELTA);
+
+		assertThat(responder.consultar(FirmaDePrueba.token(abierta)).telefonoPaciente())
+				.isEqualTo(RespuestasEnMemoria.SIM);
+		assertThat(responder.consultar(FirmaDePrueba.token(resuelta)).telefonoPaciente()).isNull();
+	}
+
+	/** 24-11-2026: la llamada se registra con la alerta abierta, y no con la alerta cerrada. */
+	@Test
+	void laLlamadaSeRegistraSoloConLaAlertaAbierta() {
+		UUID abierta = respuestas.agregar(EstadoContacto.AVISANDO_CONTACTO);
+		UUID cancelada = respuestas.agregar(EstadoContacto.CANCELADA);
+
+		responder.llamar(FirmaDePrueba.token(abierta));
+		responder.llamar(FirmaDePrueba.token(cancelada));
+
+		assertThat(respuestas.llamadas).containsOnlyKeys(abierta);
+	}
+
+	/** 24-11-2026: sin "voy", la llegada es un conflicto y no resuelve nada. */
+	@Test
+	void sinVoyLaLlegadaEsUnConflicto() {
+		UUID intento = respuestas.agregar(EstadoContacto.AVISANDO_CONTACTO);
+
+		assertThatThrownBy(() -> responder.llegar(FirmaDePrueba.token(intento)))
+				.isInstanceOf(Conflicto.class);
+		responder.responder(FirmaDePrueba.token(intento), RespuestaContacto.NO_PUEDO);
+		assertThatThrownBy(() -> responder.llegar(FirmaDePrueba.token(intento)))
+				.isInstanceOf(Conflicto.class);
+		assertThat(respuestas.resueltasPorLlegada).isEmpty();
+	}
+
+	/** 24-11-2026: la llegada de quien dijo "voy" resuelve la alerta y avisa al reloj, una sola vez. */
+	@Test
+	void laLlegadaResuelveYAvisaAlReloj() {
+		String token = FirmaDePrueba.token(respuestas.agregar(EstadoContacto.AVISANDO_CONTACTO));
+		responder.responder(token, RespuestaContacto.VOY_EN_CAMINO);
+
+		VistaRespuesta vista = responder.llegar(token);
+		responder.llegar(token);
+
+		assertThat(vista.llegada()).isEqualTo(AHORA);
+		assertThat(vista.cerrada()).isTrue();
+		assertThat(vista.telefonoPaciente()).isNull();
+		assertThat(respuestas.resueltasPorLlegada).containsExactly(RespuestasEnMemoria.ALERTA);
+		assertThat(respuestas.resueltasAlReloj).containsExactly(RespuestasEnMemoria.ALERTA);
+	}
+
 	/** Avisos por correo a contactos de una misma alerta (#142, caída grave de Rosa), en memoria. */
 	private static final class RespuestasEnMemoria implements RespuestasContacto {
 
 		static final UUID ALERTA = UUID.randomUUID();
 
+		static final String SIM = "+56987654321";
+
 		private final Map<UUID, AvisoRespondible> avisos = new HashMap<>();
 		final List<UUID> confirmadasAlReloj = new ArrayList<>();
+		final List<UUID> resueltasAlReloj = new ArrayList<>();
+		final Map<UUID, Instant> llamadas = new HashMap<>();
+		/** Las alertas que resolvió una llegada. */
+		final List<UUID> resueltasPorLlegada = new ArrayList<>();
 
 		/** @return un aviso nuevo, sin respuesta, de una alerta en ese estado */
 		UUID agregar(EstadoContacto estado) {
 			UUID id = UUID.randomUUID();
 			avisos.put(id, new AvisoRespondible(id, ALERTA, 142, "Rosa", TipoEvento.CAIDA, Severidad.GRAVE,
-					DETECCION, estado, null, null));
+					DETECCION, estado, null, null, null, SIM, true));
 			return id;
 		}
 
@@ -217,8 +276,41 @@ class ResponderAvisoTest {
 			}
 			avisos.put(idIntento, new AvisoRespondible(aviso.idIntento(), aviso.idAlerta(), aviso.numero(),
 					aviso.alias(), aviso.tipo(), aviso.severidad(), aviso.fechaHora(), aviso.estado(), respuesta,
-					fecha));
+					fecha, aviso.llegada(), aviso.telefonoReloj(), aviso.delReloj()));
 			return true;
+		}
+
+		@Override
+		public boolean registrarLlamada(UUID idIntento, Instant fecha) {
+			return llamadas.putIfAbsent(idIntento, fecha) == null;
+		}
+
+		@Override
+		public boolean registrarLlegada(UUID idIntento, Instant fecha) {
+			AvisoRespondible aviso = avisos.get(idIntento);
+			if (aviso.llegada() != null || aviso.respuesta() != RespuestaContacto.VOY_EN_CAMINO) {
+				return false;
+			}
+			avisos.put(idIntento, new AvisoRespondible(aviso.idIntento(), aviso.idAlerta(), aviso.numero(),
+					aviso.alias(), aviso.tipo(), aviso.severidad(), aviso.fechaHora(), aviso.estado(),
+					aviso.respuesta(), aviso.fechaRespuesta(), fecha, aviso.telefonoReloj(), aviso.delReloj()));
+			return true;
+		}
+
+		/** Deja RESUELTA la alerta en todos sus avisos, como la vista alerta_estado. */
+		@Override
+		public boolean resolverPorLlegada(UUID idAlerta, Instant fecha) {
+			resueltasPorLlegada.add(idAlerta);
+			avisos.replaceAll((id, aviso) -> new AvisoRespondible(aviso.idIntento(), aviso.idAlerta(),
+					aviso.numero(), aviso.alias(), aviso.tipo(), aviso.severidad(), aviso.fechaHora(),
+					EstadoContacto.RESUELTA, aviso.respuesta(), aviso.fechaRespuesta(), aviso.llegada(),
+					aviso.telefonoReloj(), aviso.delReloj()));
+			return true;
+		}
+
+		@Override
+		public void dejarAvisoResueltaPendiente(UUID idAlerta) {
+			resueltasAlReloj.add(idAlerta);
 		}
 
 		@Override

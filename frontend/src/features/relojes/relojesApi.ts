@@ -15,4 +15,7 @@ export const relojesApi = {
   /** Reemplaza los datos del reloj. */
   editar: (id: string, datos: DatosReloj) =>
     pedir<void>(`/relojes/${id}`, { method: 'PUT', body: JSON.stringify(datos) }),
+
+  /** Borra un reloj que nunca tuvo usuario. 409 con código EN_USO o CON_HISTORIAL si no se puede. */
+  eliminar: (id: string) => pedir<void>(`/relojes/${id}`, { method: 'DELETE' }),
 };

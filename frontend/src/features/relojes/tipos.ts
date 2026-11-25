@@ -54,10 +54,20 @@ export interface EstadoTecnicoReloj {
   ultimaSincronizacion: string | null;
   nivelBateria: number | null;
   relojPuesto: boolean | null;
-  tipoConexion: 'LTE' | 'WIFI' | null;
+  tipoConexion: TipoConexion | null;
   versionApp: string | null;
   configuracionPendiente: boolean;
 }
+
+/** Por dónde envió el reloj su última sincronización. */
+export type TipoConexion = 'LTE' | 'WIFI' | 'BLUETOOTH';
+
+/** Cómo se nombra cada conexión. */
+export const NOMBRE_CONEXION: Record<TipoConexion, string> = {
+  LTE: 'LTE',
+  WIFI: 'Wi-Fi',
+  BLUETOOTH: 'Bluetooth',
+};
 
 /** Cómo se nombra cada color. */
 export const NOMBRE_SEMAFORO: Record<ColorSemaforo, string> = {

@@ -6,16 +6,18 @@ import cl.ucn.alertacuida.application.respuesta.modelo.VistaRespuesta;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Respuesta de un contacto del paciente desde los enlaces de su correo (página /responder del dashboard). Es
  * pública (ver ConfiguracionSeguridad): el contacto no tiene cuenta, así que lo autoriza el token firmado del
  * enlace. El token va en el cuerpo y no en la dirección, para que no quede en los registros del servidor.
- * Las dos son POST: así los revisores de enlaces del correo, que solo abren direcciones, no las disparan.
+ * Todas son POST: así los revisores de enlaces del correo, que solo abren direcciones, no las disparan.
  */
 @RestController
 @RequestMapping("/api/respuestas-contacto")
@@ -77,6 +79,29 @@ public class RespuestasContactoController {
 	@PostMapping
 	public VistaRespuesta responder(@Valid @RequestBody SolicitudRespuesta solicitud) {
 		return responder.responder(solicitud.token(), solicitud.respuesta());
+	}
+
+
+	/**
+	 * Registra que el contacto presionó "Llamar al paciente" (solo la primera vez, con la alerta abierta). La
+	 * página abre después el marcador del teléfono.
+	 *
+	 * @return 204. 400 si el enlace no sirve
+	 */
+	@PostMapping("/llamada")
+	@ResponseStatus(HttpStatus.NO_CONTENT)
+	public void llamar(@Valid @RequestBody SolicitudConsulta solicitud) {
+		responder.llamar(solicitud.token());
+	}
+
+	/**
+	 * Registra que el contacto llegó donde el paciente y, si la alerta sigue abierta, la resuelve.
+	 *
+	 * @return 200 con cómo quedó. 400 si el enlace no sirve; 409 si no respondió "Voy en camino"
+	 */
+	@PostMapping("/llegada")
+	public VistaRespuesta llegar(@Valid @RequestBody SolicitudConsulta solicitud) {
+		return responder.llegar(solicitud.token());
 	}
 
 }

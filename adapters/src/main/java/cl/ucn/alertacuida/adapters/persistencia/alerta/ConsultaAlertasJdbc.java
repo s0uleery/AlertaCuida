@@ -131,7 +131,7 @@ public class ConsultaAlertasJdbc implements ConsultaAlertas {
 		return jdbc.sql("""
 				SELECT i.id_contacto_paciente, c.nombre, u.nombre_profesional, i.canal, i.ronda, i.fecha_hora_envio,
 					i.fecha_hora_entrega, i.fecha_hora_lectura, i.fecha_hora_fallo, i.motivo_fallo, i.respuesta,
-					i.fecha_hora_respuesta
+					i.fecha_hora_respuesta, i.fecha_hora_llamada, i.fecha_hora_llegada
 				FROM registro_intento i
 				LEFT JOIN contacto_paciente cp USING (id_contacto_paciente)
 				LEFT JOIN contacto c ON c.id_contacto = cp.id_contacto
@@ -145,7 +145,8 @@ public class ConsultaAlertasJdbc implements ConsultaAlertas {
 						fila.getObject("ronda", Integer.class), instante(fila, "fecha_hora_envio"),
 						instante(fila, "fecha_hora_entrega"), instante(fila, "fecha_hora_lectura"),
 						instante(fila, "fecha_hora_fallo"), fila.getString("motivo_fallo"), fila.getString("respuesta"),
-						instante(fila, "fecha_hora_respuesta")))
+						instante(fila, "fecha_hora_respuesta"), instante(fila, "fecha_hora_llamada"),
+						instante(fila, "fecha_hora_llegada")))
 				.list();
 	}
 

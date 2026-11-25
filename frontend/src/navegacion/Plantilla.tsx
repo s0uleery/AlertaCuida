@@ -9,7 +9,10 @@ const NOMBRE_ROL: Record<string, string> = {
   PERSONAL: 'Personal',
 };
 
-/** Barra superior con el menú según los permisos del rol; cada página se dibuja en <Outlet />. */
+/**
+ * Barra superior con el menú según los permisos del rol y, a la derecha, el nombre (abre "Mi cuenta") y el
+ * botón para salir. Cada página se dibuja en <Outlet />.
+ */
 export function Plantilla() {
   const { usuario, puede, salir } = useSesion();
   const visibles = SECCIONES.filter((seccion) => !seccion.permiso || puede(seccion.permiso));
@@ -35,10 +38,10 @@ export function Plantilla() {
             ))}
           </nav>
           <div className="flex items-center gap-3 text-sm">
-            <span className="text-slate-700">
+            <NavLink to="/mi-cuenta" title="Mi cuenta" className="text-slate-700 hover:underline">
               {usuario?.nombre}{' '}
               <span className="text-slate-400">· {NOMBRE_ROL[usuario?.rol ?? ''] ?? usuario?.rol}</span>
-            </span>
+            </NavLink>
             <button onClick={salir} className="rounded-md border border-slate-300 px-3 py-1 hover:bg-slate-50">
               Salir
             </button>

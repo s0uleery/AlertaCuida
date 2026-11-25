@@ -95,7 +95,25 @@ public class PlantillasCorreo {
 	 * @return el mensaje, no marcado como importante
 	 */
 	public Mensaje activacion(String destinatario, String nombre, String enlace, Instant expiraEn) {
-		TextosCorreo.Activacion t = textos.activacion();
+		return conEnlace(textos.activacion(), destinatario, nombre, enlace, expiraEn);
+	}
+
+	/**
+	 * Correo de recuperación a una persona del equipo que olvidó su contraseña.
+	 *
+	 * @param destinatario su correo
+	 * @param nombre       su nombre, para saludarla
+	 * @param enlace       la página para elegir la contraseña nueva, con el token después de "#"
+	 * @param expiraEn     hasta cuándo sirve el enlace
+	 * @return el mensaje, no marcado como importante
+	 */
+	public Mensaje recuperacion(String destinatario, String nombre, String enlace, Instant expiraEn) {
+		return conEnlace(textos.recuperacion(), destinatario, nombre, enlace, expiraEn);
+	}
+
+	/** Activación y recuperación tienen los mismos marcadores: {nombre}, {enlace}, {vence} y {pie}. */
+	private Mensaje conEnlace(TextosCorreo.Activacion t, String destinatario, String nombre, String enlace,
+			Instant expiraEn) {
 		Map<String, String> valores = Map.of("nombre", nombre.strip(), "enlace", enlace,
 				"vence", VENCE.format(expiraEn), "pie", textos.pieEquipo());
 		return new Mensaje(destinatario, limpiar(rellenar(t.asunto(), valores)),
@@ -263,10 +281,8 @@ public class PlantillasCorreo {
 		revisar("aviso-oficina.cuerpo", oficina.cuerpo(),
 				Set.of("alerta", "deQuien", "folio", "dashboard", "pie", "responder"));
 		exigir("aviso-oficina.cuerpo", oficina.cuerpo(), ENLACE);
-		TextosCorreo.Activacion activacion = requerido("activacion", textos.activacion());
-		revisar("activacion.asunto", activacion.asunto(), Set.of("nombre"));
-		revisar("activacion.cuerpo", activacion.cuerpo(), Set.of("nombre", "enlace", "vence", "pie"));
-		exigir("activacion.cuerpo", activacion.cuerpo(), Set.of("enlace"));
+		revisarConEnlace("activacion", textos.activacion());
+		revisarConEnlace("recuperacion", textos.recuperacion());
 		for (Severidad severidad : Severidad.values()) {
 			if (textos.gravedades() == null || vacio(textos.gravedades().get(severidad))) {
 				throw new IllegalArgumentException("correos.yml: falta el nombre de la gravedad " + severidad
@@ -281,6 +297,14 @@ public class PlantillasCorreo {
 						+ " en tecnicas");
 			}
 		}
+	}
+
+	/** Revisa un texto con la forma de la activación: asunto con {nombre} y cuerpo que exige {enlace}. */
+	private static void revisarConEnlace(String clave, TextosCorreo.Activacion texto) {
+		TextosCorreo.Activacion t = requerido(clave, texto);
+		revisar(clave + ".asunto", t.asunto(), Set.of("nombre"));
+		revisar(clave + ".cuerpo", t.cuerpo(), Set.of("nombre", "enlace", "vence", "pie"));
+		exigir(clave + ".cuerpo", t.cuerpo(), Set.of("enlace"));
 	}
 
 	/** Revisa que el texto exista y que solo use los marcadores permitidos en él. */

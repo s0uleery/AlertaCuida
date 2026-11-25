@@ -5,7 +5,7 @@ import type { ClasificacionAlerta, PasoAlerta } from './tipos';
 /** Qué le avisa el servidor al reloj, en palabras. */
 const AVISO_RELOJ: Record<string, string> = {
   ALERTA_CONFIRMADA: 'un contacto confirmó',
-  ALERTA_RESUELTA: 'el equipo resolvió la alerta',
+  ALERTA_RESUELTA: 'la alerta quedó resuelta',
   SIMULACRO: 'simulacro',
   CONFIGURACION_NUEVA: 'configuración nueva',
 };
@@ -69,6 +69,14 @@ function describir(paso: PasoAlerta): { texto: string; detalle: string | null; t
         tono: paso.detalle === 'VOY_EN_CAMINO' ? 'bien' : 'problema',
       };
     }
+    case 'LLAMADA_PACIENTE':
+      return {
+        texto: `${paso.contacto ?? 'El contacto'} intentó llamar al usuario desde el enlace`,
+        detalle: null,
+        tono: 'normal',
+      };
+    case 'LLEGADA_CONTACTO':
+      return { texto: `${paso.contacto ?? 'El contacto'} llegó donde el usuario`, detalle: null, tono: 'bien' };
     case 'SIN_RESPUESTA':
       return { texto: 'El reloj terminó la lista y nadie confirmó', detalle: null, tono: 'problema' };
     case 'CASO_ASUMIDO':
@@ -77,7 +85,11 @@ function describir(paso: PasoAlerta): { texto: string; detalle: string | null; t
       return { texto: `Seguimiento de ${paso.usuario ?? 'el equipo'}`, detalle: paso.detalle, tono: 'normal' };
     case 'ALERTA_RESUELTA':
       return {
-        texto: paso.usuario ? `${paso.usuario} resolvió la alerta` : 'El sistema cerró la alerta',
+        texto: paso.usuario
+          ? `${paso.usuario} resolvió la alerta`
+          : paso.contacto
+            ? `Alerta resuelta por la llegada de ${paso.contacto}`
+            : 'El sistema cerró la alerta',
         detalle: paso.detalle ? (CLASIFICACION[paso.detalle as ClasificacionAlerta] ?? paso.detalle) : null,
         tono: 'bien',
       };

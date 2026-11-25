@@ -15,13 +15,27 @@ interface Props {
   /** Se llama con la clasificación (null en las técnicas) y las observaciones escritas */
   alResolver: (clasificacion: ClasificacionAlerta | null, observaciones: string) => void;
   alCancelar: () => void;
+  /**
+   * La alerta ya la resolvió el sistema al llegar un contacto: solo falta la clasificación y las observaciones
+   * (solo alertas de salud). Cambia los textos del diálogo
+   */
+  completando?: boolean;
 }
 
 /**
  * Cierra una alerta. Las observaciones son obligatorias siempre; las alertas de salud además se clasifican.
  * Una positiva queda en seguimiento hasta cerrarlo. En las de salud, el reloj deja de avisar a los contactos.
+ * Con `completando`, sirve para completar el cierre de una alerta que el sistema resolvió al llegar un contacto.
  */
-export function DialogoResolver({ numero, esSalud, error, guardando, alResolver, alCancelar }: Props) {
+export function DialogoResolver({
+  numero,
+  esSalud,
+  error,
+  guardando,
+  alResolver,
+  alCancelar,
+  completando = false,
+}: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const [clasificacion, setClasificacion] = useState<ClasificacionAlerta | null>(null);
   const [observaciones, setObservaciones] = useState('');
@@ -50,12 +64,14 @@ export function DialogoResolver({ numero, esSalud, error, guardando, alResolver,
     >
       <form onSubmit={enviar} className="space-y-4 p-6" noValidate>
         <h2 id="resolver-titulo" className="text-lg font-semibold text-slate-900">
-          Resolver la alerta #{numero}
+          {completando ? `Completar el cierre de la alerta #${numero}` : `Resolver la alerta #${numero}`}
         </h2>
         {esSalud && (
           <p className="text-sm text-slate-600">
-            El reloj dejará de avisar a los contactos. Si fue una emergencia real, la alerta queda en seguimiento hasta
-            que lo cierres.
+            {completando
+              ? 'Un contacto llegó donde el usuario y la alerta quedó resuelta. Registra qué fue y qué se hizo. '
+              : 'El reloj dejará de avisar a los contactos. '}
+            Si fue una emergencia real, la alerta queda en seguimiento hasta que lo cierres.
           </p>
         )}
 
@@ -107,7 +123,7 @@ export function DialogoResolver({ numero, esSalud, error, guardando, alResolver,
             disabled={guardando || !completo}
             className="rounded-md bg-sky-700 px-4 py-2 font-medium text-white hover:bg-sky-800 disabled:opacity-50"
           >
-            {guardando ? 'Guardando…' : 'Resolver alerta'}
+            {guardando ? 'Guardando…' : completando ? 'Guardar cierre' : 'Resolver alerta'}
           </button>
         </div>
       </form>

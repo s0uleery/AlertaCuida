@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import { ErrorApi } from '../../api/cliente';
 import { CLASE_BOTON_PRINCIPAL, CLASE_CAMPO, CLASE_ERROR, CLASE_ETIQUETA } from '../../comun/estilos';
 import { formatearRun, runValido } from '../../comun/run';
@@ -94,6 +94,12 @@ export function PaginaLogin() {
         >
           {enviando ? 'Ingresando…' : 'Ingresar'}
         </button>
+
+        <p className="text-center text-sm">
+          <Link to="/recuperar" className="text-sky-700 underline hover:text-sky-900">
+            ¿Olvidaste tu contraseña?
+          </Link>
+        </p>
       </form>
     </main>
   );

@@ -28,6 +28,13 @@ export const alertasApi = {
   resolver: (id: string, clasificacion: ClasificacionAlerta | null, observaciones: string) =>
     pedir<void>(`/alertas/${id}/resolver`, { method: 'POST', body: JSON.stringify({ clasificacion, observaciones }) }),
 
+  /** Clasifica y anota una alerta de salud que el sistema resolvió al llegar un contacto. */
+  completarCierre: (id: string, clasificacion: ClasificacionAlerta | null, observaciones: string) =>
+    pedir<void>(`/alertas/${id}/completar-cierre`, {
+      method: 'POST',
+      body: JSON.stringify({ clasificacion, observaciones }),
+    }),
+
   /** Termina el seguimiento de una alerta POSITIVA. */
   cerrarSeguimiento: (id: string) => pedir<void>(`/alertas/${id}/seguimiento/cerrar`, { method: 'POST' }),
 };

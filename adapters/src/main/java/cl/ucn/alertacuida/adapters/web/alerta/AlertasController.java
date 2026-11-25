@@ -110,6 +110,19 @@ public class AlertasController {
 				peticion.getRemoteAddr());
 	}
 
+	/**
+	 * Agrega clasificación y observaciones a una alerta que resolvió el sistema al llegar un contacto. 204 sin
+	 * cuerpo; 400 si falta un dato o es técnica; 404 si no existe; 409 si no la cerró el sistema o ya se completó.
+	 */
+	@PostMapping("/{id}/completar-cierre")
+	@PreAuthorize(Permisos.ALERTAS_EDITAR)
+	@ResponseStatus(HttpStatus.NO_CONTENT)
+	public void completarCierre(@PathVariable UUID id, @RequestBody SolicitudResolucion solicitud,
+			@AuthenticationPrincipal Jwt jwt, HttpServletRequest peticion) {
+		atender.completarCierre(id, solicitud.clasificacion(), solicitud.observaciones(), TokenJwt.leer(jwt).id(),
+				peticion.getRemoteAddr());
+	}
+
 	/** Termina el seguimiento de una alerta POSITIVA. 204 sin cuerpo; 404 si no existe; 409 si no tiene uno abierto. */
 	@PostMapping("/{id}/seguimiento/cerrar")
 	@PreAuthorize(Permisos.ALERTAS_EDITAR)

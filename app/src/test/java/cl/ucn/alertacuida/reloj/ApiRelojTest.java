@@ -145,6 +145,21 @@ class ApiRelojTest {
 		assertThat(bateria).isEqualTo(80);
 	}
 
+	/**
+	 * Contrato (24-11-2026): el reloj puede sincronizar a través del teléfono por Bluetooth, y la conexión
+	 * queda guardada tal cual.
+	 */
+	@Test
+	void sincronizaPorBluetooth() throws Exception {
+		enviar(TOKEN, "/api/reloj/v1/sincronizaciones", lote(UUID.randomUUID(), "")
+				.replace("\"tipoConexion\": \"LTE\"", "\"tipoConexion\": \"BLUETOOTH\""))
+				.andExpect(status().isOk());
+
+		String conexion = jdbc.sql("SELECT tipo_conexion FROM sincronizacion WHERE id_asignacion = :a")
+				.param("a", asignacion).query(String.class).single();
+		assertThat(conexion).isEqualTo("BLUETOOTH");
+	}
+
 	/** Un mensaje mal formado responde 400 MENSAJE_INVALIDO y no guarda nada. */
 	@Test
 	void unMensajeMalFormadoResponde400() throws Exception {

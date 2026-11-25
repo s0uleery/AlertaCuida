@@ -45,6 +45,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * <li>R5 Agravamiento: solo caídas leves o medias; repetirlo no cambia la hora; 404 si no es de ese
  * reloj; 409 NO_APLICA si no aplica.</li>
  * <li>R6 Reintento con el mismo eventId: 200 con la misma alerta, sin duplicar nada.</li>
+ * <li>R7 El reloj no envía alertas técnicas (decisión del 24-11-2026): BATERIA_BAJA y RELOJ_NO_PUESTO
+ * los crea el servidor con la sincronización; enviados por el reloj son 400 MENSAJE_INVALIDO.</li>
  * </ul>
  */
 @SpringBootTest
@@ -358,6 +360,24 @@ class RequisitosRecepcionAlertasTest {
 		assertThat(discrepancias(eventId)).containsExactly("VERSION_DISTINTA");
 	}
 
+	// ---------- R7: el reloj no envía alertas técnicas ----------
+
+	/**
+	 * R7: la batería baja y el reloj no puesto los crea el servidor con la sincronización; si el reloj los
+	 * envía como alerta o como cancelación, es un mensaje mal formado (400) y no se guarda nada.
+	 */
+	@Test
+	void elRelojNoPuedeEnviarAlertasTecnicas() throws Exception {
+		for (String tipo : new String[] {"BATERIA_BAJA", "RELOJ_NO_PUESTO"}) {
+			alerta(UUID.randomUUID(), tipo, "LEVE", vigente, null).andExpect(status().isBadRequest())
+					.andExpect(jsonPath("$.codigo").value("MENSAJE_INVALIDO"));
+			cancelacionDe(UUID.randomUUID(), tipo).andExpect(status().isBadRequest())
+					.andExpect(jsonPath("$.codigo").value("MENSAJE_INVALIDO"));
+		}
+
+		assertThat(alertasDelReloj()).isZero();
+	}
+
 	// ---------- Ayudas ----------
 
 	/** @return si una alerta de ese tipo con una sola lectura queda marcada LECTURAS_EN_RANGO */
@@ -399,11 +419,16 @@ class RequisitosRecepcionAlertasTest {
 
 	/** Informa una caída que el paciente canceló en los 30 s, con el token del reloj del paciente. */
 	private ResultActions cancelacion(UUID eventId) throws Exception {
+		return cancelacionDe(eventId, "CAIDA");
+	}
+
+	/** Informa una alerta de ese tipo que el paciente canceló en los 30 s, con el token del reloj del paciente. */
+	private ResultActions cancelacionDe(UUID eventId, String tipo) throws Exception {
 		return mvc.perform(post("/api/reloj/v1/cancelaciones").header("Authorization", "Bearer " + TOKEN)
 				.contentType(MediaType.APPLICATION_JSON).content("""
-						{"eventId": "%s", "tipoEvento": "CAIDA", "severidad": "MEDIA", "versionConfiguracion": "%s",
+						{"eventId": "%s", "tipoEvento": "%s", "severidad": "MEDIA", "versionConfiguracion": "%s",
 						"fechaHoraDeteccion": "%s", "fechaHoraCancelacion": "%s"}"""
-						.formatted(eventId, vigente, ahora.minusSeconds(40), ahora.minusSeconds(20))));
+						.formatted(eventId, tipo, vigente, ahora.minusSeconds(40), ahora.minusSeconds(20))));
 	}
 
 	/** Pide el agravamiento de una caída. */

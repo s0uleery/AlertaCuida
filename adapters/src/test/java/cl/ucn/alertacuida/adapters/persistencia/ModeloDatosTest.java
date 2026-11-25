@@ -286,7 +286,7 @@ class ModeloDatosTest {
 	private DynamicContainer estructura() {
 		return grupo("1. Estructura de la base (migraciones)",
 			c.vale("Migraciones aplicadas por Flyway", """
-					SELECT count(*) n FROM flyway_schema_history WHERE success AND version IS NOT NULL""", 15),
+					SELECT count(*) n FROM flyway_schema_history WHERE success AND version IS NOT NULL""", 17),
 			c.vale("Cantidad de tablas", """
 					SELECT count(*) n FROM information_schema.tables WHERE table_schema = 'public'
 					AND table_type = 'BASE TABLE' AND table_name <> 'flyway_schema_history'""", 31),
@@ -757,7 +757,7 @@ class ModeloDatosTest {
 	/** Datos que envía el reloj: lotes, lecturas, ubicaciones y eventos descartados. */
 	private DynamicContainer datosDelReloj() {
 		return grupo("8. Datos recibidos del reloj (lotes, lecturas, GPS)",
-			c.acepta("Lotes de cada reloj (LTE y Wi-Fi)", """
+			c.acepta("Lotes de cada reloj (LTE, Wi-Fi y Bluetooth)", """
 					INSERT INTO sincronizacion (id_sincronizacion, event_id, id_asignacion, hash_configuracion,
 					fecha_hora_envio, fecha_hora_recepcion, nivel_bateria, reloj_puesto, minutos_puesto, tipo_conexion,
 					version_app) VALUES
@@ -766,7 +766,12 @@ class ModeloDatosTest {
 			('{S_PEDRO}', gen_random_uuid(), '{A_PEDRO}', 'h1', '2026-10-15 13:00Z', '2026-10-15 13:01Z', 15, true,
 					120, 'WIFI', '1.0.0'),
 			('{S_ROSA}', gen_random_uuid(), '{A_ROSA}', 'h1', '2026-10-15 13:00Z', '2026-10-15 13:01Z', 95, false,
-					30, 'LTE', '1.0.0')"""),
+					30, 'BLUETOOTH', '1.0.0')"""),
+			c.rechaza("Lote con una conexión que no existe (NFC)", """
+					INSERT INTO sincronizacion (id_sincronizacion, event_id, id_asignacion, hash_configuracion,
+					fecha_hora_recepcion, nivel_bateria, tipo_conexion)
+					VALUES (gen_random_uuid(), gen_random_uuid(), '{A_MARIA}', 'h1', '2026-10-15 13:30Z', 80, 'NFC')""",
+					CHECK),
 			c.acepta("Lecturas de FC y SpO2 con su hora de medición", String.join(";",
 					lectura("S_MARIA", "A_MARIA", "FC", 70, "2026-10-15 12:00Z"),
 					lectura("S_MARIA", "A_MARIA", "FC", 80, "2026-10-15 12:30Z"),
@@ -1128,6 +1133,14 @@ class ModeloDatosTest {
 			c.rechaza("Respuesta que no existe en los botones",
 					aviso("MEDIA_ROSA", "R2", 2, ", respuesta, fecha_hora_respuesta", ", 'TAL_VEZ', now()"), CHECK),
 			c.rechaza("Canal que no existe (SMS)", aviso("MEDIA_ROSA", "R2", 2, "", "", "SMS"), CHECK),
+			c.rechaza("Llegada donde el paciente de quien no respondió (V17)",
+					aviso("MEDIA_ROSA", "R2", 2, ", fecha_hora_llegada", ", now()", "CORREO"), CHECK),
+			c.rechaza("Llegada de quien respondió que no puede ir (V17)",
+					aviso("MEDIA_ROSA", "R2", 2, ", respuesta, fecha_hora_respuesta, fecha_hora_llegada",
+							", 'NO_PUEDO', now(), now()", "CORREO"), CHECK),
+			c.rechaza("Llegada antes de responder que va (V17)",
+					aviso("MEDIA_ROSA", "R2", 2, ", respuesta, fecha_hora_respuesta, fecha_hora_llegada",
+							", 'VOY_EN_CAMINO', now(), now() - interval '1 minute'", "CORREO"), CHECK),
 			c.rechaza("Aviso a un vínculo que no existe", aviso("MEDIA_ROSA", "INEXISTENTE", 1), FORANEA),
 			c.backend("Aviso a un vínculo de otro paciente (la hija de María en una alerta de Rosa)",
 					aviso("MEDIA_ROSA", "M1", 2)),

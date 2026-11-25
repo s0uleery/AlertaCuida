@@ -14,8 +14,9 @@ import java.util.UUID;
 
 /**
  * Cambia el celular con WhatsApp y el opt-in de una cuenta ya creada; antes solo se pedían en el alta y al pasar
- * a coordinador (decisión del 19-11-2026: lo hace ADMINISTRACION:EDITAR). Un coordinador no puede quedar sin
- * teléfono, porque recibe los avisos de la oficina PRLAC.
+ * a coordinador (decisión del 19-11-2026: lo hace ADMINISTRACION:EDITAR). Desde el 24-11-2026 también lo usa
+ * "Mi cuenta", donde cada persona cambia el suyo. Un coordinador no puede quedar sin teléfono, porque recibe los
+ * avisos de la oficina PRLAC.
  */
 public class CambiarTelefonoPersonal {
 

@@ -1,5 +1,11 @@
 import { formatearAntiguedad } from '../../comun/fechas';
-import { MOTIVO_SEMAFORO, NOMBRE_SEMAFORO, type ColorSemaforo, type EstadoTecnicoReloj } from './tipos';
+import {
+  MOTIVO_SEMAFORO,
+  NOMBRE_CONEXION,
+  NOMBRE_SEMAFORO,
+  type ColorSemaforo,
+  type EstadoTecnicoReloj,
+} from './tipos';
 
 /** Color de cada círculo. */
 const CIRCULO: Record<ColorSemaforo, string> = {
@@ -50,7 +56,7 @@ function DetalleTecnico({ estado }: { estado: EstadoTecnicoReloj }) {
       ? `Sincronizó ${formatearAntiguedad(estado.ultimaSincronizacion)}`
       : 'Todavía no sincroniza',
     estado.nivelBateria !== null ? `batería ${estado.nivelBateria} %` : null,
-    estado.tipoConexion,
+    estado.tipoConexion ? NOMBRE_CONEXION[estado.tipoConexion] : null,
     estado.versionApp ? `app ${estado.versionApp}` : null,
   ].filter((parte): parte is string => parte !== null);
   return (

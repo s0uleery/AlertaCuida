@@ -36,4 +36,15 @@ class TipoEventoTest {
 		TipoEvento.tecnicas().forEach(tipo -> assertTrue(tipo.esTecnica(), tipo.name()));
 	}
 
+	/**
+	 * Decisión del 24-11-2026: el reloj solo informa alertas de salud. Las técnicas, incluidas la batería
+	 * baja y el reloj no puesto, las crea el servidor con los datos de la sincronización.
+	 */
+	@Test
+	void elRelojSoloInformaLasDeSalud() {
+		for (TipoEvento tipo : TipoEvento.values()) {
+			assertEquals(!tipo.esTecnica(), tipo.loDetectaElReloj(), tipo.name());
+		}
+	}
+
 }

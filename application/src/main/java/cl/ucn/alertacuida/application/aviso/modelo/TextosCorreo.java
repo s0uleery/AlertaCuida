@@ -20,11 +20,14 @@ import java.util.Map;
  * @param gravedades    cómo se nombra cada gravedad ({gravedad})
  * @param tecnicas      cómo se nombra cada alerta técnica ({tecnica}), menos el silencio de datos
  * @param activacion    a la persona del equipo a la que se le crea una cuenta, con su enlace de activación
+ * @param recuperacion  a la persona del equipo que olvidó su contraseña, con su enlace para elegir otra. Tiene
+ *                      la misma forma y los mismos marcadores que {@code activacion}
  */
 public record TextosCorreo(String pieEquipo, String pieContacto, SilencioDatos silencioDatos,
 		AlertaEquipo alertaEquipo, Contacto contacto, Vigilante vigilante, Agravamiento agravamiento,
 		AvisoOficina avisoOficina,
-		Map<Severidad, String> gravedades, Map<TipoEvento, String> tecnicas, Activacion activacion) {
+		Map<Severidad, String> gravedades, Map<TipoEvento, String> tecnicas, Activacion activacion,
+		Activacion recuperacion) {
 
 	/**
 	 * A la persona a la que se le crea una cuenta del equipo (o se le emite un enlace nuevo), para que elija

@@ -468,14 +468,16 @@ Depende de: 0.7, 0.9, 2.4.1. Listo cuando: el servidor envía una plantilla con 
 
 | Estado | # | Subtarea | Horas |
 |---|---|---|---|
-| [ ] | 2.9.1 | Cliente de la Cloud API de Meta, con el token como secreto | 4 |
-| [ ] | 2.9.2 | Envío de plantillas con botones de respuesta rápida ("Voy en camino", "No puedo") | 4 |
-| [ ] | 2.9.3 | Webhook: verificación inicial de Meta y validación de la firma de cada mensaje | 4 |
-| [ ] | 2.9.4 | Recepción de los botones y vínculo con la alerta y el contacto | 4 |
-| [ ] | 2.9.5 | Estados de entrega de Meta (enviado, entregado, leído, fallido) en la línea de tiempo | 3 |
-| [ ] | 2.9.6 | Respetar el opt-in: sin opt-in vigente no se envía, se responde al reloj para que pase al siguiente contacto y se marca en el dashboard | 3 |
-| [ ] | 2.9.7 | Manejo de errores, reintentos y límites de Meta; si WhatsApp falla, respaldo por correo | 4 |
+| [x] | 2.9.1 | Cliente de la Cloud API de Meta, con el token como secreto | 4 |
+| [x] | 2.9.2 | Envío de plantillas con botones de respuesta rápida ("Voy en camino", "No puedo") | 4 |
+| [x] | 2.9.3 | Webhook: verificación inicial de Meta y validación de la firma de cada mensaje | 4 |
+| [x] | 2.9.4 | Recepción de los botones y vínculo con la alerta y el contacto | 4 |
+| [x] | 2.9.5 | Estados de entrega de Meta (enviado, entregado, leído, fallido) en la línea de tiempo | 3 |
+| [x] | 2.9.6 | Respetar el opt-in: sin opt-in vigente no se envía, se responde al reloj para que pase al siguiente contacto y se marca en el dashboard | 3 |
+| [x] | 2.9.7 | Manejo de errores, reintentos y límites de Meta; si WhatsApp falla, respaldo por correo | 4 |
 | [ ] | 2.9.8 | Usar el simulador de contactos (0.9) en local y probar con el número de prueba de Meta | 4 |
+
+Nota (24-11-2026): 2.9.1 a 2.9.7 programadas siguiendo la guía de webhooks de Meta, con pruebas unitarias, un servidor HTTP falso y la base real (`RequisitosWebhookWhatsappTest`); 2.9.6 ya estaba en `SolicitarAviso`. Falta la 2.9.8: el recorrido con los simuladores y con Meta real, que espera la lista de plantillas aprobadas ([despliegue.md](despliegue.md#11-activar-whatsapp)). Fuera de alcance por decisión: la baja del opt-in por webhook (sigue manual) y guardar el contenido de los webhooks.
 
 ### 2.10 Escalamiento dirigido por el reloj: lado del servidor (25 h). Cambia en v8.
 El reloj decide a quién avisar, espera y pasa al siguiente contacto (ver la app del reloj). El servidor envía cada aviso que el reloj pide, le informa cuando un contacto confirma y registra el recorrido completo. Reemplaza al motor de escalamiento del servidor de la v6.
@@ -487,7 +489,7 @@ Depende de: 1.9, 2.1, 2.3, 2.9. Listo cuando: con el simulador de reloj, una ale
 | [x] | 2.10.1 | Máquina de estados de la alerta en el servidor según lo que informa el reloj (recibida, avisando al contacto n, confirmada, sin respuesta, resuelta, pendiente de día hábil, cancelada) | 4 |
 | [x] | 2.10.2 | Endpoint de solicitud de aviso: el reloj pide avisar a un contacto; el servidor verifica que sea del paciente y tenga opt-in, y envía por WhatsApp o correo. Una solicitud repetida no envía dos veces | 5 |
 | [x] | 2.10.3 | Endpoint de estado de la alerta, que el reloj consulta antes de pasar al siguiente contacto (respaldo si FCM se atrasa) | 2 |
-| [ ] | 2.10.4 | Al recibir la confirmación por webhook: marcar la alerta como confirmada y avisar al reloj por FCM | 2 |
+| [x] | 2.10.4 | Al recibir la confirmación por webhook: marcar la alerta como confirmada y avisar al reloj por FCM | 2 |
 | [x] | 2.10.5 | WhatsApp simultáneo a todos los coordinadores con opt-in, en paralelo al escalamiento del reloj, solo en horario laboral y para todas las gravedades; correo de respaldo si el WhatsApp falla. Medias y graves destacadas en el dashboard | 3 |
 | [x] | 2.10.6 | Registrar el fin de la lista informado por el reloj (`SIN_RESPUESTA`), y vigilante: alerta abierta sin noticias del reloj en un plazo → correo a los profesionales | 3 |
 | [x] | 2.10.7 | Pruebas, incluidos un reloj sin señal y un reinicio del servidor a mitad de un escalamiento | 4 |

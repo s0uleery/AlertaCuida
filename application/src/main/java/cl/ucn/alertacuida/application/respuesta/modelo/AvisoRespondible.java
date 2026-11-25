@@ -20,8 +20,11 @@ import java.util.UUID;
  * @param estado         estado de contacto de la alerta ahora
  * @param respuesta      lo que ya respondió este contacto a este aviso; null si aún no responde
  * @param fechaRespuesta cuándo respondió; null si aún no responde
+ * @param llegada        cuándo avisó que llegó donde el paciente; null si no lo ha hecho
+ * @param telefonoReloj  número de la SIM del reloj de la alerta, para "Llamar al paciente"; null si no tiene
+ * @param delReloj       si la envió el reloj: entonces, al resolverse, hay que avisarle para que deje de escalar
  */
 public record AvisoRespondible(UUID idIntento, UUID idAlerta, long numero, String alias, TipoEvento tipo,
 		Severidad severidad, Instant fechaHora, EstadoContacto estado, RespuestaContacto respuesta,
-		Instant fechaRespuesta) {
+		Instant fechaRespuesta, Instant llegada, String telefonoReloj, boolean delReloj) {
 }

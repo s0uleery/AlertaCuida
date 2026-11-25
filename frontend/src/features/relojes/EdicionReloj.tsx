@@ -1,17 +1,21 @@
 import { Link, useNavigate, useParams } from 'react-router';
 import { CLASE_ERROR, CLASE_TARJETA } from '../../comun/estilos';
 import { useDatos } from '../../comun/useDatos';
+import { useSesion } from '../sesion/SesionContext';
+import { EliminarReloj } from './EliminarReloj';
 import { FormularioReloj } from './FormularioReloj';
 import { relojesApi } from './relojesApi';
 import type { DatosReloj } from './tipos';
 
 /**
  * Registro (/relojes/nuevo) y edición (/relojes/:id/editar) de un reloj. Al guardar vuelve a la lista.
- * Para editar se busca el reloj en la lista: el backend no tiene GET /api/relojes/{id}.
+ * Para editar se busca el reloj en la lista: el backend no tiene GET /api/relojes/{id}. Con USUARIOS:ELIMINAR,
+ * la edición ofrece además eliminarlo.
  */
 export function EdicionReloj() {
   const { id } = useParams();
   const navegar = useNavigate();
+  const { puede } = useSesion();
   const { datos: relojes, error, cargando } = useDatos(
     () => (id ? relojesApi.listar() : Promise.resolve([])),
     id ?? 'nuevo',
@@ -48,6 +52,9 @@ export function EdicionReloj() {
             alGuardar={guardar}
             alCancelar={() => navegar('/relojes')}
           />
+        )}
+        {id && reloj && puede('USUARIOS:ELIMINAR') && (
+          <EliminarReloj id={id} datos={reloj.datos} alTerminar={() => navegar('/relojes')} />
         )}
       </section>
     </div>

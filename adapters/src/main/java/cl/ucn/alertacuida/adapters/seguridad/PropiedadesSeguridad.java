@@ -23,6 +23,7 @@ import org.springframework.validation.annotation.Validated;
  * @param sesion        cuánto dura una sesión y cómo viaja su token de renovación
  * @param bloqueo       cuándo se bloquea una cuenta por intentos fallidos
  * @param activacion    enlaces para que el personal nuevo elija su contraseña
+ * @param recuperacion  enlaces para que quien olvidó su contraseña elija otra
  */
 @Validated
 @ConfigurationProperties("alertacuida.seguridad")
@@ -34,7 +35,8 @@ public record PropiedadesSeguridad(
 		@NotNull Duration duracionToken,
 		@NotNull @Valid Sesion sesion,
 		@NotNull @Valid Bloqueo bloqueo,
-		@NotNull @Valid Activacion activacion) {
+		@NotNull @Valid Activacion activacion,
+		@NotNull @Valid Recuperacion recuperacion) {
 
 	/**
 	 * El dashboard renueva antes de que se cumpla la inactividad. Si el token de acceso durara más,
@@ -71,6 +73,16 @@ public record PropiedadesSeguridad(
 	 * @param vigencia cuánto dura un enlace sin usar
 	 */
 	public record Activacion(@NotBlank String url, @NotNull Duration vigencia) {
+	}
+
+	/**
+	 * Enlaces de recuperación de contraseña.
+	 *
+	 * @param url           página del dashboard que recibe el enlace; el token se agrega después de "#"
+	 * @param vigencia      cuánto dura un enlace sin usar
+	 * @param maximoPorHora cuántos enlaces se envían como máximo a una misma cuenta en una hora
+	 */
+	public record Recuperacion(@NotBlank String url, @NotNull Duration vigencia, @Min(1) int maximoPorHora) {
 	}
 
 }

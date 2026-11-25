@@ -101,12 +101,14 @@ Un solo JSON con el estado del reloj y todo lo acumulado desde la sincronizació
 | `estado.nivelBateria` | sí | 0 a 100 |
 | `estado.relojPuesto` | sí | |
 | `estado.minutosPuesto` | no | minutos puesto desde el lote anterior |
-| `estado.tipoConexion` | sí | `LTE` o `WIFI` |
+| `estado.tipoConexion` | sí | `LTE`, `WIFI` o `BLUETOOTH` (a través del teléfono emparejado) |
 | `estado.versionApp` | sí | hasta 40 caracteres |
 | `estado.versionConfiguracion` | no | hash de la configuración aplicada; `null` si aún no recibió ninguna |
 | `lecturas` | no | `tipo`: `FC` (válida de 20 a 250) o `SPO2` (de 50 a 100) |
 | `ubicaciones` | no | solo con el GPS activo |
-| `eventosDescartados` | no | eventos detectados que no llegaron a alerta, por tipo |
+| `eventosDescartados` | no | eventos detectados que no llegaron a alerta, por tipo (los mismos de `POST /alertas`) |
+
+- **La batería baja y el reloj no puesto los detecta el servidor** con `estado.nivelBateria` y `estado.relojPuesto`: dos lotes seguidos bajo 20 % crean `BATERIA_BAJA`, y dos lotes seguidos del mismo día sin estar puesto, entre las 08:00 y las 22:00, crean `RELOJ_NO_PUESTO`. El servidor avisa al equipo y las cierra solo cuando el reloj se recupera. El reloj no las envía como alerta.
 
 Respuesta 200:
 ```json
@@ -150,7 +152,7 @@ Respuesta 200:
 
 | Campo | Obligatorio | Valores |
 |---|---|---|
-| `tipoEvento` | sí | `CAIDA`, `FC`, `SPO2`, `FC_SPO2`, `TENDENCIA`, `INACTIVIDAD`, `ZONA_SEGURA`, `BOTON_AYUDA` (siempre `LEVE`), `BATERIA_BAJA`, `RELOJ_NO_PUESTO`. `SILENCIO_DATOS` no: ese lo detecta solo el servidor |
+| `tipoEvento` | sí | `CAIDA`, `FC`, `SPO2`, `FC_SPO2`, `TENDENCIA`, `INACTIVIDAD`, `ZONA_SEGURA`, `BOTON_AYUDA` (siempre `LEVE`). Solo alertas de salud: las técnicas (`BATERIA_BAJA`, `RELOJ_NO_PUESTO`, `SILENCIO_DATOS`, `EXCESO_ALERTAS`) las crea el servidor, y si el reloj las envía responde 400 `MENSAJE_INVALIDO` |
 | `severidad` | sí | `LEVE`, `MEDIA`, `GRAVE` |
 | `versionConfiguracion` | sí | la configuración con que se detectó |
 | `esperaDiaHabil` | sí | `true` si es leve, fuera del horario hábil, y el reloj no avisará a nadie |

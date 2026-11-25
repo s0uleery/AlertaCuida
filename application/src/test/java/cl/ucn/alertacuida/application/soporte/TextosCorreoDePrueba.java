@@ -34,7 +34,9 @@ public final class TextosCorreoDePrueba {
 				Map.of(TipoEvento.BATERIA_BAJA, "batería baja", TipoEvento.RELOJ_NO_PUESTO, "reloj no puesto",
 						TipoEvento.EXCESO_ALERTAS, "exceso de alertas"),
 				new TextosCorreo.Activacion("Active su cuenta, {nombre}",
-						"Hola, {nombre}.\n\nActivar: {enlace}\n\nVence el {vence}.\n\n{pie}\n"));
+						"Hola, {nombre}.\n\nActivar: {enlace}\n\nVence el {vence}.\n\n{pie}\n"),
+				new TextosCorreo.Activacion("Recupere su contraseña, {nombre}",
+						"Hola, {nombre}.\n\nRestablecer: {enlace}\n\nVence el {vence}.\n\n{pie}\n"));
 	}
 
 }
