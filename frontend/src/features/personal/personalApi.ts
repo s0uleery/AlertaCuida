@@ -22,6 +22,16 @@ export const personalApi = {
   cambiarRecibeAvisos: (id: string, recibeAvisos: boolean) =>
     pedir<void>(`/personal/${id}/recibe-avisos`, { method: 'PUT', body: JSON.stringify({ recibeAvisos }) }),
 
+  /**
+   * Cambia o quita (telefono vacío) el celular con WhatsApp de otra cuenta, con su aceptación (exige
+   * ADMINISTRACION:EDITAR). 400 si el número no sirve o un coordinador quedaría sin teléfono.
+   */
+  cambiarTelefono: (id: string, telefono: string, aceptaWhatsapp: boolean) =>
+    pedir<void>(`/personal/${id}/telefono`, {
+      method: 'PUT',
+      body: JSON.stringify({ telefono: telefono || null, aceptaWhatsapp }),
+    }),
+
   /** Emite otro enlace para una cuenta pendiente; el anterior deja de servir. */
   nuevoEnlace: (idUsuario: string) =>
     pedir<RespuestaEnlace>(`/personal/${idUsuario}/enlace-activacion`, { method: 'POST' }),

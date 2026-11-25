@@ -575,6 +575,73 @@ paths:
         '400': { $ref: '#/components/responses/Invalido' }
         '401': { $ref: '#/components/responses/SinToken' }
 
+  /api/mi-cuenta/contrasena:
+    post:
+      tags: [Sesión]
+      operationId: cambiarMiContrasena
+      summary: Cambia la contraseña propia con la actual
+      description: >-
+        Cualquier sesión, sobre su propia cuenta (25-11-2026). La actual incorrecta responde 400 y cuenta como
+        intento fallido para el bloqueo. La nueva sigue la política de siempre (12 caracteres o más, no el RUN) y
+        no puede ser igual a la actual. Queda en la auditoría como MODIFICAR USUARIO, sin la contraseña.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [actual, nueva]
+              properties:
+                actual: { type: string, format: password }
+                nueva: { type: string, format: password, minLength: 12 }
+      responses:
+        '204': { description: Cambiada. }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+
+  /api/pacientes/{idPaciente}/reportes/{periodo}.{formato}:
+    parameters:
+      - $ref: '#/components/parameters/IdPaciente'
+      - { name: periodo, in: path, required: true, schema: { type: string, enum: [diario, semanal] } }
+      - { name: formato, in: path, required: true, schema: { type: string, enum: [xlsx, pdf] } }
+      - { name: dia, in: query, required: false, schema: { type: string, format: date }, description: 'Si falta, hoy.' }
+    get:
+      tags: [Reportes]
+      operationId: exportarReporteUsuario
+      summary: Descarga el reporte diario o semanal de un usuario en Excel o PDF
+      description: 'Permiso: `REPORTES:EXPORTAR` (25-11-2026). Cada descarga queda como EXPORTAR REPORTE.'
+      responses:
+        '200':
+          description: El archivo, con Content-Disposition attachment.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet: { schema: { type: string, format: binary } }
+            application/pdf: { schema: { type: string, format: binary } }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
+  /api/reportes/gestion.{formato}:
+    parameters:
+      - { name: formato, in: path, required: true, schema: { type: string, enum: [xlsx, pdf] } }
+      - { name: desde, in: query, required: true, schema: { type: string, format: date } }
+      - { name: hasta, in: query, required: true, schema: { type: string, format: date } }
+    get:
+      tags: [Reportes]
+      operationId: exportarGestion
+      summary: Descarga la gestión operativa del período en Excel o PDF
+      description: >-
+        Permiso: `REPORTES:EXPORTAR` (25-11-2026). Totales por estado, distribución por gravedad, carga por
+        profesional y el detalle de cada alerta del período, sin simulacros. Como máximo 93 días.
+      responses:
+        '200':
+          description: El archivo, con Content-Disposition attachment.
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet: { schema: { type: string, format: binary } }
+            application/pdf: { schema: { type: string, format: binary } }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+
   /api/respuestas-contacto/consulta:
     post:
       tags: [Respuesta del contacto]
@@ -1260,9 +1327,9 @@ paths:
       tags: [Reloj del paciente]
       operationId: vincularReloj
       summary: Entrega un reloj a un paciente que no tiene
-      description: |
-        Permiso: `USUARIOS:EDITAR`. **El token se muestra una sola vez**: hay que mostrarlo para
-        cargarlo en el reloj, porque no se puede volver a consultar.
+      description: >-
+        Permiso: `USUARIOS:EDITAR`. Se vincula con el código de emparejamiento que muestra el reloj: el
+        reloj recibe su token al emparejarse, y nadie lo ve ni lo copia.
       requestBody:
         required: true
         content:
@@ -1273,7 +1340,7 @@ paths:
           description: Reloj vinculado.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/TokenReloj' }
+              schema: { $ref: '#/components/schemas/Vinculo' }
         '400':
           description: El paciente no tiene registrado el consentimiento informado.
           content:
@@ -1318,10 +1385,10 @@ paths:
             schema: { $ref: '#/components/schemas/SolicitudVinculo' }
       responses:
         '200':
-          description: Token del reloj nuevo.
+          description: Reloj nuevo vinculado.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/TokenReloj' }
+              schema: { $ref: '#/components/schemas/Vinculo' }
         '400':
           description: El reloj nuevo es el mismo que ya tiene.
           content:
@@ -1336,20 +1403,36 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problema' }
 
-  /api/pacientes/{idPaciente}/reloj/token:
+  /api/pacientes/{idPaciente}/reloj/emparejamiento:
     parameters:
       - $ref: '#/components/parameters/IdPaciente'
     post:
       tags: [Reloj del paciente]
-      operationId: nuevoTokenReloj
-      summary: Otro token para el mismo reloj (por ejemplo, si se perdió); el anterior deja de servir
-      description: 'Permiso: `USUARIOS:EDITAR`.'
+      operationId: emparejarRelojDeNuevo
+      summary: Empareja de nuevo el mismo reloj con el código que muestra; su token anterior deja de servir
+      description: >-
+        Permiso: `USUARIOS:EDITAR`. Sirve tras restaurar el reloj de fábrica o si su token se filtró. Nadie ve
+        ni copia el token: el reloj lo recibe al emparejarse. El vínculo sigue igual.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [codigoEmparejamiento]
+              properties:
+                codigoEmparejamiento: { type: string, examples: ['K7Q2M9'] }
       responses:
         '200':
-          description: Token nuevo.
+          description: Emparejado.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/TokenReloj' }
+              schema:
+                type: object
+                required: [idAsignacion]
+                properties:
+                  idAsignacion: { type: string, format: uuid }
+        '400': { $ref: '#/components/responses/Invalido' }
         '401': { $ref: '#/components/responses/SinToken' }
         '403': { $ref: '#/components/responses/SinPermiso' }
         '404': { $ref: '#/components/responses/NoEncontrado' }
@@ -1485,9 +1568,9 @@ paths:
       operationId: consultarCalendario
       summary: Horario hábil de cada día y feriados nacionales
       description: |
-        Lo ve todo el equipo: basta con iniciar sesión, sin un permiso en particular. Viene de
-        `calendario.yml`; cambiarlo requiere reiniciar el backend. Una alerta leve fuera de este
-        horario o en feriado espera al día hábil; las medias y graves avisan siempre.
+        Lo ve todo el equipo: basta con iniciar sesión, sin un permiso en particular. La jornada está en
+        la base (se edita con `PUT /api/calendario/horario`); los feriados, en `calendario.yml`. Una
+        alerta leve fuera de este horario o en feriado espera al día hábil; las medias y graves avisan siempre.
       responses:
         '200':
           description: Calendario.
@@ -1495,6 +1578,74 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Calendario' }
         '401': { $ref: '#/components/responses/SinToken' }
+
+  /api/calendario/horario:
+    put:
+      tags: [Calendario]
+      operationId: guardarHorarioHabil
+      summary: Reemplaza la jornada hábil; rige al tiro, sin reiniciar
+      description: >-
+        Permiso: `ADMINISTRACION:EDITAR` (25-11-2026). Un tramo por día; los días que no van dejan de ser
+        hábiles. Queda en la auditoría como MODIFICAR CALENDARIO con el horario anterior y el nuevo.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [horarioHabil]
+              properties:
+                horarioHabil:
+                  type: array
+                  minItems: 1
+                  items: { $ref: '#/components/schemas/DiaHabil' }
+      responses:
+        '204': { description: Guardada. }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
+
+  /api/calendario/simulacion:
+    get:
+      tags: [Calendario]
+      operationId: simularEscalamiento
+      summary: Qué pasaría con una alerta de salud ese día, a esa hora y con esa gravedad
+      description: >-
+        Permiso: `ALERTAS:VER` (25-11-2026). Con las reglas que el sistema aplica hoy. No guarda nada ni avisa
+        a nadie. Sin `idPaciente`, `contactos` va vacía.
+      parameters:
+        - { name: fecha, in: query, required: true, schema: { type: string, format: date } }
+        - { name: hora, in: query, required: true, schema: { type: string, examples: ['15:30'] } }
+        - { name: gravedad, in: query, required: true, schema: { type: string, enum: [LEVE, MEDIA, GRAVE] } }
+        - { name: idPaciente, in: query, required: false, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Simulación.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [habil, feriado, esperaDiaHabil, avisoOficina, contactos]
+                properties:
+                  habil: { type: boolean }
+                  feriado: { type: boolean }
+                  esperaDiaHabil: { type: boolean, description: Leve fuera de horario; no se avisa a nadie. }
+                  avisoOficina: { type: boolean, description: Se avisa a los coordinadores de la oficina PRLAC. }
+                  contactos:
+                    type: array
+                    items:
+                      type: object
+                      required: [orden, nombre, tipo, cuidadorPrincipal, canales]
+                      properties:
+                        orden: { type: integer }
+                        nombre: { type: string }
+                        tipo: { type: string }
+                        parentesco: { type: ['string', 'null'] }
+                        cuidadorPrincipal: { type: boolean }
+                        canales: { type: array, items: { type: string, enum: [WHATSAPP, CORREO] } }
+        '400': { $ref: '#/components/responses/Invalido' }
+        '401': { $ref: '#/components/responses/SinToken' }
+        '403': { $ref: '#/components/responses/SinPermiso' }
 
 components:
   securitySchemes:
@@ -2176,20 +2327,20 @@ components:
       enum: [OPERATIVO, EN_REPARACION, RETIRADO]
     SolicitudVinculo:
       type: object
-      required: [idDispositivo]
+      required: [idDispositivo, codigoEmparejamiento]
       properties:
         idDispositivo: { type: string, format: uuid, description: Id del reloj en el inventario. }
+        codigoEmparejamiento: { type: string, maxLength: 20, description: El código que muestra el reloj. }
         estadoRelojAnterior:
           description: Solo en el reemplazo, cómo queda el reloj devuelto.
           oneOf:
             - $ref: '#/components/schemas/EstadoReloj'
             - type: 'null'
-    TokenReloj:
+    Vinculo:
       type: object
-      required: [idAsignacion, token]
+      required: [idAsignacion]
       properties:
         idAsignacion: { type: string, format: uuid }
-        token: { type: string, description: Se muestra una sola vez. }
     ConfiguracionAplicada:
       type: object
       required: [estado, versionVigente]
@@ -2254,6 +2405,13 @@ components:
         versionApp: { type: ['string', 'null'] }
         configuracionPendiente: { type: boolean, description: La configuración informada no es la vigente. }
 
+    DiaHabil:
+      type: object
+      required: [dia, inicio, fin]
+      properties:
+        dia: { type: string, enum: [LUNES, MARTES, MIERCOLES, JUEVES, VIERNES, SABADO, DOMINGO] }
+        inicio: { type: string, examples: ['08:30'], description: Incluida. }
+        fin: { type: string, examples: ['17:30'], description: Sin incluirla. }
     Calendario:
       type: object
       required: [zonaHoraria, horarioHabil, feriados]
@@ -2262,13 +2420,7 @@ components:
         horarioHabil:
           type: array
           description: Un tramo por día hábil, de lunes a domingo. Los días que no aparecen no son hábiles.
-          items:
-            type: object
-            required: [dia, inicio, fin]
-            properties:
-              dia: { type: string, enum: [LUNES, MARTES, MIERCOLES, JUEVES, VIERNES, SABADO, DOMINGO] }
-              inicio: { type: string, examples: ['08:30'], description: Incluida. }
-              fin: { type: string, examples: ['17:30'], description: Sin incluirla. }
+          items: { $ref: '#/components/schemas/DiaHabil' }
         feriados:
           type: array
           description: Feriados nacionales, ordenados por fecha.

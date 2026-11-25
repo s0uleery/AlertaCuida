@@ -9,10 +9,10 @@ import {
 
 /** Color de cada círculo. */
 const CIRCULO: Record<ColorSemaforo, string> = {
-  VERDE: 'bg-emerald-500',
-  AMARILLO: 'bg-amber-400',
-  ROJO: 'bg-red-600',
-  GRIS: 'bg-slate-400',
+  VERDE: 'bg-verde',
+  AMARILLO: 'bg-naranja',
+  ROJO: 'bg-magenta',
+  GRIS: 'bg-linea-oscura',
 };
 
 /** @return los motivos en texto, uno por línea, para mostrar al pasar el mouse */
@@ -32,7 +32,7 @@ export function SemaforoReloj({
   estado: EstadoTecnicoReloj | undefined;
   detalle?: boolean;
 }) {
-  if (!estado) return <span className="text-slate-400">—</span>;
+  if (!estado) return <span className="text-apagado">—</span>;
   const texto = explicacion(estado);
   return (
     <span className="inline-flex flex-col gap-0.5">
@@ -43,7 +43,7 @@ export function SemaforoReloj({
       </span>
       {detalle && <DetalleTecnico estado={estado} />}
       {!detalle && estado.motivos.length > 0 && estado.semaforo !== 'GRIS' && (
-        <span className="text-xs text-slate-500">{MOTIVO_SEMAFORO[estado.motivos[0]]}</span>
+        <span className="text-xs text-apagado">{MOTIVO_SEMAFORO[estado.motivos[0]]}</span>
       )}
     </span>
   );
@@ -61,9 +61,9 @@ function DetalleTecnico({ estado }: { estado: EstadoTecnicoReloj }) {
   ].filter((parte): parte is string => parte !== null);
   return (
     <>
-      <span className="text-sm text-slate-600">{partes.join(' · ')}</span>
+      <span className="text-sm text-apagado">{partes.join(' · ')}</span>
       {estado.motivos.length > 0 && (
-        <ul className="list-disc pl-5 text-sm text-slate-700">
+        <ul className="list-disc pl-5 text-sm text-texto">
           {estado.motivos.map((motivo) => (
             <li key={motivo}>{MOTIVO_SEMAFORO[motivo]}</li>
           ))}

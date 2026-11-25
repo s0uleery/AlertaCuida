@@ -75,7 +75,7 @@ export function CondicionesDelUsuario({ idPaciente }: Props) {
   }
 
   if (error) return <p className={CLASE_ERROR}>{error}</p>;
-  if (!datos) return <p className="text-slate-500">Cargando…</p>;
+  if (!datos) return <p className="text-apagado">Cargando…</p>;
 
   return (
     <div className="space-y-4">
@@ -139,18 +139,18 @@ function ListaCondiciones({ tipo, condiciones, editable, alAgregar, alQuitar }: 
 
   return (
     <div>
-      <h3 className="mb-2 font-medium text-slate-800">{grupo.titulo}</h3>
+      <h3 className="mb-2 font-medium text-texto">{grupo.titulo}</h3>
       {condiciones.length === 0 ? (
-        <p className="text-sm text-slate-500">{grupo.vacio}</p>
+        <p className="text-sm text-apagado">{grupo.vacio}</p>
       ) : (
-        <ul className="divide-y divide-slate-100">
+        <ul className="divide-y divide-linea">
           {condiciones.map((condicion) => (
             <li key={condicion.id} className="flex items-center justify-between gap-2 py-1.5">
-              <span className="text-slate-800">{condicion.descripcion}</span>
+              <span className="text-texto">{condicion.descripcion}</span>
               {editable && (
                 <button
                   onClick={() => alQuitar(condicion)}
-                  className="text-sm text-red-700 hover:underline"
+                  className="text-sm text-magenta hover:underline"
                   aria-label={`Quitar ${condicion.descripcion}`}
                 >
                   Quitar

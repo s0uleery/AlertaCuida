@@ -68,8 +68,8 @@ export function EliminarReloj({
   }
 
   return (
-    <div className="space-y-3 border-t border-slate-200 pt-4">
-      <h2 className="text-lg font-medium text-tinta">Eliminar reloj</h2>
+    <div className="space-y-3 border-t border-linea pt-4">
+      <h2 className="text-[14.5px] font-bold text-navy">Eliminar reloj</h2>
       {error && (
         <p role="alert" className={CLASE_ERROR}>
           {error}
@@ -86,7 +86,7 @@ export function EliminarReloj({
               type="button"
               onClick={eliminar}
               disabled={trabajando}
-              className={`${CLASE_BOTON_SECUNDARIO} border-red-300 text-red-700 hover:bg-red-50`}
+              className={`${CLASE_BOTON_SECUNDARIO} border-magenta-borde text-magenta hover:bg-magenta-tinte`}
             >
               Eliminar reloj
             </button>

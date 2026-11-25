@@ -1,21 +1,26 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router';
 import { ErrorApi } from '../../api/cliente';
 import { useConfirmar } from '../../comun/Confirmacion';
-import { CLASE_CAMPO, CLASE_ERROR } from '../../comun/estilos';
+import { CLASE_CAMPO } from '../../comun/estilos';
 import { formatearHoraReciente } from '../../comun/fechas';
+import { Aviso, Cargando, Vacio } from '../../comun/ui/Aviso';
+import { Boton } from '../../comun/ui/Boton';
+import { Insignia, type TonoInsignia } from '../../comun/ui/Insignia';
+import { Panel } from '../../comun/ui/Panel';
+import { Paginacion, TABLA, Tabla, usePaginacion } from '../../comun/ui/Tabla';
+import { useToast } from '../../comun/ui/Toast';
 import { useDatos } from '../../comun/useDatos';
 import { useSesion } from '../sesion/SesionContext';
-import { DialogoTelefono } from './DialogoTelefono';
+import { DialogoTelefono, type MotivoTelefono } from './DialogoTelefono';
 import { personalApi } from './personalApi';
 import { nombreRol, ROLES } from './roles';
 import type { EstadoCuenta, PerfilEquipo, Rol } from './tipos';
 
 /** Cómo se muestra cada estado de la cuenta. */
-const ESTADO: Record<EstadoCuenta, { texto: string; clase: string }> = {
-  ACTIVA: { texto: 'Activo', clase: 'bg-[#dff2de] text-[#14540f]' },
-  PENDIENTE: { texto: 'Pendiente de activar', clase: 'bg-[#fff0cc] text-[#7a4e00]' },
-  DESACTIVADA: { texto: 'Desactivado', clase: 'bg-slate-200 text-slate-600' },
+const ESTADO: Record<EstadoCuenta, { texto: string; tono: TonoInsignia }> = {
+  ACTIVA: { texto: 'Activo', tono: 'leve' },
+  PENDIENTE: { texto: 'Pendiente de activar', tono: 'media' },
+  DESACTIVADA: { texto: 'Desactivado', tono: 'cerrada' },
 };
 
 /** Rol que recibe por WhatsApp los avisos de la oficina PRLAC: necesita teléfono. */
@@ -34,17 +39,20 @@ function coincide(perfil: PerfilEquipo, busqueda: string): boolean {
 }
 
 /**
- * Pestaña "Perfiles": las cuentas del equipo tal como están en la base. Quien tiene
- * ADMINISTRACION:EDITAR puede cambiar el rol de los demás desde la tabla.
+ * Pestaña "Equipo y roles": las cuentas del equipo tal como están en la base. Quien tiene ADMINISTRACION:EDITAR
+ * cambia desde la tabla el rol de los demás, su aviso técnico por correo y su celular con WhatsApp. "Agregar
+ * perfil" está en el encabezado de Administración.
  */
 export function PerfilesEquipo() {
   const { usuario, puede } = useSesion();
   const confirmar = useConfirmar();
+  const avisar = useToast();
   const [busqueda, setBusqueda] = useState('');
   const [guardando, setGuardando] = useState<string | null>(null);
   const [errorCambio, setErrorCambio] = useState<string | null>(null);
-  // Cuenta que pasa a coordinador sin teléfono: se abre el diálogo que lo pide
+  // Cuenta a la que se le pide el teléfono: al pasarla a coordinador sin él, o al editarlo
   const [pidiendoTelefono, setPidiendoTelefono] = useState<PerfilEquipo | null>(null);
+  const [motivoTelefono, setMotivoTelefono] = useState<MotivoTelefono>('COORDINADOR');
   const [errorTelefono, setErrorTelefono] = useState<string | null>(null);
   const { datos, error, cargando, recargar } = useDatos(personalApi.listar);
 
@@ -60,6 +68,7 @@ export function PerfilesEquipo() {
   async function cambiarRol(perfil: PerfilEquipo, rol: Rol) {
     if (rol === ROL_AVISOS_OFICINA && !perfil.tieneTelefono) {
       setErrorTelefono(null);
+      setMotivoTelefono('COORDINADOR');
       setPidiendoTelefono(perfil);
       return;
     }
@@ -72,19 +81,25 @@ export function PerfilesEquipo() {
     setErrorCambio(null);
     try {
       await guardar(perfil.id, () => personalApi.cambiarRol(perfil.id, { rol }));
+      avisar('Rol cambiado');
     } catch (e) {
       setErrorCambio(mensajeDe(e));
     }
   }
 
-  /** Pasa a coordinador la cuenta del diálogo, con el teléfono que se escribió. */
-  async function cambiarConTelefono(telefono: string, aceptaWhatsapp: boolean) {
+  /** Guarda el teléfono del diálogo: pasa la cuenta a coordinador o solo cambia su celular. */
+  async function guardarTelefono(telefono: string, aceptaWhatsapp: boolean) {
     if (!pidiendoTelefono) return;
     const id = pidiendoTelefono.id;
     setErrorTelefono(null);
     try {
-      await guardar(id, () => personalApi.cambiarRol(id, { rol: ROL_AVISOS_OFICINA, telefono, aceptaWhatsapp }));
+      await guardar(id, () =>
+        motivoTelefono === 'COORDINADOR'
+          ? personalApi.cambiarRol(id, { rol: ROL_AVISOS_OFICINA, telefono, aceptaWhatsapp })
+          : personalApi.cambiarTelefono(id, telefono, aceptaWhatsapp),
+      );
       setPidiendoTelefono(null);
+      avisar(motivoTelefono === 'COORDINADOR' ? 'Rol cambiado a Coordinador' : 'Teléfono guardado');
     } catch (e) {
       setErrorTelefono(mensajeDe(e));
     }
@@ -112,62 +127,67 @@ export function PerfilesEquipo() {
   }
 
   const editable = puede('ADMINISTRACION:EDITAR');
+  const paginacion = usePaginacion(visibles, 10);
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-medium text-tinta">Perfiles del equipo</h2>
-        {puede('ADMINISTRACION:CREAR') && (
-          <Link
-            to="/administracion/nuevo"
-            className="rounded-sm bg-prlac px-4 py-2 font-medium text-white hover:bg-prlac-oscuro"
-          >
-            Agregar perfil
-          </Link>
+    <Panel titulo="Equipo y roles">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <input
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+          placeholder="Buscar por nombre, cargo, correo o rol"
+          aria-label="Buscar"
+          className={`${CLASE_CAMPO} mt-0 max-w-sm`}
+        />
+        {datos && (
+          <span className="text-[12.5px] text-apagado">
+            {visibles.length} de {datos.length} cuentas
+          </span>
         )}
       </div>
 
-      <input
-        value={busqueda}
-        onChange={(e) => setBusqueda(e.target.value)}
-        placeholder="Buscar por nombre, cargo, correo o rol"
-        aria-label="Buscar"
-        className={`${CLASE_CAMPO} mt-0 max-w-sm`}
-      />
-
-      {error && <p className={CLASE_ERROR}>{error}</p>}
-      {errorCambio && (
-        <p role="alert" className={CLASE_ERROR}>
-          {errorCambio}
-        </p>
+      {error && <Aviso tono="error">{error}</Aviso>}
+      {errorCambio && <Aviso tono="error">{errorCambio}</Aviso>}
+      {cargando && !datos && <Cargando />}
+      {!cargando && !error && visibles.length === 0 && (
+        <Vacio>{busqueda ? 'Nadie coincide con la búsqueda.' : 'Todavía no hay cuentas del equipo.'}</Vacio>
       )}
 
-      <div className="overflow-x-auto rounded-lg border border-slate-200">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-slate-200 text-slate-500">
-            <tr>
-              <th className="px-4 py-3 font-medium">Nombre</th>
-              <th className="px-4 py-3 font-medium">Cargo</th>
-              <th className="px-4 py-3 font-medium">Rol</th>
-              <th className="px-4 py-3 font-medium">Estado</th>
-              <th className="px-4 py-3 font-medium">Último acceso</th>
-              <th className="px-4 py-3 font-medium" title="Correo cuando un reloj tiene un problema técnico">
-                Avisos técnicos
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {visibles.map((perfil) => {
+      {visibles.length > 0 && (
+        <>
+          <Tabla
+            columnas={[
+              'Funcionario/a',
+              'Cargo',
+              'Rol',
+              'Estado',
+              'Último acceso',
+              'Avisos técnicos',
+              editable ? 'Celular' : null,
+            ]}
+            etiqueta="Perfiles del equipo"
+          >
+            {paginacion.visibles.map((perfil) => {
               const propio = perfil.id === usuario?.id;
               return (
-                <tr key={perfil.id} className="border-b border-slate-100 last:border-0">
-                  <td className="px-4 py-3">
-                    <span className="font-medium text-slate-900">{perfil.nombre}</span>
-                    {propio && <span className="ml-1 text-slate-500">(tú)</span>}
-                    <span className="block text-xs text-slate-500">{perfil.correo}</span>
+                <tr key={perfil.id} className={TABLA.fila}>
+                  <td className={TABLA.td}>
+                    <span className="flex items-center gap-2.5">
+                      <span
+                        aria-hidden="true"
+                        className="grid h-8 w-8 flex-none place-items-center rounded-full bg-navy text-[11px] font-bold text-white"
+                      >
+                        {iniciales(perfil.nombre)}
+                      </span>
+                      <span>
+                        <b className="text-navy">{perfil.nombre}</b>
+                        {propio && <span className="ml-1 text-apagado">(tú)</span>}
+                        <span className="block text-xs text-apagado">{perfil.correo}</span>
+                      </span>
+                    </span>
                   </td>
-                  <td className="px-4 py-3">{perfil.cargo || <span className="text-slate-400">—</span>}</td>
-                  <td className="px-4 py-3">
+                  <td className={TABLA.td}>{perfil.cargo || <span className="text-apagado">—</span>}</td>
+                  <td className={TABLA.td}>
                     {editable ? (
                       <select
                         value={perfil.rol}
@@ -175,7 +195,7 @@ export function PerfilesEquipo() {
                         disabled={propio || guardando === perfil.id}
                         title={propio ? 'No puedes cambiar tu propio rol' : undefined}
                         aria-label={`Rol de ${perfil.nombre}`}
-                        className="w-full max-w-48 rounded-md border border-slate-300 bg-white px-2 py-1.5 focus:border-sky-600 focus:outline-none disabled:bg-slate-100"
+                        className={`${CLASE_CAMPO} mt-0 w-full max-w-48 py-1.5`}
                       >
                         {ROLES.map((rol) => (
                           <option key={rol.valor} value={rol.valor}>
@@ -187,21 +207,17 @@ export function PerfilesEquipo() {
                       nombreRol(perfil.rol)
                     )}
                   </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`inline-block rounded-full px-2 py-0.5 text-xs ${ESTADO[perfil.estado].clase}`}
-                    >
-                      {ESTADO[perfil.estado].texto}
-                    </span>
+                  <td className={TABLA.td}>
+                    <Insignia tono={ESTADO[perfil.estado].tono}>{ESTADO[perfil.estado].texto}</Insignia>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className={`${TABLA.td} cifra whitespace-nowrap`}>
                     {perfil.ultimoAcceso ? (
                       formatearHoraReciente(perfil.ultimoAcceso)
                     ) : (
-                      <span className="text-slate-400">Nunca</span>
+                      <span className="text-apagado">Nunca</span>
                     )}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className={TABLA.td}>
                     {editable ? (
                       <Interruptor
                         encendido={perfil.recibeAvisos}
@@ -212,24 +228,36 @@ export function PerfilesEquipo() {
                     ) : perfil.recibeAvisos ? (
                       'Sí'
                     ) : (
-                      <span className="text-slate-400">No</span>
+                      <span className="text-apagado">No</span>
                     )}
                   </td>
+                  {editable && (
+                    <td className={TABLA.td}>
+                      <Boton
+                        variante="enlace"
+                        chico
+                        disabled={guardando === perfil.id}
+                        onClick={() => {
+                          setErrorTelefono(null);
+                          setMotivoTelefono('EDITAR');
+                          setPidiendoTelefono(perfil);
+                        }}
+                        aria-label={`Editar el celular de ${perfil.nombre}`}
+                      >
+                        {perfil.tieneTelefono ? 'Cambiar' : 'Agregar'}
+                      </Boton>
+                    </td>
+                  )}
                 </tr>
               );
             })}
-          </tbody>
-        </table>
-        {cargando && <p className="px-4 py-3 text-slate-500">Cargando…</p>}
-        {!cargando && !error && visibles.length === 0 && (
-          <p className="px-4 py-3 text-slate-500">
-            {busqueda ? 'Nadie coincide con la búsqueda.' : 'Todavía no hay cuentas del equipo.'}
-          </p>
-        )}
-      </div>
+          </Tabla>
+          <Paginacion estado={paginacion} />
+        </>
+      )}
 
       {editable && (
-        <p className="text-xs text-slate-500">
+        <p className="mt-3 text-xs text-apagado">
           Avisos técnicos: correo cuando un reloj tiene un problema (deja de enviar datos, batería baja, no se lo ponen
           o envía demasiadas alertas). Solo en horario laboral. Las alertas de salud las avisa el reloj a los contactos
           de cada usuario.
@@ -239,14 +267,25 @@ export function PerfilesEquipo() {
       {pidiendoTelefono && (
         <DialogoTelefono
           nombre={pidiendoTelefono.nombre}
+          motivo={motivoTelefono}
           error={errorTelefono}
           guardando={guardando === pidiendoTelefono.id}
-          alGuardar={cambiarConTelefono}
+          alGuardar={guardarTelefono}
           alCancelar={() => setPidiendoTelefono(null)}
         />
       )}
-    </div>
+    </Panel>
   );
+}
+
+/** @returns las iniciales del nombre (dos como máximo) */
+function iniciales(nombre: string): string {
+  return nombre
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((parte) => parte[0]?.toUpperCase())
+    .join('');
 }
 
 /** Propiedades de Interruptor. */
@@ -269,7 +308,7 @@ function Interruptor({ encendido, deshabilitado, etiqueta, alCambiar }: PropsInt
       disabled={deshabilitado}
       onClick={alCambiar}
       className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
-        encendido ? 'bg-prlac' : 'bg-slate-300'
+        encendido ? 'bg-teal' : 'bg-linea-oscura'
       }`}
     >
       <span

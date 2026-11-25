@@ -1,18 +1,27 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router';
-import { CLASE_BOTON_PRINCIPAL, CLASE_CAMPO, CLASE_ERROR, CLASE_ETIQUETA, CLASE_TARJETA } from '../../comun/estilos';
+import { Link, useNavigate, useParams } from 'react-router';
+import { CLASE_CAMPO, CLASE_ETIQUETA } from '../../comun/estilos';
 import { formatearFecha } from '../../comun/fechas';
+import { Aviso, Cargando, Vacio } from '../../comun/ui/Aviso';
+import { claseBoton } from '../../comun/ui/Boton';
+import { Dialogo } from '../../comun/ui/Dialogo';
+import { Insignia, type TonoInsignia } from '../../comun/ui/Insignia';
+import { EncabezadoVista } from '../../comun/ui/Panel';
+import { Paginacion, TABLA, Tabla, usePaginacion } from '../../comun/ui/Tabla';
+import { useToast } from '../../comun/ui/Toast';
 import { useDatos } from '../../comun/useDatos';
 import { useSesion } from '../sesion/SesionContext';
+import { EliminarReloj } from './EliminarReloj';
+import { FormularioReloj } from './FormularioReloj';
 import { relojesApi } from './relojesApi';
 import { SemaforoReloj } from './SemaforoReloj';
-import { NOMBRE_ESTADO, type EstadoReloj, type RelojConPaciente } from './tipos';
+import { NOMBRE_ESTADO, type DatosReloj, type EstadoReloj, type RelojConPaciente } from './tipos';
 
-/** Color de la etiqueta de cada estado. */
-const COLOR_ESTADO: Record<EstadoReloj, string> = {
-  OPERATIVO: 'bg-emerald-100 text-emerald-800',
-  EN_REPARACION: 'bg-amber-100 text-amber-800',
-  RETIRADO: 'bg-slate-200 text-slate-600',
+/** Tono de la insignia de cada estado. */
+const TONO_ESTADO: Record<EstadoReloj, TonoInsignia> = {
+  OPERATIVO: 'leve',
+  EN_REPARACION: 'media',
+  RETIRADO: 'neutra',
 };
 
 /** true si el texto buscado está en el identificador, el modelo, la SIM o el nombre del usuario. */
@@ -23,12 +32,17 @@ function coincide(fila: RelojConPaciente, busqueda: string): boolean {
 }
 
 /**
- * Inventario de relojes con búsqueda y filtro por estado. Para entregar un reloj a un usuario
- * se va a su ficha. La columna "Funcionamiento" muestra el semáforo de cada reloj (al pasar el mouse, por qué).
+ * Inventario de relojes del mockup, con búsqueda, filtro por estado y paginación. La columna "Funcionamiento"
+ * muestra el semáforo de cada reloj (al pasar el mouse, por qué). Registrar y editar se hacen en un diálogo
+ * (también desde /relojes/nuevo y /relojes/:id/editar); eliminar está dentro de la edición. Para entregar un
+ * reloj a un usuario se va a su ficha, porque pide el código de emparejamiento que muestra el reloj.
  */
-export function ListaRelojes() {
+export function ListaRelojes({ dialogo }: { dialogo?: 'nuevo' | 'editar' }) {
   const { puede } = useSesion();
-  const { datos: relojes, error, cargando } = useDatos(relojesApi.listar);
+  const { id } = useParams();
+  const navegar = useNavigate();
+  const avisar = useToast();
+  const { datos: relojes, error, cargando, recargar } = useDatos(relojesApi.listar);
   // El semáforo se carga aparte: si falla, la lista se muestra igual, sin el círculo
   const { datos: estados } = useDatos(relojesApi.estado);
   const estadoDe = useMemo(() => new Map((estados ?? []).map((estado) => [estado.idDispositivo, estado])), [estados]);
@@ -43,23 +57,54 @@ export function ListaRelojes() {
       ),
     [relojes, estado, busqueda],
   );
+  const paginacion = usePaginacion(visibles, 10);
+  const enUso = (relojes ?? []).filter((fila) => fila.idPaciente).length;
+  const editado = dialogo === 'editar' ? relojes?.find((fila) => fila.reloj.id === id)?.reloj : undefined;
+
+  /** Cierra el diálogo y vuelve a la lista. */
+  function cerrar() {
+    navegar('/relojes');
+  }
+
+  /** Registra o edita, avisa y vuelve a la lista recargada. */
+  async function guardar(datos: DatosReloj) {
+    if (dialogo === 'editar' && id) {
+      await relojesApi.editar(id, datos);
+      avisar(`Reloj ${datos.identificadorReloj} actualizado`);
+    } else {
+      await relojesApi.registrar(datos);
+      avisar(`Reloj ${datos.identificadorReloj} registrado`);
+    }
+    recargar();
+    cerrar();
+  }
 
   return (
-    <section className={`${CLASE_TARJETA} space-y-4`}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-medium text-tinta">Relojes</h1>
-          <p className="text-tinta">Inventario de relojes del programa y la persona usuaria que tiene cada uno.</p>
-        </div>
-        {puede('USUARIOS:CREAR') && (
-          <Link to="/relojes/nuevo" className={CLASE_BOTON_PRINCIPAL}>
-            Registrar reloj
-          </Link>
-        )}
-      </div>
+    <>
+      <EncabezadoVista
+        titulo="Relojes"
+        subtitulo={
+          <>
+            Inventario de relojes del programa y la persona usuaria vinculada a cada dispositivo.
+            {relojes && (
+              <>
+                {' '}
+                <b className="cifra text-navy">{enUso}</b> de <b className="cifra text-navy">{relojes.length}</b> en uso.
+              </>
+            )}
+          </>
+        }
+        acciones={
+          puede('USUARIOS:CREAR') && (
+            <Link to="/relojes/nuevo" className={claseBoton('principal')}>
+              + Registrar reloj
+            </Link>
+          )
+        }
+      />
 
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="block min-w-52 flex-1">
+      <div className="mb-4 flex flex-wrap items-end gap-3">
+        <label className="block min-w-56 flex-1">
           <span className={CLASE_ETIQUETA}>Buscar reloj</span>
           <input
             value={busqueda}
@@ -70,11 +115,7 @@ export function ListaRelojes() {
         </label>
         <label className="block w-52">
           <span className={CLASE_ETIQUETA}>Estado</span>
-          <select
-            value={estado}
-            onChange={(e) => setEstado(e.target.value as EstadoReloj | '')}
-            className={CLASE_CAMPO}
-          >
+          <select value={estado} onChange={(e) => setEstado(e.target.value as EstadoReloj | '')} className={CLASE_CAMPO}>
             <option value="">Todos</option>
             {(Object.keys(NOMBRE_ESTADO) as EstadoReloj[]).map((valor) => (
               <option key={valor} value={valor}>
@@ -85,51 +126,46 @@ export function ListaRelojes() {
         </label>
       </div>
 
-      {error && <p className={CLASE_ERROR}>{error}</p>}
+      {error && <Aviso tono="error" className="mb-4">{error}</Aviso>}
 
-      <div className="overflow-x-auto rounded-lg border border-slate-200">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-slate-200 text-slate-500">
-            <tr>
-              <th className="px-4 py-3 font-medium">Identificador</th>
-              <th className="px-4 py-3 font-medium">Modelo</th>
-              <th className="px-4 py-3 font-medium">SIM</th>
-              <th className="px-4 py-3 font-medium">Plan vence</th>
-              <th className="px-4 py-3 font-medium">Estado</th>
-              <th className="px-4 py-3 font-medium">Funcionamiento</th>
-              <th className="px-4 py-3 font-medium">Usuario</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody>
-            {visibles.map((fila) => {
+      {cargando && !relojes ? (
+        <Cargando />
+      ) : visibles.length === 0 ? (
+        <Vacio>
+          {relojes?.length === 0 ? 'Todavía no hay relojes registrados en el inventario.' : 'Ningún reloj coincide con los filtros.'}
+        </Vacio>
+      ) : (
+        <>
+          <Tabla
+            columnas={['Identificador', 'Modelo', 'SIM', 'Plan vence', 'Estado', 'Funcionamiento', 'Usuario', null]}
+            etiqueta="Inventario de relojes"
+          >
+            {paginacion.visibles.map((fila) => {
               const d = fila.reloj.datos;
               return (
-                <tr key={fila.reloj.id} className="border-b border-slate-100 last:border-0">
-                  <td className="px-4 py-3 font-mono">{d.identificadorReloj}</td>
-                  <td className="px-4 py-3">{d.modelo ?? '—'}</td>
-                  <td className="px-4 py-3">{d.numeroSim ?? '—'}</td>
-                  <td className="px-4 py-3">{d.fechaVencimientoPlan ? formatearFecha(d.fechaVencimientoPlan) : '—'}</td>
-                  <td className="px-4 py-3">
-                    <span className={`rounded-full px-2 py-0.5 text-xs ${COLOR_ESTADO[d.estado]}`}>
-                      {NOMBRE_ESTADO[d.estado]}
-                    </span>
+                <tr key={fila.reloj.id} className={TABLA.fila}>
+                  <td className={`${TABLA.td} cifra font-semibold text-navy`}>{d.identificadorReloj}</td>
+                  <td className={TABLA.td}>{d.modelo ?? '—'}</td>
+                  <td className={`${TABLA.td} cifra`}>{d.numeroSim ?? '—'}</td>
+                  <td className={`${TABLA.td} cifra`}>{d.fechaVencimientoPlan ? formatearFecha(d.fechaVencimientoPlan) : '—'}</td>
+                  <td className={TABLA.td}>
+                    <Insignia tono={TONO_ESTADO[d.estado]}>{NOMBRE_ESTADO[d.estado]}</Insignia>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className={TABLA.td}>
                     <SemaforoReloj estado={estadoDe.get(fila.reloj.id)} />
                   </td>
-                  <td className="px-4 py-3">
+                  <td className={TABLA.td}>
                     {fila.idPaciente ? (
-                      <Link to={`/usuarios/${fila.idPaciente}`} className="text-sky-700 hover:underline">
+                      <Link to={`/usuarios/${fila.idPaciente}`} className="font-bold text-navy hover:underline">
                         {fila.nombrePaciente}
                       </Link>
                     ) : (
-                      <span className="text-slate-400">Libre</span>
+                      <span className="text-apagado">Sin asignar</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className={`${TABLA.td} text-right`}>
                     {puede('USUARIOS:EDITAR') && (
-                      <Link to={`/relojes/${fila.reloj.id}/editar`} className="text-sky-700 hover:underline">
+                      <Link to={`/relojes/${fila.reloj.id}/editar`} className={claseBoton('contorno', true)}>
                         Editar
                       </Link>
                     )}
@@ -137,15 +173,37 @@ export function ListaRelojes() {
                 </tr>
               );
             })}
-          </tbody>
-        </table>
-        {cargando && <p className="px-4 py-3 text-slate-500">Cargando…</p>}
-        {!cargando && relojes && visibles.length === 0 && (
-          <p className="px-4 py-3 text-slate-500">
-            {relojes.length === 0 ? 'Todavía no hay relojes registrados.' : 'Ningún reloj coincide con los filtros.'}
-          </p>
-        )}
-      </div>
-    </section>
+          </Tabla>
+          <Paginacion estado={paginacion} />
+        </>
+      )}
+
+      {dialogo === 'nuevo' && (
+        <Dialogo titulo="Registrar reloj" alCerrar={cerrar} ancho="max-w-3xl">
+          <FormularioReloj alGuardar={guardar} alCancelar={cerrar} />
+        </Dialogo>
+      )}
+      {dialogo === 'editar' && relojes && (
+        <Dialogo titulo={editado ? `Editar reloj · ${editado.datos.identificadorReloj}` : 'Editar reloj'} alCerrar={cerrar} ancho="max-w-3xl">
+          {editado && id ? (
+            <div className="space-y-5">
+              <FormularioReloj key={id} inicial={editado.datos} alGuardar={guardar} alCancelar={cerrar} />
+              {puede('USUARIOS:ELIMINAR') && (
+                <EliminarReloj
+                  id={id}
+                  datos={editado.datos}
+                  alTerminar={() => {
+                    recargar();
+                    cerrar();
+                  }}
+                />
+              )}
+            </div>
+          ) : (
+            <Aviso tono="error">No se encontró el reloj.</Aviso>
+          )}
+        </Dialogo>
+      )}
+    </>
   );
 }

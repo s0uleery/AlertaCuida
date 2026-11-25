@@ -39,6 +39,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * <li>R3 Sin teléfono no se enciende WhatsApp (400), y un coordinador no puede quedar sin teléfono (400).</li>
  * <li>R4 Solo cambia la cuenta propia (la de la sesión), y queda en la auditoría sin el número.</li>
  * <li>R5 Un coordinador que apagó su WhatsApp ya no lo recibe en el aviso a la oficina (solo el correo).</li>
+ * <li>R6 La persona cambia su contraseña con la actual (25-11-2026): la actual incorrecta cuenta como intento
+ * fallido, y la nueva cumple la política y no es igual a la actual.</li>
  * </ul>
  */
 @SpringBootTest
@@ -133,7 +135,53 @@ class RequisitosMiCuentaTest {
 		assertThat(conWhatsapp).isZero();
 	}
 
+	// ---------- R6: cambiar la contraseña (25-11-2026) ----------
+
+	/** R6: con la actual correcta cambia la contraseña: la nueva sirve para entrar y la anterior ya no. */
+	@Test
+	void cambiaLaContrasenaPropia() throws Exception {
+		cambiarContrasena(sesionAna, "Clave-de-prueba1", "Una-clave-nueva-2").andExpect(status().isNoContent());
+
+		login("12.345.678-5", "Una-clave-nueva-2").andExpect(status().isOk());
+		login("12.345.678-5", "Clave-de-prueba1").andExpect(status().isUnauthorized());
+	}
+
+	/** R6: la actual incorrecta se rechaza y cuenta como intento fallido (para el bloqueo del login). */
+	@Test
+	void laActualIncorrectaSeRechazaYCuentaComoIntento() throws Exception {
+		jdbc.sql("DELETE FROM registro_auditoria").update();
+
+		cambiarContrasena(sesionAna, "otra-clave-cualquiera", "Una-clave-nueva-2").andExpect(status().isBadRequest());
+
+		Integer fallidos = jdbc.sql("""
+				SELECT count(*) FROM registro_auditoria WHERE id_usuario = :u AND accion = 'LOGIN_FALLIDO'""")
+				.param("u", ana).query(Integer.class).single();
+		assertThat(fallidos).isEqualTo(1);
+		login("12.345.678-5", "Clave-de-prueba1").andExpect(status().isOk());
+	}
+
+	/** R6: una nueva débil, igual al RUN o igual a la actual se rechaza. */
+	@Test
+	void laNuevaDebeCumplirLaPolitica() throws Exception {
+		cambiarContrasena(sesionAna, "Clave-de-prueba1", "corta").andExpect(status().isBadRequest());
+		cambiarContrasena(sesionAna, "Clave-de-prueba1", "12345678-5").andExpect(status().isBadRequest());
+		cambiarContrasena(sesionAna, "Clave-de-prueba1", "Clave-de-prueba1").andExpect(status().isBadRequest());
+	}
+
 	// ---------- Ayudas ----------
+
+	/** Pide cambiar la contraseña propia. */
+	private ResultActions cambiarContrasena(String token, String actual, String nueva) throws Exception {
+		return mvc.perform(post("/api/mi-cuenta/contrasena").header("Authorization", "Bearer " + token)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"actual\": \"" + actual + "\", \"nueva\": \"" + nueva + "\"}"));
+	}
+
+	/** Intenta iniciar sesión. */
+	private ResultActions login(String run, String contrasena) throws Exception {
+		return mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"run\": \"" + run + "\", \"contrasena\": \"" + contrasena + "\"}"));
+	}
 
 	/** @return si la cuenta tiene un opt-in de WhatsApp vigente */
 	private boolean optIn(UUID cuenta) {

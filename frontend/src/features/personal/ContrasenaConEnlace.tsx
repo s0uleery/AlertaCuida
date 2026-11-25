@@ -1,13 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { ErrorApi } from '../../api/cliente';
-import {
-  CLASE_BOTON_PRINCIPAL,
-  CLASE_CAMPO,
-  CLASE_ERROR,
-  CLASE_ETIQUETA,
-  CLASE_TARJETA,
-} from '../../comun/estilos';
+import { CLASE_CAMPO, CLASE_ETIQUETA } from '../../comun/estilos';
+import { Aviso } from '../../comun/ui/Aviso';
+import { claseBoton } from '../../comun/ui/Boton';
+import { PlantillaAcceso } from '../../navegacion/PlantillaAcceso';
 
 /** Igual que PoliticaContrasena.java. Aquí solo se revisa el largo; el backend revisa todo. */
 const LARGO_MINIMO = 12;
@@ -76,22 +73,15 @@ export function ContrasenaConEnlace({
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-100 px-4">
-      <div className={`${CLASE_TARJETA} w-full max-w-md space-y-5 p-8`}>
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">AlertaCuida</h1>
-          <p className="text-sm text-slate-500">{textos.subtitulo}</p>
-        </div>
+    <PlantillaAcceso titulo={textos.subtitulo} ancho="max-w-[480px]">
 
         {lista ? (
           <Exito texto={textos.exito} />
         ) : !token ? (
-          <p role="alert" className={CLASE_ERROR}>
-            {textos.enlaceIncompleto}
-          </p>
+          <Aviso tono="error">{textos.enlaceIncompleto}</Aviso>
         ) : (
           <form onSubmit={enviar} className="space-y-4" noValidate>
-            <p className="text-sm text-slate-600">
+            <p className="text-[13px] text-apagado">
               Elige una contraseña de al menos {LARGO_MINIMO} caracteres. Una frase que recuerdes es más segura
               que una palabra corta con símbolos. No puede ser tu RUN.
             </p>
@@ -106,7 +96,7 @@ export function ContrasenaConEnlace({
                 required
                 className={CLASE_CAMPO}
               />
-              <span className="mt-1 block text-xs text-slate-500">
+              <span className="mt-1 block text-xs text-apagado">
                 {contrasena.length} de {LARGO_MINIMO} caracteres mínimos
               </span>
             </label>
@@ -123,28 +113,23 @@ export function ContrasenaConEnlace({
               />
             </label>
 
-            <label className="flex items-center gap-2 text-sm text-slate-600">
+            <label className="flex items-center gap-2 text-[13px] text-apagado">
               <input type="checkbox" checked={mostrar} onChange={(e) => setMostrar(e.target.checked)} />
               Mostrar contraseña
             </label>
 
-            {error && (
-              <p role="alert" className={CLASE_ERROR}>
-                {error}
-              </p>
-            )}
+            {error && <Aviso tono="error">{error}</Aviso>}
 
             <button
               type="submit"
               disabled={enviando || !contrasena || !repetida}
-              className={`${CLASE_BOTON_PRINCIPAL} w-full`}
+              className={`${claseBoton('principal')} w-full`}
             >
               {enviando ? textos.enviando : textos.boton}
             </button>
           </form>
         )}
-      </div>
-    </main>
+    </PlantillaAcceso>
   );
 }
 
@@ -152,10 +137,8 @@ export function ContrasenaConEnlace({
 function Exito({ texto }: { texto: string }) {
   return (
     <div className="space-y-4">
-      <p className="rounded-md bg-emerald-50 px-4 py-3 text-emerald-900">
-        {texto}
-      </p>
-      <Link to="/login" className={`${CLASE_BOTON_PRINCIPAL} block w-full text-center`}>
+      <Aviso tono="exito">{texto}</Aviso>
+      <Link to="/login" className={`${claseBoton('principal')} w-full`}>
         Ir a ingresar
       </Link>
     </div>

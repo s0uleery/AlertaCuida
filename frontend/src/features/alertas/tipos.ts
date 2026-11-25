@@ -166,3 +166,12 @@ export interface DetalleAlerta extends ResumenAlerta {
   evidencia: EvidenciaAlerta;
   discrepancias: Discrepancia[];
 }
+
+/** Gestión que el equipo registra en la bitácora del caso. */
+export type TipoSeguimiento = 'LLAMADA' | 'VISITA' | 'DERIVACION' | 'NOTA';
+
+/** Adónde se puede derivar un caso (GET /api/destinos-derivacion). */
+export interface DestinoDerivacion {
+  codigo: string;
+  nombre: string;
+}

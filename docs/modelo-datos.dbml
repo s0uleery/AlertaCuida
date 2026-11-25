@@ -873,3 +873,10 @@ Ref: CODIGO_RESPALDO.id_usuario > USUARIO.id_usuario [delete: cascade]
 Ref: TOKEN_SESION.id_usuario > USUARIO.id_usuario [delete: cascade]
 Ref: TOKEN_ACCION.id_usuario > USUARIO.id_usuario [delete: cascade]
 Ref: REGISTRO_AUDITORIA.id_usuario > USUARIO.id_usuario
+
+Table HORARIO_HABIL {
+  dia_semana varchar [pk, note: 'LUNES … DOMINGO; los días sin fila no son hábiles']
+  inicio time [not null, note: 'Hora de Chile, incluida']
+  fin time [not null, note: 'Hora de Chile, sin incluirla']
+  Note: 'Jornada hábil del PRLAC (V18). CHECK inicio < fin. Sin relaciones a propósito: es del programa entero. Se edita desde el dashboard (ADMINISTRACION:EDITAR) y rige sin reiniciar; los feriados siguen en calendario.yml.'
+}

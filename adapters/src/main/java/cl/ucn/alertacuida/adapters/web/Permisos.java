@@ -38,6 +38,8 @@ public final class Permisos {
 
 	/** Ver los reportes, entre ellos los hallazgos de la red de seguridad. */
 	public static final String REPORTES_VER = "hasAuthority('REPORTES:VER')";
+	/** Exportar los reportes a Excel o PDF (25-11-2026). */
+	public static final String REPORTES_EXPORTAR = "hasAuthority('REPORTES:EXPORTAR')";
 
 	/** Solo constantes: no se crean objetos de esta clase. */
 	private Permisos() {

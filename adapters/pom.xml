@@ -70,6 +70,18 @@
 			<version>${firebase-admin.version}</version>
 		</dependency>
 
+		<!-- Exportación de reportes a Excel y PDF -->
+		<dependency>
+			<groupId>org.dhatim</groupId>
+			<artifactId>fastexcel</artifactId>
+			<version>${fastexcel.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>com.github.librepdf</groupId>
+			<artifactId>openpdf</artifactId>
+			<version>${openpdf.version}</version>
+		</dependency>
+
 		<!-- Pruebas de las migraciones con un PostgreSQL real (Docker) -->
 		<dependency>
 			<groupId>org.testcontainers</groupId>

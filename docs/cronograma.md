@@ -329,6 +329,8 @@ Depende de: 1.5. Listo cuando: la regla de enrutamiento está configurada, cada 
 | [x] | 1.9.1 | Regla de enrutamiento base (Anexo B): una alerta leve fuera del horario hábil queda pendiente; una media o grave avisa siempre a los contactos disponibles a esa hora, por prioridad | 4 |
 | [x] | 1.9.2 | Calendario hábil (horario y feriados nacionales del año en curso y el siguiente) en la configuración del backend (`calendario.yml`), en zona `America/Santiago`; cambiarlo requiere reiniciar el backend. Solo lectura en el dashboard | 3 |
 | [x] | 1.9.3 | Pruebas, incluidos los días de cambio de hora | 3 |
+
+Nota (25-11-2026): la jornada hábil pasó a la base (V18, `horario_habil`) y se edita en Calendario con `ADMINISTRACION:EDITAR`; rige sin reiniciar y queda en la auditoría. Los feriados siguen en `calendario.yml`. Se agregó un simulador de canales en Calendario que muestra, con las reglas de hoy, qué pasaría con una alerta en un día, una hora y una gravedad dadas. Pruebas en `RequisitosCalendarioTest`. El nuevo flujo de escalamiento (PRLAC, tercero significativo, CESFAM o Carabineros) es una tarea aparte, después del rediseño.
  
 ---
 
@@ -601,6 +603,8 @@ Depende de: 3.5. Listo cuando: cada día y cada semana se genera solo un reporte
 | [ ] | 3.6.6 | Pruebas y revisión con el PRLAC | 5 |
 
 Nota (19-11-2026): los reportes se calculan al pedirlos, sin tabla ni tarea programada, como dice el modelo de datos (reemplaza lo que decían 3.6.2 y 3.6.3). Indicadores decididos el 19-11-2026: FC y SpO2 (promedio, mínimo, máximo y lecturas), uso del reloj (minutos puesto y sincronizaciones), batería mínima y alertas por tipo y gravedad (sin simulacros; canceladas aparte). Semanal de lunes a domingo, comparado con la semana anterior. Backend programado (`GET /api/pacientes/{id}/reportes/diario` y `/semanal`), sin marcar hasta correr las pruebas con Docker; falta la vista (3.6.4) y revisarlo con el PRLAC.
+
+Nota (25-11-2026): rediseño del dashboard con el mockup del PRLAC. La vista del reporte (3.6.4) y la comparación (3.6.5) ya están en el front: indicadores contra el período anterior, curvas de FC y SpO2 con la banda normal del usuario y las alertas marcadas, e historial de alertas. Se agregó la pestaña Gestión operativa (totales, gravedad y carga por profesional) y la exportación a Excel y PDF (`REPORTES:EXPORTAR`, auditada como `EXPORTAR REPORTE`; cumple lo pendiente de la 1.6.2). Falta revisarlo con el PRLAC (3.6.6).
 
 ### 3.7 Bandeja de alertas pendientes de día hábil (4 h)
 Reúne las alertas leves llegadas fuera de horario para revisarlas a primera hora del siguiente día hábil.

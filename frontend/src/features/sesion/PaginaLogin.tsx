@@ -1,8 +1,11 @@
 import { useState, type FormEvent } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import { ErrorApi } from '../../api/cliente';
-import { CLASE_BOTON_PRINCIPAL, CLASE_CAMPO, CLASE_ERROR, CLASE_ETIQUETA } from '../../comun/estilos';
+import { CLASE_CAMPO, CLASE_ETIQUETA } from '../../comun/estilos';
 import { formatearRun, runValido } from '../../comun/run';
+import { Aviso } from '../../comun/ui/Aviso';
+import { claseBoton } from '../../comun/ui/Boton';
+import { PlantillaAcceso } from '../../navegacion/PlantillaAcceso';
 import { useSesion } from './SesionContext';
 
 /**
@@ -43,17 +46,11 @@ export function PaginaLogin() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-100 px-4">
-      <form onSubmit={enviar} className="w-full max-w-sm space-y-5 rounded-xl bg-white p-8 shadow-sm" noValidate>
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">AlertaCuida</h1>
-          <p className="text-sm text-slate-500">Ingreso del personal del PRLAC</p>
-        </div>
+    <PlantillaAcceso titulo="Ingreso a la plataforma" subtitulo="Monitoreo y teleasistencia del PRLAC. Ingresa con tu RUN.">
+      <form onSubmit={enviar} className="space-y-4" noValidate>
 
         {avisoCierre && !error && (
-          <p role="status" className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            {avisoCierre}
-          </p>
+          <Aviso tono="advertencia">{avisoCierre}</Aviso>
         )}
 
         <label className="block">
@@ -65,7 +62,7 @@ export function PaginaLogin() {
             autoComplete="username"
             inputMode="text"
             required
-            className={CLASE_CAMPO}
+            className={`${CLASE_CAMPO} cifra`}
           />
         </label>
 
@@ -81,26 +78,22 @@ export function PaginaLogin() {
           />
         </label>
 
-        {error && (
-          <p role="alert" className={CLASE_ERROR}>
-            {error}
-          </p>
-        )}
+        {error && <Aviso tono="error">{error}</Aviso>}
 
         <button
           type="submit"
           disabled={enviando || !run || !contrasena}
-          className={`${CLASE_BOTON_PRINCIPAL} w-full`}
+          className={`${claseBoton('principal')} w-full`}
         >
           {enviando ? 'Ingresando…' : 'Ingresar'}
         </button>
 
-        <p className="text-center text-sm">
-          <Link to="/recuperar" className="text-sky-700 underline hover:text-sky-900">
+        <p className="text-center text-[13px]">
+          <Link to="/recuperar" className="font-bold text-teal-oscuro hover:underline">
             ¿Olvidaste tu contraseña?
           </Link>
         </p>
       </form>
-    </main>
+    </PlantillaAcceso>
   );
 }

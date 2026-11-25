@@ -17,4 +17,11 @@ export const cuentaApi = {
   /** Cambia el teléfono y si recibe WhatsApp. El correo le sigue llegando siempre. */
   cambiarWhatsapp: (telefono: string, aceptaWhatsapp: boolean) =>
     pedir<void>('/mi-cuenta/whatsapp', { method: 'PUT', body: JSON.stringify({ telefono, aceptaWhatsapp }) }),
+
+  /**
+   * Cambia la contraseña propia. 400 si la actual no calza (cuenta como intento fallido para el bloqueo) o si la
+   * nueva no cumple la política.
+   */
+  cambiarContrasena: (actual: string, nueva: string) =>
+    pedir<void>('/mi-cuenta/contrasena', { method: 'POST', body: JSON.stringify({ actual, nueva }) }),
 };

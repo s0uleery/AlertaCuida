@@ -1,8 +1,11 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { ErrorApi } from '../../api/cliente';
-import { CLASE_BOTON_PRINCIPAL, CLASE_CAMPO, CLASE_ERROR, CLASE_ETIQUETA } from '../../comun/estilos';
+import { CLASE_CAMPO, CLASE_ETIQUETA } from '../../comun/estilos';
 import { formatearRun, runValido } from '../../comun/run';
+import { Aviso } from '../../comun/ui/Aviso';
+import { claseBoton } from '../../comun/ui/Boton';
+import { PlantillaAcceso } from '../../navegacion/PlantillaAcceso';
 import { sesionApi } from './sesionApi';
 
 /**
@@ -36,24 +39,16 @@ export function PaginaRecuperar() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-100 px-4">
-      <div className="w-full max-w-sm space-y-5 rounded-xl bg-white p-8 shadow-sm">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">AlertaCuida</h1>
-          <p className="text-sm text-slate-500">Recuperar la contraseña</p>
-        </div>
+    <PlantillaAcceso titulo="Recuperar la contraseña" subtitulo="Te enviaremos un enlace al correo registrado en tu cuenta.">
 
         {enviado ? (
-          <p role="status" className="rounded-md bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          <Aviso tono="exito">
             Si el RUN corresponde a una cuenta activa, te enviamos un correo con un enlace para elegir una contraseña
             nueva. El enlace vence en una hora. Si no llega, revisa la carpeta de spam o pide ayuda a quien administra
             AlertaCuida.
-          </p>
+          </Aviso>
         ) : (
           <form onSubmit={enviar} className="space-y-4" noValidate>
-            <p className="text-sm text-slate-600">
-              Escribe tu RUN y te enviaremos un enlace al correo registrado en tu cuenta.
-            </p>
             <label className="block">
               <span className={CLASE_ETIQUETA}>RUN</span>
               <input
@@ -62,28 +57,23 @@ export function PaginaRecuperar() {
                 placeholder="12.345.678-9"
                 autoComplete="username"
                 required
-                className={CLASE_CAMPO}
+                className={`${CLASE_CAMPO} cifra`}
               />
             </label>
 
-            {error && (
-              <p role="alert" className={CLASE_ERROR}>
-                {error}
-              </p>
-            )}
+            {error && <Aviso tono="error">{error}</Aviso>}
 
-            <button type="submit" disabled={enviando || !run} className={`${CLASE_BOTON_PRINCIPAL} w-full`}>
+            <button type="submit" disabled={enviando || !run} className={`${claseBoton('principal')} w-full`}>
               {enviando ? 'Enviando…' : 'Enviar enlace'}
             </button>
           </form>
         )}
 
-        <p className="text-center text-sm">
-          <Link to="/login" className="text-sky-700 underline hover:text-sky-900">
+        <p className="text-center text-[13px]">
+          <Link to="/login" className="font-bold text-teal-oscuro hover:underline">
             Volver a ingresar
           </Link>
         </p>
-      </div>
-    </main>
+    </PlantillaAcceso>
   );
 }

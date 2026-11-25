@@ -1,10 +1,15 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router';
 import { ErrorApi } from '../../api/cliente';
 import { useConfirmar } from '../../comun/Confirmacion';
-import { CLASE_BOTON_SECUNDARIO, CLASE_ERROR, CLASE_TARJETA } from '../../comun/estilos';
 import { formatearFecha, formatearFechaHora } from '../../comun/fechas';
 import { formatearRun } from '../../comun/run';
+import { Aviso, Cargando } from '../../comun/ui/Aviso';
+import { Boton, claseBoton } from '../../comun/ui/Boton';
+import { Insignia } from '../../comun/ui/Insignia';
+import { EncabezadoVista, ListaDatos, Panel } from '../../comun/ui/Panel';
+import { TABLA, Tabla } from '../../comun/ui/Tabla';
+import { useToast } from '../../comun/ui/Toast';
 import { useDatos } from '../../comun/useDatos';
 import { useSesion } from '../sesion/SesionContext';
 import { CondicionesDelUsuario } from './CondicionesDelUsuario';
@@ -19,36 +24,39 @@ const SEXO: Record<string, string> = { FEMENINO: 'Femenino', MASCULINO: 'Masculi
 /** Cómo se muestra cada nivel de dependencia. */
 const NIVEL: Record<string, string> = { MODERADA: 'Moderada', SEVERA: 'Severa' };
 
-/** Filas de la tabla de datos personales: etiqueta y cómo mostrar el valor. */
-function filas(datos: DatosPaciente, edad: number | null): [string, string][] {
-  const fecha = (valor: string | null) => (valor ? formatearFecha(valor) : '—');
+/** Datos de identificación: etiqueta y valor. */
+function identificacion(datos: DatosPaciente, edad: number | null): [string, ReactNode][] {
+  const fecha = (valor: string | null) => (valor ? formatearFecha(valor) : null);
   return [
-    ['RUN', formatearRun(datos.run)],
-    ['Alias', datos.alias ?? '—'],
-    ['Nacimiento', datos.fechaNacimiento ? `${fecha(datos.fechaNacimiento)} (${edad} años)` : '—'],
+    ['RUN', <span key="run" className="cifra">{formatearRun(datos.run)}</span>],
+    ['Alias para los mensajes', datos.alias],
+    ['Fecha de nacimiento', datos.fechaNacimiento ? `${fecha(datos.fechaNacimiento)} (${edad} años)` : null],
     ['Sexo', datos.sexo ? SEXO[datos.sexo] : 'No informado'],
-    ['Dirección', datos.direccion ?? '—'],
+    ['Dirección', datos.direccion],
     ['Dependencia', datos.nivelDependencia ? NIVEL[datos.nivelDependencia] : 'Por evaluar'],
-    ['Ingreso', fecha(datos.fechaIngreso)],
-    ['Consentimiento', datos.fechaConsentimiento ? fecha(datos.fechaConsentimiento) : 'Sin registrar'],
+    ['Fecha de ingreso', fecha(datos.fechaIngreso)],
+    ['Consentimiento', datos.fechaConsentimiento ? fecha(datos.fechaConsentimiento) : <b key="c" className="text-naranja-texto">Sin registrar</b>],
   ];
 }
 
 /**
- * Ficha de un usuario del programa (/usuarios/:id): datos, salud, contactos, perfil clínico, su
- * reloj e historial de relojes.
+ * Ficha de un usuario del programa (/usuarios/:id), con el orden del mockup: "Identificación y red de cuidados"
+ * (datos, contactos con su cuidador principal, reloj e historial) y "Umbrales biométricos y antecedentes"
+ * (perfil clínico y condiciones de salud). Cada bloque conserva sus acciones.
  */
 export function FichaUsuario() {
   const { id = '' } = useParams();
   const { puede } = useSesion();
   const confirmar = useConfirmar();
+  const avisar = useToast();
   const { datos: detalle, error, cargando, recargar } = useDatos(() => pacientesApi.detalle(id), id);
   const [errorBaja, setErrorBaja] = useState<string | null>(null);
 
-  if (cargando && !detalle) return <p className="text-slate-500">Cargando…</p>;
-  if (error || !detalle) return <p className={CLASE_ERROR}>{error ?? 'No se encontró el usuario.'}</p>;
+  if (cargando && !detalle) return <Cargando />;
+  if (error || !detalle) return <Aviso tono="error">{error ?? 'No se encontró el usuario.'}</Aviso>;
 
   const { paciente, edad, historial } = detalle;
+  const datos = paciente.datos;
 
   /** Pide confirmación, da de baja al usuario y recarga la ficha. */
   async function darDeBaja() {
@@ -61,6 +69,7 @@ export function FichaUsuario() {
     if (!confirmado) return;
     try {
       await pacientesApi.darDeBaja(paciente.id);
+      avisar('Usuario dado de baja');
       recargar();
     } catch (e) {
       setErrorBaja(e instanceof ErrorApi ? e.message : 'No se pudo conectar con el servidor.');
@@ -68,94 +77,90 @@ export function FichaUsuario() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <Link to="/usuarios" className="text-sm text-sky-700 hover:underline">
-            ← Usuarios
-          </Link>
-          <h1 className="text-xl font-semibold text-slate-900">
-            {paciente.datos.nombres} {paciente.datos.apellidos}
-          </h1>
-          {paciente.fechaBaja && (
-            <p className="text-sm text-slate-500">Dado de baja el {formatearFecha(paciente.fechaBaja)}</p>
-          )}
+    <>
+      <EncabezadoVista
+        migas={[{ texto: 'Usuarios', a: '/usuarios' }]}
+        titulo={
+          <>
+            {datos.nombres} {datos.apellidos}
+            {edad !== null && `, ${edad} años`}
+          </>
+        }
+        subtitulo={
+          <>
+            {datos.direccion ?? 'Sin dirección registrada'} · Ingreso {formatearFecha(datos.fechaIngreso)}
+            {paciente.fechaBaja && <> · Dado de baja el {formatearFecha(paciente.fechaBaja)}</>}
+          </>
+        }
+        acciones={
+          <>
+            {paciente.fechaBaja && <Insignia tono="neutra">De baja</Insignia>}
+            {puede('REPORTES:VER') && (
+              <Link to={`/reportes/${paciente.id}/semanal`} className={claseBoton('contorno')}>
+                Ver reporte
+              </Link>
+            )}
+            {puede('USUARIOS:EDITAR') && (
+              <Link to={`/usuarios/${paciente.id}/editar`} className={claseBoton('normal')}>
+                Editar ficha
+              </Link>
+            )}
+            {puede('USUARIOS:ELIMINAR') && !paciente.fechaBaja && (
+              <Boton variante="peligro" onClick={darDeBaja}>
+                Dar de baja
+              </Boton>
+            )}
+          </>
+        }
+      />
+
+      {errorBaja && <Aviso tono="error" className="mb-4">{errorBaja}</Aviso>}
+
+      <div className="grid items-start gap-5 xl:grid-cols-2">
+        <div className="space-y-5">
+          <Panel titulo="Identificación">
+            <ListaDatos datos={identificacion(datos, edad)} />
+          </Panel>
+          <Panel titulo="Red de cuidados">
+            <ContactosDelUsuario idPaciente={paciente.id} />
+          </Panel>
+          <Panel titulo="Reloj vinculado">
+            <div className="space-y-4">
+              <RelojDelUsuario detalle={detalle} alCambiar={recargar} />
+            </div>
+          </Panel>
+          <Panel titulo="Historial de relojes">
+            {historial.length === 0 ? (
+              <p className="text-apagado">Nunca ha tenido reloj.</p>
+            ) : (
+              <Tabla columnas={['Reloj', 'Desde', 'Hasta']} etiqueta="Historial de relojes">
+                {historial.map((asignacion) => (
+                  <tr key={asignacion.idAsignacion} className={TABLA.fila}>
+                    <td className={`${TABLA.td} cifra`}>{asignacion.identificadorReloj}</td>
+                    <td className={`${TABLA.td} cifra`}>{formatearFechaHora(asignacion.inicio)}</td>
+                    <td className={TABLA.td}>
+                      {asignacion.fin ? (
+                        <span className="cifra">{formatearFechaHora(asignacion.fin)}</span>
+                      ) : (
+                        <Insignia tono="leve">En uso</Insignia>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </Tabla>
+            )}
+          </Panel>
         </div>
-        <div className="flex gap-2">
-          {puede('USUARIOS:EDITAR') && (
-            <Link to={`/usuarios/${paciente.id}/editar`} className={CLASE_BOTON_SECUNDARIO}>
-              Editar
-            </Link>
-          )}
-          {puede('USUARIOS:ELIMINAR') && !paciente.fechaBaja && (
-            <button onClick={darDeBaja} className={`${CLASE_BOTON_SECUNDARIO} text-red-700`}>
-              Dar de baja
-            </button>
-          )}
+
+        <div className="space-y-5">
+          <Panel titulo="Umbrales biométricos y módulos">
+            <PerfilClinicoDelUsuario idPaciente={paciente.id} />
+          </Panel>
+          <Panel titulo="Antecedentes de salud">
+            <CondicionesDelUsuario idPaciente={paciente.id} />
+          </Panel>
         </div>
       </div>
-
-      {errorBaja && <p className={CLASE_ERROR}>{errorBaja}</p>}
-
-      <section className={CLASE_TARJETA}>
-        <h2 className="mb-3 text-lg font-semibold text-slate-900">Datos personales</h2>
-        <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-2">
-          {filas(paciente.datos, edad).map(([etiqueta, valor]) => (
-            <div key={etiqueta} className="flex gap-2">
-              <dt className="w-32 shrink-0 text-sm text-slate-500">{etiqueta}</dt>
-              <dd className="text-slate-800">{valor}</dd>
-            </div>
-          ))}
-        </dl>
-      </section>
-
-      <section className={CLASE_TARJETA}>
-        <h2 className="mb-3 text-lg font-semibold text-slate-900">Salud</h2>
-        <CondicionesDelUsuario idPaciente={paciente.id} />
-      </section>
-
-      <section className={CLASE_TARJETA}>
-        <h2 className="mb-3 text-lg font-semibold text-slate-900">Contactos</h2>
-        <ContactosDelUsuario idPaciente={paciente.id} />
-      </section>
-
-      <section className={CLASE_TARJETA}>
-        <h2 className="mb-3 text-lg font-semibold text-slate-900">Perfil clínico</h2>
-        <PerfilClinicoDelUsuario idPaciente={paciente.id} />
-      </section>
-
-      <section className={`${CLASE_TARJETA} space-y-4`}>
-        <h2 className="text-lg font-semibold text-slate-900">Reloj</h2>
-        <RelojDelUsuario detalle={detalle} alCambiar={recargar} />
-      </section>
-
-      <section className={CLASE_TARJETA}>
-        <h2 className="mb-3 text-lg font-semibold text-slate-900">Historial de relojes</h2>
-        {historial.length === 0 ? (
-          <p className="text-slate-500">Nunca ha tenido reloj.</p>
-        ) : (
-          <table className="w-full text-left text-sm">
-            <thead className="text-slate-500">
-              <tr>
-                <th className="py-2 font-medium">Reloj</th>
-                <th className="py-2 font-medium">Desde</th>
-                <th className="py-2 font-medium">Hasta</th>
-              </tr>
-            </thead>
-            <tbody>
-              {historial.map((asignacion) => (
-                <tr key={asignacion.idAsignacion} className="border-t border-slate-100">
-                  <td className="py-2 font-mono">{asignacion.identificadorReloj}</td>
-                  <td className="py-2">{formatearFechaHora(asignacion.inicio)}</td>
-                  <td className="py-2">
-                    {asignacion.fin ? formatearFechaHora(asignacion.fin) : <span className="text-emerald-700">En uso</span>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
-    </div>
+    </>
   );
 }

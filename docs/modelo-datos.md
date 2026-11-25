@@ -7,7 +7,7 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
 ## Principios
 
 - **Normalizado hasta FNBC.** Cada dato se guarda en un solo lugar. Hay una sola excepción, controlada y explicada en [Normalización](#normalización). **Lo que se puede calcular no se guarda**: el estado de la alerta, la edad, el último acceso, el bloqueo por intentos fallidos, la configuración pendiente, los reportes y los hallazgos se obtienen con consultas.
-- **Sin tablas sueltas.** Todas las tablas se relacionan con otra (ver [Relaciones](#relaciones)).
+- **Sin tablas sueltas.** Todas las tablas se relacionan con otra (ver [Relaciones](#relaciones)), salvo `EMPAREJAMIENTO_RELOJ` y `HORARIO_HABIL`, explicadas abajo.
 - **Identidad separada de salud (0.4.2).** Los datos personales están en `PACIENTE` y `CONTACTO`, cifrados. Los datos de salud van en `FICHA_PACIENTE`, `CONDICION_PACIENTE`, `CONFIGURACION` y `UMBRAL`.
 - **Dónde va cada regla:**
   - si se puede comprobar mirando **una sola fila**, la hace cumplir la base (claves foráneas, `unique`, `CHECK`, `EXCLUDE`, índices únicos parciales);
@@ -100,7 +100,8 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
 - **`ASIGNACION_RELOJ`**: vínculo reloj-paciente con historial (1.2.4) y el hash del token del reloj (rol `DEVICE`).
   - **Todo lo que llega del reloj cuelga de la asignación**, que da el reloj y el paciente con una sola relación.
   - El token vale mientras la asignación está vigente: cerrarla lo revoca. Para cambiar el token se cierra la asignación y se abre otra.
-- **`EMPAREJAMIENTO_RELOJ`** (V15): códigos de emparejamiento pendientes, con el hash del código, el hash del token que ya tiene el reloj y su vencimiento (10 minutos). Al usarse, el hash del token pasa a `ASIGNACION_RELOJ` y la fila se borra; las vencidas se borran al pedir un código nuevo. Es la única tabla sin relaciones, a propósito: el código lo pide un reloj que todavía no se sabe cuál es ni de quién.
+- **`EMPAREJAMIENTO_RELOJ`** (V15): códigos de emparejamiento pendientes, con el hash del código, el hash del token que ya tiene el reloj y su vencimiento (10 minutos). Al usarse, el hash del token pasa a `ASIGNACION_RELOJ` y la fila se borra; las vencidas se borran al pedir un código nuevo. No tiene relaciones, a propósito: el código lo pide un reloj que todavía no se sabe cuál es ni de quién.
+- **`HORARIO_HABIL`** (V18, 25-11-2026): la jornada hábil del PRLAC, una fila por día hábil (`dia_semana` es la clave) con su inicio y término (`inicio < fin`). Los días que no tienen fila no son hábiles. Antes estaba en `calendario.yml`; pasó a la base para que se edite desde el dashboard sin reiniciar. La primera vez se llena con lo del yml. Tampoco tiene relaciones: es la jornada del programa entero, no un dato de alguien. Los feriados siguen en `calendario.yml`. Cada cambio queda en `REGISTRO_AUDITORIA` (entidad `CALENDARIO`, nueva en V18).
   - **Sin superposiciones en el tiempo**, ni vigentes ni cerradas, ni por reloj ni por paciente (1.2.5): dos restricciones `EXCLUDE`. Cerrar a las 12:00 y abrir otra a las 12:00 no se superpone.
 - **`SINCRONIZACION`**: el lote cada 2 horas (o antes si la batería baja de 15 %) con el estado del reloj: batería, si está puesto, minutos puesto desde el lote anterior (uso del reloj en reportes), LTE, Wi-Fi o Bluetooth (a través del teléfono, V16), versión de la app y **hash de la configuración** que tiene aplicada. La última sincronización da el estado actual (3.4.1, 3.8.1).
 - **`EVENTO_DESCARTADO`**: cuántos eventos de cada tipo descartó el reloj en el lote, una fila por tipo (1FN). Sirve a las métricas de validación (4.7). No admite `SILENCIO_DATOS`, porque ese evento lo detecta el servidor.
@@ -272,6 +273,10 @@ Las tablas las crea Flyway con las migraciones de [`adapters/src/main/resources/
 | `V12__vigilante_del_escalamiento` | `registro_intento.fecha_hora_solicitud` (cuándo se pidió o encoló cada aviso) y `registro_intento.proposito` (`AVISO` o `VIGILANTE`), que entra en la unicidad de los avisos al equipo |
 | `V13__aviso_de_agravamiento` | Propósito `AGRAVAMIENTO` en `registro_intento`: el segundo aviso a los coordinadores cuando la alerta pasa a grave |
 | `V14__respuesta_de_coordinadores` | La respuesta también se guarda en el aviso a la oficina y en el de agravamiento a un coordinador: su "Voy en camino" confirma la alerta |
+| `V15__emparejamiento_reloj` | `emparejamiento_reloj`: el reloj se vincula con un código de emparejamiento, sin que nadie copie su token |
+| `V16__conexion_bluetooth` | Tipo de conexión `BLUETOOTH` en las sincronizaciones |
+| `V17__llamada_y_llegada_contacto` | "Llamar al paciente" y "Llegué donde el paciente" en `registro_intento` (la llegada exige "Voy en camino") |
+| `V18__horario_habil` | `horario_habil` (jornada hábil editable) y la entidad `CALENDARIO` en `registro_auditoria` |
 
 Una migración ya aplicada no se edita: los cambios van en una migración nueva (`V7__...`).
 

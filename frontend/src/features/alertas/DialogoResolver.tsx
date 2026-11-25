@@ -60,14 +60,14 @@ export function DialogoResolver({
         e.preventDefault();
         if (!guardando) alCancelar();
       }}
-      className="m-auto w-[calc(100%-2rem)] max-w-lg rounded-xl bg-white p-0 shadow-xl backdrop:bg-slate-900/40"
+      className="m-auto w-[calc(100%-2rem)] max-w-lg rounded-panel bg-white p-0 shadow-xl backdrop:bg-navy/55"
     >
       <form onSubmit={enviar} className="space-y-4 p-6" noValidate>
-        <h2 id="resolver-titulo" className="text-lg font-semibold text-slate-900">
+        <h2 id="resolver-titulo" className="text-lg font-semibold text-navy">
           {completando ? `Completar el cierre de la alerta #${numero}` : `Resolver la alerta #${numero}`}
         </h2>
         {esSalud && (
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-apagado">
             {completando
               ? 'Un contacto llegó donde el usuario y la alerta quedó resuelta. Registra qué fue y qué se hizo. '
               : 'El reloj dejará de avisar a los contactos. '}
@@ -121,7 +121,7 @@ export function DialogoResolver({
           <button
             type="submit"
             disabled={guardando || !completo}
-            className="rounded-md bg-sky-700 px-4 py-2 font-medium text-white hover:bg-sky-800 disabled:opacity-50"
+            className="rounded-md bg-teal px-4 py-2 font-medium text-white hover:bg-teal-hover disabled:opacity-50"
           >
             {guardando ? 'Guardando…' : completando ? 'Guardar cierre' : 'Resolver alerta'}
           </button>

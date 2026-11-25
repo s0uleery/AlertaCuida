@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { CLASE_CAMPO, CLASE_ERROR, CLASE_ETIQUETA } from '../../comun/estilos';
+import { CLASE_CAMPO, CLASE_ETIQUETA } from '../../comun/estilos';
 import { formatearFechaHora, hoyEnChile } from '../../comun/fechas';
+import { Aviso, Cargando, Vacio } from '../../comun/ui/Aviso';
+import { Panel } from '../../comun/ui/Panel';
+import { TABLA, Tabla } from '../../comun/ui/Tabla';
 import { useDatos } from '../../comun/useDatos';
 import { hallazgosApi, type Hallazgo } from './hallazgosApi';
 
@@ -43,14 +46,14 @@ export function HallazgosRedSeguridad() {
   const hallazgos = datos ?? [];
 
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-slate-500">
+    <Panel titulo="Posibles eventos no alertados">
+      <p className="mb-4 text-[13px] text-apagado">
         Lecturas más allá del límite grave de cada persona sin una alerta del reloj cerca (30 minutos antes o después).
         Nadie fue avisado por ellas: sirven para revisar si algún reloj no está alertando.
       </p>
 
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="block">
+      <div className="mb-4 flex flex-wrap items-end gap-3">
+        <label className="block w-44">
           <span className={CLASE_ETIQUETA}>Desde</span>
           <input
             type="date"
@@ -60,7 +63,7 @@ export function HallazgosRedSeguridad() {
             className={CLASE_CAMPO}
           />
         </label>
-        <label className="block">
+        <label className="block w-44">
           <span className={CLASE_ETIQUETA}>Hasta</span>
           <input
             type="date"
@@ -73,45 +76,30 @@ export function HallazgosRedSeguridad() {
         </label>
       </div>
 
-      {error && <p className={CLASE_ERROR}>{error}</p>}
-
-      <div className="overflow-x-auto rounded-lg border border-prlac">
-        <table className="w-full min-w-[640px] border-collapse text-left text-sm">
-          <thead className="bg-prlac text-white">
-            <tr>
-              <th className="px-3 py-2.5 font-bold">Medida</th>
-              <th className="px-3 py-2.5 font-bold">Usuario</th>
-              <th className="px-3 py-2.5 font-bold">Lectura</th>
-              <th className="px-3 py-2.5 font-bold">Valor</th>
-              <th className="px-3 py-2.5 font-bold">Límite grave</th>
+      {error && <Aviso tono="error">{error}</Aviso>}
+      {cargando && !datos && <Cargando />}
+      {!cargando && !error && hallazgos.length === 0 && (
+        <Vacio>No hay lecturas graves sin alerta del reloj en estas fechas.</Vacio>
+      )}
+      {hallazgos.length > 0 && (
+        <Tabla columnas={['Medida', 'Usuario', 'Lectura', 'Valor', 'Límite grave']} etiqueta="Posibles no alertadas">
+          {hallazgos.map((h, i) => (
+            <tr key={`${h.paciente.id}-${h.variable}-${h.fechaHoraMedicion}-${i}`} className={TABLA.fila}>
+              <td className={`${TABLA.td} cifra whitespace-nowrap`}>{formatearFechaHora(h.fechaHoraMedicion)}</td>
+              <td className={TABLA.td}>
+                <Link to={`/usuarios/${h.paciente.id}`} className="font-bold text-teal-oscuro hover:underline">
+                  {[h.paciente.nombres, h.paciente.apellidos].filter(Boolean).join(' ') || 'Sin nombre'}
+                </Link>
+              </td>
+              <td className={TABLA.td}>{VARIABLE[h.variable].nombre}</td>
+              <td className={`${TABLA.td} cifra font-bold text-magenta`}>
+                {numero(h.valor)} {VARIABLE[h.variable].unidad}
+              </td>
+              <td className={TABLA.td}>{limite(h)}</td>
             </tr>
-          </thead>
-          <tbody>
-            {hallazgos.map((h, i) => (
-              <tr
-                key={`${h.paciente.id}-${h.variable}-${h.fechaHoraMedicion}-${i}`}
-                className="border-t border-slate-300"
-              >
-                <td className="px-3 py-2.5">{formatearFechaHora(h.fechaHoraMedicion)}</td>
-                <td className="px-3 py-2.5">
-                  <Link to={`/usuarios/${h.paciente.id}`} className="text-sky-700 hover:underline">
-                    {[h.paciente.nombres, h.paciente.apellidos].filter(Boolean).join(' ') || 'Sin nombre'}
-                  </Link>
-                </td>
-                <td className="px-3 py-2.5">{VARIABLE[h.variable].nombre}</td>
-                <td className="px-3 py-2.5 font-medium tabular-nums text-[#a1111a]">
-                  {numero(h.valor)} {VARIABLE[h.variable].unidad}
-                </td>
-                <td className="px-3 py-2.5">{limite(h)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {cargando && <p className="px-3 py-2.5 text-slate-500">Cargando…</p>}
-        {!cargando && !error && hallazgos.length === 0 && (
-          <p className="px-3 py-2.5 text-slate-500">No hay lecturas graves sin alerta del reloj en estas fechas.</p>
-        )}
-      </div>
-    </div>
+          ))}
+        </Tabla>
+      )}
+    </Panel>
   );
 }

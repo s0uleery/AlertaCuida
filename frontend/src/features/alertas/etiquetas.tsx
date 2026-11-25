@@ -1,3 +1,4 @@
+import { Insignia, type TonoInsignia } from '../../comun/ui/Insignia';
 import type {
   Canal,
   ClasificacionAlerta,
@@ -46,24 +47,37 @@ export const ESTADO_CONTACTO: Record<EstadoContacto, string> = {
 
 /** Etiqueta gris de los simulacros, para no confundirlos con una emergencia real. */
 export function InsigniaSimulacro() {
-  return (
-    <span className="inline-block rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-bold text-slate-700">
-      Simulacro
-    </span>
-  );
+  return <Insignia tono="neutra">Simulacro</Insignia>;
 }
 
-const GRAVEDAD: Record<Severidad, { texto: string; clase: string }> = {
-  GRAVE: { texto: 'Grave', clase: 'bg-[#fde3e3] text-[#a1111a]' },
-  MEDIA: { texto: 'Media', clase: 'bg-[#fff0cc] text-[#7a4e00]' },
-  LEVE: { texto: 'Leve', clase: 'bg-[#dff2de] text-[#14540f]' },
+/** Texto y tono de cada gravedad. */
+export const GRAVEDAD: Record<Severidad, { texto: string; tono: TonoInsignia }> = {
+  GRAVE: { texto: 'Grave', tono: 'grave' },
+  MEDIA: { texto: 'Media', tono: 'media' },
+  LEVE: { texto: 'Leve', tono: 'leve' },
 };
 
-/** Insignia de color con la gravedad. */
+/** Insignia de color con la gravedad, con su punto (magenta, naranja o verde), como en el mockup. */
 export function InsigniaGravedad({ severidad }: { severidad: Severidad }) {
-  const { texto, clase } = GRAVEDAD[severidad];
-  return <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-bold ${clase}`}>{texto}</span>;
+  const { texto, tono } = GRAVEDAD[severidad];
+  return <Insignia tono={tono}>{texto}</Insignia>;
 }
+
+/** Tono de la insignia de cada estado de atención: lo nuevo resalta y lo cerrado va en verde. */
+const TONO_ESTADO: Record<EstadoAtencion, TonoInsignia> = {
+  SIN_ASIGNAR: 'nueva',
+  EN_ATENCION: 'neutra',
+  EN_SEGUIMIENTO: 'teal',
+  RESUELTA: 'cerrada',
+};
+
+/** Insignia del estado de atención de una alerta. */
+export function InsigniaEstado({ estado }: { estado: EstadoAtencion }) {
+  return <Insignia tono={TONO_ESTADO[estado]}>{ESTADO[estado]}</Insignia>;
+}
+
+/** Orden de urgencia: grave primero. */
+export const PESO_GRAVEDAD: Record<Severidad, number> = { GRAVE: 0, MEDIA: 1, LEVE: 2 };
 
 /** Cómo se muestra la clasificación con que se cerró una alerta de salud. */
 export const CLASIFICACION: Record<ClasificacionAlerta, string> = {

@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { CLASE_BOTON_SECUNDARIO } from './estilos';
+import { claseBoton } from './ui/Boton';
 
 /** Lo que se muestra en el diálogo de confirmación. */
 export interface OpcionesConfirmacion {
@@ -77,23 +78,21 @@ function DialogoConfirmacion({ opciones, alResponder }: PropsDialogo) {
       onClick={(e) => {
         if (e.target === e.currentTarget) alResponder(false);
       }}
-      className="m-auto w-[calc(100%-2rem)] max-w-md rounded-xl bg-white p-0 shadow-xl backdrop:bg-slate-900/40"
+      className="m-auto w-[calc(100%-2rem)] max-w-md rounded-lg border border-linea-oscura bg-superficie p-0 text-texto shadow-modal backdrop:bg-navy/55"
     >
-      <div className="p-6">
-        <h2 id="confirmacion-titulo" className="text-lg font-semibold text-slate-900">
+      <div className="p-5">
+        <h2 id="confirmacion-titulo" className="text-[15px] font-bold text-navy">
           {titulo}
         </h2>
-        {mensaje && <p className="mt-2 text-sm text-slate-600">{mensaje}</p>}
-        <div className="mt-6 flex justify-end gap-2">
+        {mensaje && <p className="mt-2 text-[13px] text-apagado">{mensaje}</p>}
+        <div className="mt-5 flex justify-end gap-2">
           <button type="button" onClick={() => alResponder(false)} className={CLASE_BOTON_SECUNDARIO} autoFocus>
             Cancelar
           </button>
           <button
             type="button"
             onClick={() => alResponder(true)}
-            className={`rounded-md px-4 py-2 font-medium text-white ${
-              peligro ? 'bg-red-700 hover:bg-red-800' : 'bg-sky-700 hover:bg-sky-800'
-            }`}
+            className={claseBoton(peligro ? 'peligro' : 'principal')}
           >
             {textoConfirmar}
           </button>

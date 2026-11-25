@@ -11,6 +11,7 @@ import cl.ucn.alertacuida.application.comun.puerto.HashRun;
 import cl.ucn.alertacuida.application.comun.puerto.SecretosUnSoloUso;
 import cl.ucn.alertacuida.application.comun.puerto.Transacciones;
 import cl.ucn.alertacuida.application.personal.ActivarCuenta;
+import cl.ucn.alertacuida.application.personal.CambiarContrasena;
 import cl.ucn.alertacuida.application.personal.CambiarRecibeAvisos;
 import cl.ucn.alertacuida.application.personal.CambiarRolPersonal;
 import cl.ucn.alertacuida.application.personal.CambiarTelefonoPersonal;
@@ -24,6 +25,7 @@ import cl.ucn.alertacuida.application.personal.GuardarPermisosRol;
 import cl.ucn.alertacuida.application.personal.NuevoEnlaceActivacion;
 import cl.ucn.alertacuida.application.personal.RestablecerContrasena;
 import cl.ucn.alertacuida.application.personal.SolicitarRecuperacion;
+import cl.ucn.alertacuida.application.personal.puerto.ContrasenasGuardadas;
 import cl.ucn.alertacuida.application.personal.puerto.CuentasPersonal;
 import cl.ucn.alertacuida.application.personal.puerto.CuentasPropias;
 import cl.ucn.alertacuida.application.personal.puerto.CuentasRecuperacion;
@@ -178,6 +180,16 @@ public class ConfiguracionCasosDeUso {
 	CambiarTelefonoPersonal cambiarTelefonoPersonal(EquipoPersonal equipo, RegistroAuditoria auditoria,
 			Transacciones transacciones, Clock reloj) {
 		return new CambiarTelefonoPersonal(equipo, auditoria, transacciones, reloj);
+	}
+
+	/** Cambio de la contraseña propia desde "Mi perfil", con el mismo bloqueo por intentos que el login. */
+	@Bean
+	CambiarContrasena cambiarContrasena(CuentasRecuperacion cuentas, ContrasenasGuardadas guardadas,
+			VerificadorContrasena verificador, HashContrasena hashContrasena, HashRun hashRun, RegistroAccesos accesos,
+			PropiedadesSeguridad propiedades, RegistroAuditoria auditoria, Transacciones transacciones, Clock reloj) {
+		PropiedadesSeguridad.Bloqueo bloqueo = propiedades.bloqueo();
+		return new CambiarContrasena(cuentas, guardadas, verificador, hashContrasena, hashRun, accesos,
+				new PoliticaBloqueo(bloqueo.intentos(), bloqueo.ventana()), auditoria, transacciones, reloj);
 	}
 
 	/** Datos de la cuenta propia, para "Mi cuenta". */

@@ -21,9 +21,9 @@ type Tono = 'problema' | 'bien' | 'normal';
 
 /** Color del punto de la línea según el tono. */
 const PUNTO: Record<Tono, string> = {
-  problema: 'bg-[#c81e1e]',
-  bien: 'bg-[#2e7d32]',
-  normal: 'bg-slate-400',
+  problema: 'bg-magenta',
+  bien: 'bg-verde',
+  normal: 'bg-linea-oscura',
 };
 
 /** @returns "WhatsApp a Ana", "Correo a Ana" o solo el canal si no hay nombre */
@@ -112,9 +112,9 @@ function describir(paso: PasoAlerta): { texto: string; detalle: string | null; t
  * registradas: lo que informa el reloj usa la hora del reloj.
  */
 export function LineaTiempo({ pasos }: { pasos: PasoAlerta[] }) {
-  if (pasos.length === 0) return <p className="text-slate-500">Todavía no hay pasos registrados.</p>;
+  if (pasos.length === 0) return <p className="text-apagado">Todavía no hay pasos registrados.</p>;
   return (
-    <ol className="relative space-y-4 border-l-2 border-slate-200 pl-6">
+    <ol className="relative space-y-4 border-l-2 border-linea pl-6">
       {pasos.map((paso, i) => {
         const { texto, detalle, tono } = describir(paso);
         return (
@@ -123,9 +123,9 @@ export function LineaTiempo({ pasos }: { pasos: PasoAlerta[] }) {
               aria-hidden="true"
               className={`absolute -left-[31px] top-1.5 h-3 w-3 rounded-full ring-4 ring-white ${PUNTO[tono]}`}
             />
-            <p className={tono === 'problema' ? 'font-medium text-[#a1111a]' : 'text-tinta'}>{texto}</p>
-            {detalle && <p className="text-sm text-slate-600">{detalle}</p>}
-            <p className="text-xs text-slate-500">{formatearFechaHoraExacta(paso.fechaHora)}</p>
+            <p className={tono === 'problema' ? 'font-medium text-magenta' : 'text-tinta'}>{texto}</p>
+            {detalle && <p className="text-sm text-apagado">{detalle}</p>}
+            <p className="text-xs text-apagado">{formatearFechaHoraExacta(paso.fechaHora)}</p>
           </li>
         );
       })}

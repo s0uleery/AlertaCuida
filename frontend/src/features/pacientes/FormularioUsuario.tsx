@@ -11,6 +11,7 @@ import {
 } from '../../comun/estilos';
 import { hoyEnChile } from '../../comun/fechas';
 import { formatearRun, runValido } from '../../comun/run';
+import { EncabezadoVista } from '../../comun/ui/Panel';
 import { pacientesApi } from './pacientesApi';
 import type { DatosPaciente, NivelDependencia, Sexo } from './tipos';
 
@@ -51,7 +52,7 @@ export function FormularioUsuario() {
   }, [id]);
 
   if (!datos) {
-    return error ? <p className={CLASE_ERROR}>{error}</p> : <p className="text-slate-500">Cargando…</p>;
+    return error ? <p className={CLASE_ERROR}>{error}</p> : <p className="text-apagado">Cargando…</p>;
   }
 
   /** Actualiza un campo; un texto vacío se guarda como null (salvo los obligatorios). */
@@ -84,17 +85,23 @@ export function FormularioUsuario() {
   const texto = (campo: 'nombres' | 'apellidos' | 'alias' | 'direccion') => datos[campo] ?? '';
 
   return (
-    <div className="space-y-4">
-      <p className="text-slate-500">
-        <Link to="/usuarios" className="font-medium text-prlac hover:underline">
-          Usuarios
-        </Link>{' '}
-        › {id ? 'Editar usuario' : 'Nuevo usuario'}
-      </p>
+    <div>
+      <EncabezadoVista
+        migas={[
+          { texto: 'Usuarios', a: '/usuarios' },
+          ...(id ? [{ texto: 'Ficha', a: `/usuarios/${id}` }] : []),
+        ]}
+        titulo={id ? 'Editar registro' : 'Registro de persona usuaria'}
+        subtitulo={
+          id
+            ? 'Datos personales del usuario.'
+            : 'Datos personales. La persona cuidadora, los contactos, los umbrales y el reloj se completan en la ficha, después de guardar.'
+        }
+      />
 
       <section className={`${CLASE_TARJETA} space-y-4`}>
-        <h1 className="text-2xl font-medium text-tinta">{id ? 'Editar usuario' : 'Nuevo usuario'}</h1>
-        <form onSubmit={enviar} className="grid gap-4 sm:grid-cols-2" noValidate>
+        <h2 className="text-[14.5px] font-bold text-navy">Datos personales</h2>
+        <form onSubmit={enviar} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" noValidate>
           <label className="block">
             <span className={CLASE_ETIQUETA}>RUN</span>
             <input
@@ -107,7 +114,7 @@ export function FormularioUsuario() {
           </label>
           <label className="block">
             <span className={CLASE_ETIQUETA}>
-              Alias <span className="font-normal text-slate-400">(nombre corto para los mensajes)</span>
+              Alias <span className="font-normal text-apagado">(nombre corto para los mensajes)</span>
             </span>
             <input
               value={texto('alias')}
@@ -152,7 +159,7 @@ export function FormularioUsuario() {
               <option value="MASCULINO">Masculino</option>
             </select>
           </label>
-          <label className="block sm:col-span-2">
+          <label className="block sm:col-span-2 lg:col-span-3">
             <span className={CLASE_ETIQUETA}>Dirección</span>
             <input value={texto('direccion')} onChange={(e) => cambiar('direccion', e.target.value)} className={CLASE_CAMPO} />
           </label>
@@ -188,16 +195,16 @@ export function FormularioUsuario() {
               onChange={(e) => cambiar('fechaConsentimiento', e.target.value)}
               className={CLASE_CAMPO}
             />
-            <span className="mt-1 block text-xs text-slate-500">Sin consentimiento no se le puede entregar un reloj.</span>
+            <span className="mt-1 block text-xs text-apagado">Sin consentimiento no se le puede entregar un reloj.</span>
           </label>
   
           {error && (
-            <p role="alert" className={`${CLASE_ERROR} sm:col-span-2`}>
+            <p role="alert" className={`${CLASE_ERROR} sm:col-span-2 lg:col-span-3`}>
               {error}
             </p>
           )}
   
-          <div className="flex gap-2 sm:col-span-2">
+          <div className="flex gap-2 sm:col-span-2 lg:col-span-3">
             <button
               type="submit"
               disabled={enviando || !datos.run || !datos.nombres.trim() || !datos.apellidos.trim() || !datos.fechaIngreso}

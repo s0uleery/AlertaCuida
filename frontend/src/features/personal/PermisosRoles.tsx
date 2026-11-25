@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { ErrorApi } from '../../api/cliente';
-import { CLASE_ERROR, CLASE_ETIQUETA } from '../../comun/estilos';
+import { Aviso, Cargando, Vacio } from '../../comun/ui/Aviso';
+import { Boton } from '../../comun/ui/Boton';
+import { Panel } from '../../comun/ui/Panel';
+import { Segmentado } from '../../comun/ui/Pestanas';
+import { TABLA } from '../../comun/ui/Tabla';
 import { useDatos } from '../../comun/useDatos';
 import { useSesion } from '../sesion/SesionContext';
 import type { Accion, Modulo, Permiso } from '../sesion/tipos';
@@ -78,44 +82,36 @@ export function PermisosRoles() {
   }
 
   return (
-    <div className="space-y-4">
-      <h2 className="text-lg font-medium text-tinta">Permisos por rol</h2>
-
-      {error && <p className={CLASE_ERROR}>{error}</p>}
-      {cargando && !datos && <p className="text-slate-500">Cargando…</p>}
-      {!cargando && !error && roles.length === 0 && <p className="text-slate-500">No hay roles registrados.</p>}
+    <Panel titulo="Matriz de permisos por rol">
+      {error && <Aviso tono="error">{error}</Aviso>}
+      {cargando && !datos && <Cargando />}
+      {!cargando && !error && roles.length === 0 && <Vacio>No hay roles registrados.</Vacio>}
 
       {rol && (
-        <>
-          <label className="block w-60">
-            <span className={CLASE_ETIQUETA}>Rol</span>
-            <select
-              value={rol.codigo}
-              onChange={(e) => elegirRol(e.target.value)}
-              className="mt-1 w-full rounded-sm border border-slate-300 bg-white px-3 py-2"
-            >
-              {roles.map((r) => (
-                <option key={r.codigo} value={r.codigo}>
-                  {r.nombre || nombreRol(r.codigo)}
-                </option>
-              ))}
-            </select>
-          </label>
+        <div className="space-y-4">
+          <Segmentado
+            etiqueta="Rol"
+            opciones={roles.map((r) => ({ clave: r.codigo, texto: r.nombre || nombreRol(r.codigo) }))}
+            activa={rol.codigo}
+            alCambiar={elegirRol}
+          />
 
           {rol.esSistema && (
-            <p className="text-sm text-slate-500">
+            <Aviso tono="info">
               El administrador tiene todos los permisos y no se pueden cambiar, para que siempre haya alguien que
               administre las cuentas.
-            </p>
+            </Aviso>
           )}
 
-          <div className="overflow-x-auto rounded-lg border border-slate-200">
-            <table className="w-full text-sm">
-              <thead className="border-b border-slate-200 text-slate-500">
+          <div className={TABLA.contenedor}>
+            <table className={TABLA.tabla} aria-label={`Permisos de ${rol.nombre || nombreRol(rol.codigo)}`}>
+              <thead>
                 <tr>
-                  <th className="px-4 py-3 text-left font-medium">Módulo</th>
+                  <th scope="col" className={TABLA.th}>
+                    Módulo
+                  </th>
                   {ACCIONES.map((accion) => (
-                    <th key={accion.valor} className="px-4 py-3 text-center font-medium">
+                    <th key={accion.valor} scope="col" className={`${TABLA.th} text-center`}>
                       {accion.etiqueta}
                     </th>
                   ))}
@@ -123,19 +119,21 @@ export function PermisosRoles() {
               </thead>
               <tbody>
                 {MODULOS.map((modulo) => (
-                  <tr key={modulo.valor} className="border-b border-slate-100 last:border-0">
-                    <td className="px-4 py-3">{modulo.etiqueta}</td>
+                  <tr key={modulo.valor} className={TABLA.fila}>
+                    <th scope="row" className={`${TABLA.td} text-left font-bold text-navy`}>
+                      {modulo.etiqueta}
+                    </th>
                     {ACCIONES.map((accion) => {
                       const permiso: Permiso = `${modulo.valor}:${accion.valor}`;
                       return (
-                        <td key={accion.valor} className="px-4 py-3 text-center">
+                        <td key={accion.valor} className={`${TABLA.td} text-center`}>
                           <input
                             type="checkbox"
                             checked={marcados.has(permiso)}
                             onChange={() => alternar(permiso)}
                             disabled={!editable}
                             aria-label={`${modulo.etiqueta}: ${accion.etiqueta}`}
-                            className="size-4.5"
+                            className="size-4.5 accent-teal"
                           />
                         </td>
                       );
@@ -146,30 +144,22 @@ export function PermisosRoles() {
             </table>
           </div>
 
-          {errorGuardar && (
-            <p role="alert" className={CLASE_ERROR}>
-              {errorGuardar}
-            </p>
-          )}
+          {errorGuardar && <Aviso tono="error">{errorGuardar}</Aviso>}
 
           {editable && (
             <div className="flex flex-wrap items-center justify-end gap-3">
               {guardado && (
-                <span className="text-sm text-emerald-700">
+                <span role="status" className="text-[13px] text-verde-texto">
                   Permisos guardados. Se aplican cuando cada persona vuelve a iniciar sesión.
                 </span>
               )}
-              <button
-                onClick={guardar}
-                disabled={guardando || !editados}
-                className="rounded-sm bg-prlac px-4 py-2 font-medium text-white hover:bg-prlac-oscuro disabled:opacity-50"
-              >
+              <Boton variante="principal" onClick={guardar} disabled={guardando || !editados}>
                 {guardando ? 'Guardando…' : 'Guardar permisos'}
-              </button>
+              </Boton>
             </div>
           )}
-        </>
+        </div>
       )}
-    </div>
+    </Panel>
   );
 }

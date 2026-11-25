@@ -88,6 +88,7 @@ export type AccionAuditoria =
 
 /** Valores de registro_auditoria.entidad. */
 export type EntidadAuditoria =
+  | 'CALENDARIO'
   | 'PACIENTE'
   | 'FICHA_PACIENTE'
   | 'CONDICION_PACIENTE'

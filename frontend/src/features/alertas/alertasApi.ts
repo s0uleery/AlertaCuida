@@ -1,5 +1,5 @@
 import { pedir } from '../../api/cliente';
-import type { ClasificacionAlerta, DetalleAlerta, ResumenAlerta } from './tipos';
+import type { ClasificacionAlerta, DestinoDerivacion, DetalleAlerta, ResumenAlerta, TipoSeguimiento } from './tipos';
 
 /** Llamadas al backend para alertas. Ver exige ALERTAS:VER; actuar, ALERTAS:EDITAR. */
 export const alertasApi = {
@@ -37,4 +37,16 @@ export const alertasApi = {
 
   /** Termina el seguimiento de una alerta POSITIVA. */
   cerrarSeguimiento: (id: string) => pedir<void>(`/alertas/${id}/seguimiento/cerrar`, { method: 'POST' }),
+
+  /**
+   * Registra una gestión del equipo en la bitácora del caso (llamada, visita, derivación o nota).
+   *
+   * @param destino código de GET /destinos-derivacion; solo en DERIVACION
+   * @param nota obligatoria salvo en DERIVACION
+   */
+  registrarSeguimiento: (id: string, tipo: TipoSeguimiento, destino: string | null, nota: string | null) =>
+    pedir<{ id: string }>(`/alertas/${id}/seguimiento`, { method: 'POST', body: JSON.stringify({ tipo, destino, nota }) }),
+
+  /** Los destinos de derivación activos, por nombre. */
+  destinosDerivacion: () => pedir<DestinoDerivacion[]>('/destinos-derivacion'),
 };

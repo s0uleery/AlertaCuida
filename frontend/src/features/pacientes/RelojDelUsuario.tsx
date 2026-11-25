@@ -74,14 +74,14 @@ export function RelojDelUsuario({ detalle, alCambiar }: Props) {
   return (
     <div className="space-y-4">
       {emparejado && (
-        <p role="status" className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+        <p role="status" className="rounded-md bg-verde-tinte px-3 py-2 text-sm text-verde-texto">
           Reloj emparejado. En unos segundos el reloj mostrará que quedó listo y descargará su configuración.
         </p>
       )}
 
       {vigente ? (
         <>
-          <p className="text-slate-700">
+          <p className="text-texto">
             Usa el reloj <strong className="font-mono">{vigente.identificadorReloj}</strong> desde el{' '}
             {formatearFechaHora(vigente.inicio)}.
           </p>
@@ -89,11 +89,11 @@ export function RelojDelUsuario({ detalle, alCambiar }: Props) {
           <ConfiguracionDelReloj idPaciente={paciente.id} idAsignacion={vigente.idAsignacion} />
         </>
       ) : (
-        <p className="text-slate-500">No tiene reloj.</p>
+        <p className="text-apagado">No tiene reloj.</p>
       )}
 
       {editable && !paciente.datos.fechaConsentimiento && (
-        <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        <p className="rounded-md bg-naranja-tinte px-3 py-2 text-sm text-naranja-texto">
           Para entregarle un reloj, primero registra la fecha del consentimiento informado.
         </p>
       )}
@@ -178,8 +178,8 @@ interface PropsEmparejar {
 function EmparejarDeNuevo({ trabajando, alCancelar, alEmparejar }: PropsEmparejar) {
   const [codigo, setCodigo] = useState('');
   return (
-    <div className="space-y-3 rounded-md border border-slate-200 p-4">
-      <p className="text-sm text-slate-600">
+    <div className="space-y-3 rounded-md border border-linea p-4">
+      <p className="text-sm text-apagado">
         Úsalo si el reloj se restauró o perdió su vínculo: el token anterior deja de servir.
       </p>
       <CampoCodigo valor={codigo} alCambiar={setCodigo} />
@@ -213,7 +213,7 @@ function CampoCodigo({ valor, alCambiar }: { valor: string; alCambiar: (valor: s
         spellCheck={false}
         className={`${CLASE_CAMPO} font-mono tracking-widest`}
       />
-      <span className="mt-1 block text-xs text-slate-500">{AYUDA_CODIGO}</span>
+      <span className="mt-1 block text-xs text-apagado">{AYUDA_CODIGO}</span>
     </label>
   );
 }
@@ -237,7 +237,7 @@ function ElegirReloj({ reemplazo, trabajando, alCancelar, alElegir }: PropsElegi
   const [estadoAnterior, setEstadoAnterior] = useState<EstadoReloj | ''>('EN_REPARACION');
 
   return (
-    <div className="space-y-3 rounded-md border border-slate-200 p-4">
+    <div className="space-y-3 rounded-md border border-linea p-4">
       {error && <p className={CLASE_ERROR}>{error}</p>}
       <label className="block">
         <span className={CLASE_ETIQUETA}>{reemplazo ? 'Reloj nuevo' : 'Reloj a entregar'}</span>
@@ -290,7 +290,7 @@ function EstadoDelReloj({ idDispositivo }: { idDispositivo: string }) {
   const { datos, error } = useDatos(relojesApi.estado, idDispositivo);
   if (error) return null;
   return (
-    <div className="rounded-md border border-slate-200 px-3 py-2">
+    <div className="rounded-md border border-linea px-3 py-2">
       <SemaforoReloj estado={datos?.find((estado) => estado.idDispositivo === idDispositivo)} detalle />
     </div>
   );

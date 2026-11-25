@@ -48,7 +48,8 @@ La regla está fija en el código (`ReglaEnrutamiento`). El horario de cada cont
 | `MEDIA` | Avisa a los contactos | Avisa a los contactos disponibles a esa hora |
 | `GRAVE` | Avisa a los contactos | Avisa a los contactos disponibles a esa hora |
 
-- **Horario hábil:** lunes a jueves de 08:30 a 17:30 y viernes de 08:30 a 16:30, hora de Chile, sin feriados nacionales. El inicio cuenta y el fin no: a las 17:30 en punto ya es fuera de horario.
+- **Horario hábil:** al inicio, lunes a jueves de 08:30 a 17:30 y viernes de 08:30 a 16:30, hora de Chile, sin feriados nacionales. El inicio cuenta y el fin no: a las 17:30 en punto ya es fuera de horario. Desde el 25-11-2026 la jornada se edita en Calendario > Jornada hábil y feriados (`ADMINISTRACION:EDITAR`) y rige al tiro, también para el reloj; queda en la auditoría. Los feriados no se editan desde el dashboard.
+- **Simulador de canales** (Calendario, 25-11-2026): con un día, una hora, una gravedad y, si se quiere, un usuario, muestra qué haría el sistema con estas mismas reglas: si espera al día hábil, si avisa a la oficina PRLAC y a qué contactos avisaría el reloj, en orden. No avisa a nadie.
 - Cada paciente debe tener contactos disponibles a toda hora, porque las medias y las graves avisan siempre.
 - Con el botón de ayuda van primero los contactos `VECINO`, por prioridad, y después el resto, por prioridad.
 
@@ -209,7 +210,8 @@ Los de `application.properties` requieren reiniciar el backend.
 | Sin noticias del reloj antes de que avise el vigilante del escalamiento | 15 minutos | `alertacuida.escalamiento.plazo` |
 | Qué alertas van por correo a `recibe_avisos` | Las técnicas | `TipoEvento.tecnicas()` |
 | Texto de los correos | Ver arriba | `app/src/main/resources/correos.yml` |
-| Horario hábil y feriados | Ver arriba | `app/src/main/resources/calendario.yml` |
+| Horario hábil | Ver arriba | Calendario > Jornada hábil y feriados (tabla `horario_habil`); el valor inicial en `calendario.yml` |
+| Feriados | Ver arriba | `app/src/main/resources/calendario.yml` |
 | Gravedad de cada técnica | Tabla de tipos | Código de cada regla (`ReglaSilencioDatos`, `ReglaBateriaBaja`, `ReglaRelojNoPuesto`) y `RecibirAlerta` |
 | Atraso del semáforo de relojes (amarillo) | Más de 2 h 30 min sin sincronizar | `alertacuida.relojes.atraso` |
 | Aviso de plan de datos por vencer (semáforo) | 30 días | `alertacuida.relojes.aviso-plan-dias` |

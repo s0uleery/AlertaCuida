@@ -33,3 +33,27 @@ export interface Calendario {
   /** Ordenados por fecha */
   feriados: Feriado[];
 }
+
+/** Un contacto en el orden en que el reloj le avisaría (GET /api/calendario/simulacion). */
+export interface PasoSimulado {
+  orden: number;
+  nombre: string;
+  /** FAMILIA, VECINO, PRLAC, SEGURIDAD_CIUDADANA… */
+  tipo: string;
+  parentesco: string | null;
+  cuidadorPrincipal: boolean;
+  canales: ('WHATSAPP' | 'CORREO')[];
+}
+
+/** Qué pasaría con una alerta de salud, con las reglas que el sistema aplica hoy. */
+export interface Simulacion {
+  /** Dentro del horario hábil y no es feriado */
+  habil: boolean;
+  feriado: boolean;
+  /** Leve fuera de horario: no avisa a nadie y espera al día hábil */
+  esperaDiaHabil: boolean;
+  /** Se avisa a los coordinadores de la oficina PRLAC */
+  avisoOficina: boolean;
+  /** A quiénes avisaría el reloj, en orden; vacía sin usuario o si espera al día hábil */
+  contactos: PasoSimulado[];
+}

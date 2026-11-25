@@ -75,10 +75,41 @@ export async function pedir<T>(ruta: string, opciones: RequestInit = {}): Promis
   return (await respuesta.json()) as T;
 }
 
+/**
+ * Descarga un archivo del backend (por ejemplo, un reporte en Excel o PDF) con el token de la sesión, y lo guarda
+ * con el nombre que propone el servidor.
+ *
+ * @param ruta        sin el prefijo /api
+ * @param nombrePorDefecto si el servidor no propone uno
+ * @throws ErrorApi si el backend responde con error
+ */
+export async function descargar(ruta: string, nombrePorDefecto: string): Promise<void> {
+  const opciones: RequestInit = { headers: { Accept: '*/*' } };
+  let respuesta = await enviar(ruta, opciones, true);
+  if (respuesta.status === 401 && tokenActual()) {
+    if (await renovarToken()) respuesta = await enviar(ruta, opciones, true);
+    if (respuesta.status === 401) alExpirar();
+  }
+  if (!respuesta.ok) {
+    const { mensaje, codigo } = await leerError(respuesta);
+    throw new ErrorApi(respuesta.status, mensaje, codigo);
+  }
+  const disposicion = respuesta.headers.get('Content-Disposition') ?? '';
+  const nombre = /filename="?([^";]+)"?/.exec(disposicion)?.[1] ?? nombrePorDefecto;
+  const url = URL.createObjectURL(await respuesta.blob());
+  const enlace = document.createElement('a');
+  enlace.href = url;
+  enlace.download = nombre;
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+  URL.revokeObjectURL(url);
+}
+
 /** Hace la petición con las cabeceras de la API y, si corresponde, con el token actual. */
 function enviar(ruta: string, opciones: RequestInit, conToken: boolean): Promise<Response> {
   const cabeceras = new Headers(opciones.headers);
-  cabeceras.set('Accept', 'application/json');
+  if (!cabeceras.has('Accept')) cabeceras.set('Accept', 'application/json');
   if (opciones.body) {
     cabeceras.set('Content-Type', 'application/json');
   }

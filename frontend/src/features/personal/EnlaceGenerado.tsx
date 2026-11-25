@@ -58,7 +58,7 @@ export function EnlaceGenerado({ enlace: inicial, nombre, alTerminar }: Props) {
   return (
     <div className="space-y-4">
       {enlace.correoEnviado ? (
-        <div role="status" className="rounded-md bg-emerald-50 px-4 py-3 text-emerald-900">
+        <div role="status" className="rounded-md bg-verde-tinte px-4 py-3 text-verde-texto">
           <p className="font-medium">Cuenta creada para {nombre}.</p>
           <p className="text-sm">
             {reenviado ? 'Le enviamos un enlace nuevo' : 'Le enviamos un correo'} para que elija su contraseña. El
@@ -70,7 +70,7 @@ export function EnlaceGenerado({ enlace: inicial, nombre, alTerminar }: Props) {
         </div>
       ) : (
         <>
-          <div role="alert" className="rounded-md bg-amber-50 px-4 py-3 text-amber-900">
+          <div role="alert" className="rounded-md bg-naranja-tinte px-4 py-3 text-naranja-texto">
             <p className="font-medium">Cuenta creada para {nombre}, pero no se pudo enviar el correo.</p>
             <p className="text-sm">
               Pásale este enlace por otra vía para que elija su contraseña. Sirve una sola vez y vence el{' '}
@@ -86,7 +86,7 @@ export function EnlaceGenerado({ enlace: inicial, nombre, alTerminar }: Props) {
             className={`${CLASE_CAMPO} font-mono text-sm`}
           />
 
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-apagado">
             Este enlace no se vuelve a mostrar. Si se pierde o vence, genera otro: el anterior deja de servir.
           </p>
         </>
