@@ -16,17 +16,24 @@ import cl.ucn.alertacuida.application.contacto.puerto.AvisoCambioContactos;
 import cl.ucn.alertacuida.application.contacto.puerto.Contactos;
 import cl.ucn.alertacuida.application.contacto.puerto.HashMedioContacto;
 import cl.ucn.alertacuida.application.paciente.puerto.Pacientes;
+import cl.ucn.alertacuida.domain.alerta.Severidad;
 import cl.ucn.alertacuida.domain.contacto.Cobertura;
 import cl.ucn.alertacuida.domain.contacto.Correo;
 import cl.ucn.alertacuida.domain.contacto.Horario;
 import cl.ucn.alertacuida.domain.contacto.NumeroWhatsapp;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -41,6 +48,10 @@ import java.util.stream.Stream;
  *
  * <p>El SAMU y los números de emergencia no pueden ser contactos: el mensaje de una alerta grave
  * ya pide llamar al 131.
+ *
+ * <p>Cada gravedad (leve, media, grave) tiene su propia lista ordenada, y un contacto puede estar en varias
+ * con un lugar distinto en cada una: una alerta recorre solo la lista de su gravedad. Mientras el paciente
+ * tenga contactos activos, ninguna gravedad puede quedar vacía; por eso el primero va en las tres.
  */
 public class ContactosPaciente {
 
@@ -82,15 +93,18 @@ public class ContactosPaciente {
 	}
 
 	/**
-	 * @return primero los activos por prioridad, luego los desactivados por nombre, con las horas
-	 *         en que ningún contacto activo puede recibir avisos
+	 * @return primero los activos por su lugar en leve, luego en media y luego en grave; después los
+	 *         desactivados por nombre, con las horas en que ningún contacto activo puede recibir avisos
 	 * @throws NoEncontrado si el paciente no existe
 	 */
 	public ListaContactos listar(UUID idPaciente) {
 		exigirPaciente(idPaciente);
 		List<ContactoDelPaciente> todos = contactos.delPaciente(idPaciente);
-		Stream<ContactoDelPaciente> activos = todos.stream().filter(ContactoDelPaciente::activo)
-				.sorted(Comparator.comparingInt(ContactoDelPaciente::prioridad));
+		Comparator<Integer> vaciosAlFinal = Comparator.nullsLast(Comparator.naturalOrder());
+		Comparator<ContactoDelPaciente> porOrden = Comparator.comparing(c -> c.orden(Severidad.LEVE), vaciosAlFinal);
+		porOrden = porOrden.thenComparing(c -> c.orden(Severidad.MEDIA), vaciosAlFinal)
+				.thenComparing(c -> c.orden(Severidad.GRAVE), vaciosAlFinal);
+		Stream<ContactoDelPaciente> activos = todos.stream().filter(ContactoDelPaciente::activo).sorted(porOrden);
 		Stream<ContactoDelPaciente> inactivos = todos.stream().filter(contacto -> !contacto.activo())
 				.sorted(Comparator.comparing(contacto -> contacto.persona().nombre(), String.CASE_INSENSITIVE_ORDER));
 		List<Horario> disponibles = todos.stream().filter(ContactoDelPaciente::disponible)
@@ -100,15 +114,17 @@ public class ContactosPaciente {
 	}
 
 	/**
-	 * Agrega un contacto al final de la lista. Si su WhatsApp o su correo ya son de una persona
-	 * registrada, se vincula esa persona: se actualiza su nombre y se completa el medio que le faltaba.
+	 * Agrega un contacto al final de la lista de cada gravedad elegida. Si su WhatsApp o su correo ya son
+	 * de una persona registrada, se vincula esa persona: se actualiza su nombre y se completa el medio que le
+	 * faltaba.
 	 *
 	 * @param datos     lo ingresado por el equipo
 	 * @param idUsuario quien lo agrega, para la auditoría
 	 * @param ip        desde dónde llegó la petición, para la auditoría
 	 * @return el identificador del vínculo (el que conoce el reloj)
 	 * @throws NoEncontrado       si el paciente no existe
-	 * @throws SolicitudRechazada si un dato no cumple las reglas (incluido ingresar al SAMU)
+	 * @throws SolicitudRechazada si un dato no cumple las reglas (incluido ingresar al SAMU), no elige ninguna
+	 *                            gravedad, o es el primer contacto activo y no va en las tres
 	 * @throws Conflicto          si la persona ya es contacto del paciente, o el WhatsApp y el correo
 	 *                            son de personas distintas
 	 */
@@ -116,19 +132,19 @@ public class ContactosPaciente {
 		exigirPaciente(idPaciente);
 		DatosPersona persona = validarPersona(datos);
 		Vinculo vinculo = validarVinculo(datos);
+		List<ContactoDelPaciente> actuales = contactos.delPaciente(idPaciente);
+		Set<Severidad> gravedades = validarGravedades(datos.gravedades(), actuales);
 		Optional<Persona> existente = personaExistente(persona, null);
-		List<ContactoDelPaciente> lista = contactos.delPaciente(idPaciente);
 		if (existente.isPresent()) {
 			UUID idPersona = existente.get().id();
-			lista.stream().filter(contacto -> contacto.persona().id().equals(idPersona)).findFirst()
+			actuales.stream().filter(contacto -> contacto.persona().id().equals(idPersona)).findFirst()
 					.ifPresent(contacto -> {
 						throw new Conflicto(contacto.activo()
 								? "Esa persona ya es contacto del usuario"
 								: "Esa persona es un contacto desactivado del usuario: reactívalo");
 					});
 		}
-		int prioridad = lista.stream().filter(ContactoDelPaciente::activo)
-				.mapToInt(ContactoDelPaciente::prioridad).max().orElse(0) + 1;
+		Map<Severidad, List<UUID>> listas = listas(actuales);
 		Instant ahora = reloj.instant();
 		UUID creado = transacciones.ejecutar(() -> {
 			UUID idPersona;
@@ -143,7 +159,10 @@ public class ContactosPaciente {
 			if (vinculo.cuidadorPrincipal()) {
 				contactos.quitarCuidadorPrincipal(idPaciente);
 			}
-			UUID id = contactos.vincular(idPaciente, idPersona, vinculo, prioridad);
+			UUID id = contactos.vincular(idPaciente, idPersona, vinculo);
+			for (Severidad gravedad : gravedades) {
+				contactos.ordenar(idPaciente, gravedad, conAlFinal(listas.get(gravedad), id));
+			}
 			auditoria.registrar(idUsuario, "CREAR", "CONTACTO_PACIENTE", id.toString(), ip, ahora);
 			return id;
 		});
@@ -153,21 +172,40 @@ public class ContactosPaciente {
 
 	/**
 	 * Reemplaza los datos de un contacto. Nombre, WhatsApp y correo son de la persona y cambian en
-	 * todos sus pacientes; si cambia el WhatsApp, el opt-in se pierde (era del número anterior).
+	 * todos sus pacientes; si cambia el WhatsApp, el opt-in se pierde (era del número anterior). En un
+	 * contacto activo, una gravedad nueva lo deja al final de esa lista y una que se quita sube a los
+	 * siguientes; en uno desactivado las gravedades no se usan (se eligen al reactivarlo).
 	 *
 	 * @param idContactoPaciente el vínculo a editar
 	 * @throws NoEncontrado       si el paciente no existe, o el contacto no existe o es de otro paciente
-	 * @throws SolicitudRechazada si un dato no cumple las reglas
-	 * @throws Conflicto          si el WhatsApp o el correo ya son de otra persona
+	 * @throws SolicitudRechazada si un dato no cumple las reglas, o un contacto activo queda sin gravedades
+	 * @throws Conflicto          si el WhatsApp o el correo ya son de otra persona, o una gravedad quedaría sin
+	 *                            contactos
 	 */
 	public void editar(UUID idPaciente, UUID idContactoPaciente, DatosContacto datos, UUID idUsuario, String ip) {
 		exigirPaciente(idPaciente);
-		ContactoDelPaciente actual = buscar(idPaciente, idContactoPaciente);
+		List<ContactoDelPaciente> todos = contactos.delPaciente(idPaciente);
+		ContactoDelPaciente actual = buscar(todos, idContactoPaciente);
 		DatosPersona persona = validarPersona(datos);
 		Vinculo vinculo = validarVinculo(datos);
 		if (vinculo.cuidadorPrincipal() && !actual.activo()) {
 			throw new SolicitudRechazada("Un contacto desactivado no puede ser el cuidador principal");
 		}
+		Map<Severidad, List<UUID>> antes = listas(todos);
+		Map<Severidad, List<UUID>> despues = antes;
+		if (actual.activo()) {
+			Set<Severidad> gravedades = validarGravedades(datos.gravedades(), todos);
+			despues = new EnumMap<>(Severidad.class);
+			for (Severidad gravedad : Severidad.values()) {
+				List<UUID> lista = antes.get(gravedad);
+				boolean estaba = lista.contains(idContactoPaciente);
+				boolean queda = gravedades.contains(gravedad);
+				despues.put(gravedad, estaba == queda ? lista
+						: queda ? conAlFinal(lista, idContactoPaciente) : sin(lista, idContactoPaciente));
+			}
+			exigirSinVacias(despues);
+		}
+		Map<Severidad, List<UUID>> nuevas = despues;
 		UUID idPersona = actual.persona().id();
 		personaExistente(persona, idPersona);
 		boolean cambiaWhatsapp = !Objects.equals(actual.persona().whatsapp(), persona.whatsapp());
@@ -182,6 +220,7 @@ public class ContactosPaciente {
 				contactos.quitarCuidadorPrincipal(idPaciente);
 			}
 			contactos.actualizarVinculo(idContactoPaciente, vinculo);
+			guardarCambios(idPaciente, antes, nuevas);
 			auditoria.registrar(idUsuario, "MODIFICAR", "CONTACTO_PACIENTE", idContactoPaciente.toString(), ip,
 					ahora);
 			return null;
@@ -221,24 +260,26 @@ public class ContactosPaciente {
 	}
 
 	/**
-	 * Saca al contacto de la lista sin borrarlo (sus avisos quedan en el historial). Los demás
-	 * suben de prioridad para no dejar huecos.
+	 * Saca al contacto de la lista sin borrarlo (sus avisos quedan en el historial). En cada gravedad
+	 * donde estaba, los siguientes suben para no dejar huecos.
 	 *
 	 * @throws NoEncontrado si el paciente o el contacto no existen
+	 * @throws Conflicto    si era el único contacto de alguna gravedad
 	 */
 	public void desactivar(UUID idPaciente, UUID idContactoPaciente, UUID idUsuario, String ip) {
 		exigirPaciente(idPaciente);
-		ContactoDelPaciente contacto = buscar(idPaciente, idContactoPaciente);
-		if (!contacto.activo()) {
+		List<ContactoDelPaciente> todos = contactos.delPaciente(idPaciente);
+		if (!buscar(todos, idContactoPaciente).activo()) {
 			return;
 		}
-		List<UUID> restantes = activosPorPrioridad(idPaciente).stream()
-				.filter(id -> !id.equals(idContactoPaciente))
-				.toList();
+		Map<Severidad, List<UUID>> antes = listas(todos);
+		Map<Severidad, List<UUID>> despues = new EnumMap<>(Severidad.class);
+		antes.forEach((gravedad, lista) -> despues.put(gravedad, sin(lista, idContactoPaciente)));
+		exigirSinVacias(despues);
 		Instant ahora = reloj.instant();
 		transacciones.ejecutar(() -> {
 			contactos.desactivar(idContactoPaciente);
-			contactos.reordenar(idPaciente, restantes);
+			guardarCambios(idPaciente, antes, despues);
 			auditoria.registrar(idUsuario, "MODIFICAR", "CONTACTO_PACIENTE", idContactoPaciente.toString(), ip,
 					ahora);
 			return null;
@@ -247,19 +288,27 @@ public class ContactosPaciente {
 	}
 
 	/**
-	 * Vuelve a poner al contacto en la lista, al final.
+	 * Vuelve a poner al contacto en la lista, al final de cada gravedad elegida.
 	 *
-	 * @throws NoEncontrado si el paciente o el contacto no existen
+	 * @param gravedades de qué alertas vuelve a recibir avisos
+	 * @throws NoEncontrado       si el paciente o el contacto no existen
+	 * @throws SolicitudRechazada si no se elige ninguna gravedad, o es el único contacto activo y no va en las tres
 	 */
-	public void reactivar(UUID idPaciente, UUID idContactoPaciente, UUID idUsuario, String ip) {
+	public void reactivar(UUID idPaciente, UUID idContactoPaciente, Set<Severidad> gravedades, UUID idUsuario,
+			String ip) {
 		exigirPaciente(idPaciente);
-		if (buscar(idPaciente, idContactoPaciente).activo()) {
+		List<ContactoDelPaciente> todos = contactos.delPaciente(idPaciente);
+		if (buscar(todos, idContactoPaciente).activo()) {
 			return;
 		}
-		int prioridad = activosPorPrioridad(idPaciente).size() + 1;
+		Set<Severidad> elegidas = validarGravedades(gravedades, todos);
+		Map<Severidad, List<UUID>> listas = listas(todos);
 		Instant ahora = reloj.instant();
 		transacciones.ejecutar(() -> {
-			contactos.reactivar(idContactoPaciente, prioridad);
+			contactos.reactivar(idContactoPaciente);
+			for (Severidad gravedad : elegidas) {
+				contactos.ordenar(idPaciente, gravedad, conAlFinal(listas.get(gravedad), idContactoPaciente));
+			}
 			auditoria.registrar(idUsuario, "MODIFICAR", "CONTACTO_PACIENTE", idContactoPaciente.toString(), ip,
 					ahora);
 			return null;
@@ -268,24 +317,29 @@ public class ContactosPaciente {
 	}
 
 	/**
-	 * Cambia el orden en que el reloj avisa a los contactos.
+	 * Cambia el orden en que el reloj avisa a los contactos en las alertas de esa gravedad.
 	 *
-	 * @param orden todos los contactos activos del paciente, del primero al último
+	 * @param gravedad la lista que se ordena
+	 * @param orden    todos los contactos de esa gravedad, del primero al último
 	 * @throws NoEncontrado       si el paciente no existe
-	 * @throws SolicitudRechazada si falta o sobra algún contacto activo, o se repite alguno
+	 * @throws SolicitudRechazada si falta la gravedad, falta o sobra algún contacto de ella, o se repite alguno
 	 */
-	public void reordenar(UUID idPaciente, List<UUID> orden, UUID idUsuario, String ip) {
+	public void reordenar(UUID idPaciente, Severidad gravedad, List<UUID> orden, UUID idUsuario, String ip) {
 		exigirPaciente(idPaciente);
-		List<UUID> actual = activosPorPrioridad(idPaciente);
+		if (gravedad == null) {
+			throw new SolicitudRechazada("Indica la gravedad que se ordena");
+		}
+		List<UUID> actual = listas(contactos.delPaciente(idPaciente)).get(gravedad);
 		if (orden == null || orden.size() != actual.size() || !new HashSet<>(orden).equals(new HashSet<>(actual))) {
-			throw new SolicitudRechazada("El orden debe incluir una vez a cada contacto activo");
+			throw new SolicitudRechazada("El orden debe incluir una vez a cada contacto de las alertas "
+					+ plural(gravedad));
 		}
 		if (orden.equals(actual)) {
 			return;
 		}
 		Instant ahora = reloj.instant();
 		transacciones.ejecutar(() -> {
-			contactos.reordenar(idPaciente, orden);
+			contactos.ordenar(idPaciente, gravedad, orden);
 			for (int i = 0; i < orden.size(); i++) {
 				if (!orden.get(i).equals(actual.get(i))) {
 					auditoria.registrar(idUsuario, "MODIFICAR", "CONTACTO_PACIENTE", orden.get(i).toString(), ip,
@@ -297,13 +351,71 @@ public class ContactosPaciente {
 		avisoCambio.listaCambiada(idPaciente);
 	}
 
-	/** @return los vínculos activos del paciente, por prioridad */
-	private List<UUID> activosPorPrioridad(UUID idPaciente) {
-		return contactos.delPaciente(idPaciente).stream()
-				.filter(ContactoDelPaciente::activo)
-				.sorted(Comparator.comparingInt(ContactoDelPaciente::prioridad))
-				.map(ContactoDelPaciente::id)
-				.toList();
+	/** @return la lista de cada gravedad: los vínculos activos que están en ella, del primero al último */
+	private static Map<Severidad, List<UUID>> listas(List<ContactoDelPaciente> todos) {
+		Map<Severidad, List<UUID>> listas = new EnumMap<>(Severidad.class);
+		for (Severidad gravedad : Severidad.values()) {
+			listas.put(gravedad, todos.stream()
+					.filter(contacto -> contacto.activo() && contacto.orden(gravedad) != null)
+					.sorted(Comparator.comparing(contacto -> contacto.orden(gravedad)))
+					.map(ContactoDelPaciente::id)
+					.toList());
+		}
+		return listas;
+	}
+
+	/** Guarda solo las listas que cambiaron. */
+	private void guardarCambios(UUID idPaciente, Map<Severidad, List<UUID>> antes, Map<Severidad, List<UUID>> despues) {
+		despues.forEach((gravedad, lista) -> {
+			if (!lista.equals(antes.get(gravedad))) {
+				contactos.ordenar(idPaciente, gravedad, lista);
+			}
+		});
+	}
+
+	/**
+	 * @param actuales la lista del paciente, para saber si el contacto sería el primero activo
+	 * @return las gravedades elegidas
+	 * @throws SolicitudRechazada si no hay ninguna, o el paciente no tiene contactos activos y no se eligen las tres
+	 */
+	private static Set<Severidad> validarGravedades(Set<Severidad> gravedades, List<ContactoDelPaciente> actuales) {
+		if (gravedades == null || gravedades.isEmpty() || gravedades.contains(null)) {
+			throw new SolicitudRechazada("Elige de qué alertas recibe avisos: leves, medias o graves");
+		}
+		Set<Severidad> elegidas = EnumSet.copyOf(gravedades);
+		boolean primero = actuales.stream().noneMatch(ContactoDelPaciente::activo);
+		if (primero && elegidas.size() < Severidad.values().length) {
+			throw new SolicitudRechazada("El primer contacto debe recibir avisos de las tres gravedades: leves, "
+					+ "medias y graves");
+		}
+		return elegidas;
+	}
+
+	/** @throws Conflicto si alguna gravedad quedaría sin contactos */
+	private static void exigirSinVacias(Map<Severidad, List<UUID>> listas) {
+		listas.forEach((gravedad, lista) -> {
+			if (lista.isEmpty()) {
+				throw new Conflicto("Las alertas " + plural(gravedad) + " se quedarían sin contactos: agrega otro "
+						+ "contacto a esa gravedad antes");
+			}
+		});
+	}
+
+	/** @return la lista con ese vínculo al final */
+	private static List<UUID> conAlFinal(List<UUID> lista, UUID id) {
+		List<UUID> nueva = new ArrayList<>(lista);
+		nueva.add(id);
+		return nueva;
+	}
+
+	/** @return la lista sin ese vínculo */
+	private static List<UUID> sin(List<UUID> lista, UUID id) {
+		return lista.stream().filter(otro -> !otro.equals(id)).toList();
+	}
+
+	/** @return "leves", "medias" o "graves" */
+	private static String plural(Severidad gravedad) {
+		return gravedad.name().toLowerCase(Locale.ROOT) + "s";
 	}
 
 	/**
@@ -342,7 +454,8 @@ public class ContactosPaciente {
 	/**
 	 * Valida tipo, parentesco y horario.
 	 *
-	 * @throws SolicitudRechazada si el tipo no existe, hay parentesco sin ser familia, o el horario no sirve
+	 * @throws SolicitudRechazada si el tipo no existe, hay parentesco sin ser tercero significativo, o el horario
+	 *                            no sirve
 	 */
 	private Vinculo validarVinculo(DatosContacto datos) {
 		boolean tipoValido = datos.tipo() != null
@@ -352,8 +465,8 @@ public class ContactosPaciente {
 		}
 		String parentesco = datos.parentesco() == null || datos.parentesco().isBlank()
 				? null : datos.parentesco().strip();
-		if (parentesco != null && !TipoContacto.FAMILIA.equals(datos.tipo())) {
-			throw new SolicitudRechazada("El parentesco solo se indica si el contacto es familiar");
+		if (parentesco != null && !TipoContacto.TERCERO_SIGNIFICATIVO.equals(datos.tipo())) {
+			throw new SolicitudRechazada("El parentesco solo se indica si el contacto es un tercero significativo");
 		}
 		if (parentesco != null && parentesco.length() > LARGO_MAXIMO_PARENTESCO) {
 			throw new SolicitudRechazada("El parentesco no puede tener más de " + LARGO_MAXIMO_PARENTESCO
@@ -415,7 +528,15 @@ public class ContactosPaciente {
 
 	/** @throws NoEncontrado si el contacto no existe o es de otro paciente */
 	private ContactoDelPaciente buscar(UUID idPaciente, UUID idContactoPaciente) {
-		return contactos.delPaciente(idPaciente).stream()
+		return buscar(contactos.delPaciente(idPaciente), idContactoPaciente);
+	}
+
+	/**
+	 * @param todos la lista del paciente
+	 * @throws NoEncontrado si el contacto no está en ella
+	 */
+	private static ContactoDelPaciente buscar(List<ContactoDelPaciente> todos, UUID idContactoPaciente) {
+		return todos.stream()
 				.filter(contacto -> contacto.id().equals(idContactoPaciente))
 				.findFirst()
 				.orElseThrow(() -> new NoEncontrado("El usuario no tiene ese contacto"));

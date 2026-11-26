@@ -229,7 +229,8 @@ class SolicitarAvisoTest {
 	private static ContactoDelPaciente contacto(UUID id, String whatsapp, String correo, Instant optIn,
 			Instant revocacion, boolean activo) {
 		Persona persona = new Persona(UUID.randomUUID(), "Persona", whatsapp, correo, optIn, revocacion);
-		return new ContactoDelPaciente(id, persona, new Vinculo("FAMILIA", null, false, null), 1, activo, 0);
+		return new ContactoDelPaciente(id, persona, new Vinculo("TERCERO_SIGNIFICATIVO", null, false, null),
+				activo ? Map.of(Severidad.GRAVE, 1) : Map.of(), activo, 0);
 	}
 
 	/** Alertas guardadas en memoria; el estado pasa a AVISANDO_CONTACTO al encolar el primer aviso. */

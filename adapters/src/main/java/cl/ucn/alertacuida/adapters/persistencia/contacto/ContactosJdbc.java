@@ -8,12 +8,14 @@ import cl.ucn.alertacuida.application.contacto.modelo.Persona;
 import cl.ucn.alertacuida.application.contacto.modelo.TipoContacto;
 import cl.ucn.alertacuida.application.contacto.modelo.Vinculo;
 import cl.ucn.alertacuida.application.contacto.puerto.Contactos;
+import cl.ucn.alertacuida.domain.alerta.Severidad;
 import cl.ucn.alertacuida.domain.contacto.Horario;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,8 +25,9 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * Personas de contacto (tabla contacto) y la lista de cada paciente (contacto_paciente). Nombre,
- * WhatsApp y correo (marcados "cifrado" en V2) se cifran aquí; se buscan por su hash.
+ * Personas de contacto (tabla contacto) y la lista de cada paciente (contacto_paciente, con su orden por
+ * gravedad en orden_contacto). Nombre, WhatsApp y correo (marcados "cifrado" en V2) se cifran aquí; se
+ * buscan por su hash.
  */
 @Repository
 public class ContactosJdbc implements Contactos {
@@ -32,9 +35,6 @@ public class ContactosJdbc implements Contactos {
 	/** Persona con sus columnas, para leer con {@link #persona(ResultSet)}. */
 	private static final String COLUMNAS_PERSONA =
 			"c.id_contacto, c.nombre, c.whatsapp, c.correo, c.fecha_opt_in, c.fecha_revocacion_opt_in";
-
-	/** Suma temporal a las prioridades al reordenar, para no chocar con el índice único mientras tanto. */
-	private static final int DESPLAZAMIENTO = 100_000;
 
 	private final JdbcClient jdbc;
 	private final CifradoCampos cifrado;
@@ -59,7 +59,9 @@ public class ContactosJdbc implements Contactos {
 	public List<ContactoDelPaciente> delPaciente(UUID idPaciente) {
 		return jdbc.sql("""
 				SELECT %s, cp.id_contacto_paciente, cp.codigo_tipo_contacto, cp.parentesco,
-					cp.es_cuidador_principal, cp.orden_prioridad, cp.hora_inicio, cp.hora_fin, cp.activo,
+					cp.es_cuidador_principal, cp.hora_inicio, cp.hora_fin, cp.activo,
+					(SELECT string_agg(oc.severidad || ':' || oc.orden, ',') FROM orden_contacto oc
+						WHERE oc.id_contacto_paciente = cp.id_contacto_paciente) AS ordenes,
 					(SELECT count(*) FROM contacto_paciente otro WHERE otro.id_contacto = cp.id_contacto
 						AND otro.activo AND otro.id_paciente <> cp.id_paciente) AS otros_pacientes
 				FROM contacto_paciente cp JOIN contacto c ON c.id_contacto = cp.id_contacto
@@ -69,8 +71,20 @@ public class ContactosJdbc implements Contactos {
 						persona(fila),
 						new Vinculo(fila.getString("codigo_tipo_contacto"), fila.getString("parentesco"),
 								fila.getBoolean("es_cuidador_principal"), horario(fila)),
-						fila.getInt("orden_prioridad"), fila.getBoolean("activo"), fila.getInt("otros_pacientes")))
+						ordenes(fila.getString("ordenes")), fila.getBoolean("activo"), fila.getInt("otros_pacientes")))
 				.list();
+	}
+
+	/** @return el lugar en cada gravedad, leído de "LEVE:1,GRAVE:3"; vacío si no está en ninguna */
+	private static Map<Severidad, Integer> ordenes(String texto) {
+		Map<Severidad, Integer> ordenes = new EnumMap<>(Severidad.class);
+		if (texto != null) {
+			for (String par : texto.split(",")) {
+				String[] partes = par.split(":");
+				ordenes.put(Severidad.valueOf(partes[0]), Integer.parseInt(partes[1]));
+			}
+		}
+		return ordenes;
 	}
 
 	@Override
@@ -122,18 +136,17 @@ public class ContactosJdbc implements Contactos {
 	}
 
 	@Override
-	public UUID vincular(UUID idPaciente, UUID idContacto, Vinculo vinculo, int prioridad) {
+	public UUID vincular(UUID idPaciente, UUID idContacto, Vinculo vinculo) {
 		return jdbc.sql("""
 				INSERT INTO contacto_paciente (id_paciente, id_contacto, codigo_tipo_contacto, parentesco,
-					es_cuidador_principal, orden_prioridad, hora_inicio, hora_fin)
-				VALUES (:paciente, :contacto, :tipo, :parentesco, :cuidador, :prioridad, :inicio, :fin)
+					es_cuidador_principal, hora_inicio, hora_fin)
+				VALUES (:paciente, :contacto, :tipo, :parentesco, :cuidador, :inicio, :fin)
 				RETURNING id_contacto_paciente""")
 				.param("paciente", idPaciente)
 				.param("contacto", idContacto)
 				.param("tipo", vinculo.tipo())
 				.param("parentesco", vinculo.parentesco())
 				.param("cuidador", vinculo.cuidadorPrincipal())
-				.param("prioridad", prioridad)
 				.param("inicio", hora(vinculo.horario(), true))
 				.param("fin", hora(vinculo.horario(), false))
 				.query(UUID.class)
@@ -169,29 +182,35 @@ public class ContactosJdbc implements Contactos {
 				+ "WHERE id_contacto_paciente = :id")
 				.param("id", idContactoPaciente)
 				.update();
-	}
-
-	@Override
-	public void reactivar(UUID idContactoPaciente, int prioridad) {
-		jdbc.sql("UPDATE contacto_paciente SET activo = true, orden_prioridad = :prioridad "
-				+ "WHERE id_contacto_paciente = :id")
-				.param("prioridad", prioridad)
+		jdbc.sql("DELETE FROM orden_contacto WHERE id_contacto_paciente = :id")
 				.param("id", idContactoPaciente)
 				.update();
 	}
 
 	@Override
-	public void reordenar(UUID idPaciente, List<UUID> orden) {
-		// El índice único de prioridad no es diferible: primero se apartan todas y luego se asignan
-		jdbc.sql("UPDATE contacto_paciente SET orden_prioridad = orden_prioridad + :desplazamiento "
-				+ "WHERE id_paciente = :paciente AND activo")
-				.param("desplazamiento", DESPLAZAMIENTO)
+	public void reactivar(UUID idContactoPaciente) {
+		jdbc.sql("UPDATE contacto_paciente SET activo = true WHERE id_contacto_paciente = :id")
+				.param("id", idContactoPaciente)
+				.update();
+	}
+
+	@Override
+	public void ordenar(UUID idPaciente, Severidad gravedad, List<UUID> orden) {
+		jdbc.sql("""
+				DELETE FROM orden_contacto oc USING contacto_paciente cp
+				WHERE oc.id_contacto_paciente = cp.id_contacto_paciente AND cp.id_paciente = :paciente
+					AND oc.severidad = :gravedad""")
 				.param("paciente", idPaciente)
+				.param("gravedad", gravedad.name())
 				.update();
 		for (int i = 0; i < orden.size(); i++) {
-			jdbc.sql("UPDATE contacto_paciente SET orden_prioridad = :prioridad "
-					+ "WHERE id_contacto_paciente = :id AND id_paciente = :paciente")
-					.param("prioridad", i + 1)
+			// Solo vínculos activos de este paciente: un id de otro paciente no se inserta
+			jdbc.sql("""
+					INSERT INTO orden_contacto (id_contacto_paciente, severidad, orden)
+					SELECT id_contacto_paciente, :gravedad, :orden FROM contacto_paciente
+					WHERE id_contacto_paciente = :id AND id_paciente = :paciente AND activo""")
+					.param("gravedad", gravedad.name())
+					.param("orden", i + 1)
 					.param("id", orden.get(i))
 					.param("paciente", idPaciente)
 					.update();

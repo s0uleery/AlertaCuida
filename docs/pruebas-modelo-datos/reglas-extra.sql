@@ -2,7 +2,6 @@
 -- Se aplican después de crear las tablas. Son la base de las migraciones de la tarea 1.1.
 
 -- Índices únicos parciales
-CREATE UNIQUE INDEX contacto_paciente_prioridad ON "CONTACTO_PACIENTE" (id_paciente, orden_prioridad) WHERE activo;
 CREATE UNIQUE INDEX contacto_paciente_cuidador ON "CONTACTO_PACIENTE" (id_paciente) WHERE es_cuidador_principal AND activo;
 
 -- Asignaciones sin superposición en el tiempo, vigentes o cerradas (fecha_fin vacía = rango abierto)
@@ -25,8 +24,8 @@ ALTER TABLE "CONTACTO" ADD CONSTRAINT contacto_opt_in CHECK (fecha_revocacion_op
 
 ALTER TABLE "CONTACTO_PACIENTE" ADD CONSTRAINT contacto_paciente_horario CHECK ((hora_inicio IS NULL) = (hora_fin IS NULL));
 ALTER TABLE "CONTACTO_PACIENTE" ADD CONSTRAINT contacto_paciente_horario_distinto CHECK (hora_inicio IS NULL OR hora_inicio <> hora_fin);
-ALTER TABLE "CONTACTO_PACIENTE" ADD CONSTRAINT contacto_paciente_prioridad_positiva CHECK (orden_prioridad >= 1);
-ALTER TABLE "CONTACTO_PACIENTE" ADD CONSTRAINT contacto_paciente_parentesco CHECK (parentesco IS NULL OR codigo_tipo_contacto = 'FAMILIA');
+ALTER TABLE "CONTACTO_PACIENTE" ADD CONSTRAINT contacto_paciente_parentesco CHECK (parentesco IS NULL OR codigo_tipo_contacto = 'TERCERO_SIGNIFICATIVO');
+ALTER TABLE "ORDEN_CONTACTO" ADD CONSTRAINT orden_contacto_positivo CHECK (orden >= 1);
 
 ALTER TABLE "CONFIGURACION" ADD CONSTRAINT configuracion_espera CHECK (minutos_espera > 0);
 
@@ -127,6 +126,14 @@ ALTER TABLE "REGISTRO_INTENTO" ADD CONSTRAINT intento_pendiente CHECK (fecha_hor
 
 -- Vigilante del escalamiento (migración V12)
 ALTER TABLE "REGISTRO_INTENTO" ADD CONSTRAINT intento_vigilante_interno CHECK (proposito = 'AVISO' OR id_contacto_interno IS NOT NULL);
+
+-- Pasos de la oficina en el enlace del correo (migración V19)
+ALTER TABLE "ATENCION_ALERTA" ADD CONSTRAINT atencion_llamada CHECK ((resultado_llamada IS NULL) = (fecha_hora_resultado_llamada IS NULL) AND (resultado_llamada IS NULL OR fecha_hora_toma IS NOT NULL));
+ALTER TABLE "ATENCION_ALERTA" ADD CONSTRAINT atencion_resultado_llamada CHECK (resultado_llamada IN ('BIEN', 'NECESITA_ATENCION', 'NO_CONTESTA'));
+ALTER TABLE "ATENCION_ALERTA" ADD CONSTRAINT atencion_visita_coordinada CHECK ((fecha_hora_personal_asignado IS NULL AND fecha_hora_sin_disponibilidad IS NULL) OR (resultado_llamada IN ('NECESITA_ATENCION', 'NO_CONTESTA') AND (fecha_hora_personal_asignado IS NULL OR fecha_hora_sin_disponibilidad IS NULL)));
+ALTER TABLE "ATENCION_ALERTA" ADD CONSTRAINT atencion_llegada_personal CHECK (fecha_hora_llegada_personal IS NULL OR fecha_hora_personal_asignado IS NOT NULL);
+ALTER TABLE "ATENCION_ALERTA" ADD CONSTRAINT atencion_resultado_visita CHECK ((resultado_visita IS NULL) = (fecha_hora_resultado_visita IS NULL) AND (resultado_visita IS NULL OR fecha_hora_llegada_personal IS NOT NULL) AND (resultado_visita IS NULL OR resultado_visita IN ('BIEN', 'APOYO_NO_URGENTE', 'EMERGENCIA')));
+ALTER TABLE "REGISTRO_INTENTO" ADD CONSTRAINT intento_resultado_llamada CHECK ((resultado_llamada IS NULL) = (fecha_hora_resultado_llamada IS NULL) AND (resultado_llamada IS NULL OR id_contacto_paciente IS NOT NULL) AND (resultado_llamada IS NULL OR resultado_llamada IN ('CONTESTA', 'NO_CONTESTA')));
 
 -- Disparadores: responden como un CHECK (23514)
 CREATE FUNCTION contacto_tipo_fijo() RETURNS trigger LANGUAGE plpgsql AS $$

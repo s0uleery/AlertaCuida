@@ -198,9 +198,7 @@ class RequisitosCalendarioTest {
 				.param("nombre", cifrado.cifrar(nombre, ColumnaCifrada.CONTACTO_NOMBRE))
 				.param("correo", cifrado.cifrar("hija@correo.cl", ColumnaCifrada.CONTACTO_CORREO))
 				.query(UUID.class).single();
-		jdbc.sql("""
-				INSERT INTO contacto_paciente (id_paciente, id_contacto, codigo_tipo_contacto, orden_prioridad)
-				VALUES (:p, :c, 'FAMILIA', 1)""").param("p", paciente).param("c", persona).update();
+		BaseDePrueba.vincular(jdbc, paciente, persona, "TERCERO_SIGNIFICATIVO", 1);
 		return paciente;
 	}
 

@@ -8,6 +8,7 @@ import cl.ucn.alertacuida.application.comun.error.SolicitudRechazada;
 import cl.ucn.alertacuida.application.comun.puerto.Transacciones;
 import cl.ucn.alertacuida.application.respuesta.modelo.AvisoRespondible;
 import cl.ucn.alertacuida.application.respuesta.modelo.RespuestaContacto;
+import cl.ucn.alertacuida.application.respuesta.modelo.ResultadoLlamadaContacto;
 import cl.ucn.alertacuida.application.respuesta.modelo.VistaRespuesta;
 import cl.ucn.alertacuida.application.respuesta.puerto.FirmaRespuesta;
 import cl.ucn.alertacuida.application.respuesta.puerto.RespuestasContacto;
@@ -47,7 +48,7 @@ class ResponderAvisoTest {
 	private static final Instant DETECCION = AHORA.minusSeconds(300);
 
 	private final RespuestasEnMemoria respuestas = new RespuestasEnMemoria();
-	private final ResponderAviso responder = new ResponderAviso(new FirmaDePrueba(), respuestas,
+	private final ResponderAviso responder = new ResponderAviso(new FirmaDePrueba(), respuestas, aviso -> null,
 			enTransaccion(), Clock.fixed(AHORA, ZoneOffset.UTC));
 
 	/** R1: un token sin firma válida se rechaza. */
@@ -236,6 +237,36 @@ class ResponderAvisoTest {
 		assertThat(respuestas.resueltasAlReloj).containsExactly(RespuestasEnMemoria.ALERTA);
 	}
 
+	/** 26-11-2026: después de llamar, vale el primer resultado y la vista lo muestra. */
+	@Test
+	void elResultadoDeLaLlamadaValeElPrimero() {
+		String token = FirmaDePrueba.token(respuestas.agregar(EstadoContacto.AVISANDO_CONTACTO));
+
+		responder.registrarResultadoLlamada(token, ResultadoLlamadaContacto.NO_CONTESTA);
+		VistaRespuesta vista = responder.registrarResultadoLlamada(token, ResultadoLlamadaContacto.CONTESTA);
+
+		assertThat(vista.resultadoLlamada()).isEqualTo(ResultadoLlamadaContacto.NO_CONTESTA);
+	}
+
+	/** 26-11-2026: con la alerta cerrada no se registra el resultado de la llamada. */
+	@Test
+	void conLaAlertaCerradaNoSeRegistraElResultado() {
+		String token = FirmaDePrueba.token(respuestas.agregar(EstadoContacto.RESUELTA));
+
+		VistaRespuesta vista = responder.registrarResultadoLlamada(token, ResultadoLlamadaContacto.CONTESTA);
+
+		assertThat(vista.resultadoLlamada()).isNull();
+	}
+
+	/** 26-11-2026: el coordinador registra la llamada en los pasos de la oficina, no aquí. */
+	@Test
+	void unCoordinadorNoRegistraElResultadoDelContacto() {
+		String token = FirmaDePrueba.token(respuestas.agregarDeCoordinador(EstadoContacto.AVISANDO_CONTACTO));
+
+		assertThatThrownBy(() -> responder.registrarResultadoLlamada(token, ResultadoLlamadaContacto.CONTESTA))
+				.isInstanceOf(Conflicto.class);
+	}
+
 	/** Avisos por correo a contactos de una misma alerta (#142, caída grave de Rosa), en memoria. */
 	private static final class RespuestasEnMemoria implements RespuestasContacto {
 
@@ -254,7 +285,7 @@ class ResponderAvisoTest {
 		UUID agregar(EstadoContacto estado) {
 			UUID id = UUID.randomUUID();
 			avisos.put(id, new AvisoRespondible(id, ALERTA, 142, "Rosa", TipoEvento.CAIDA, Severidad.GRAVE,
-					DETECCION, estado, null, null, null, SIM, true));
+					DETECCION, estado, null, null, null, SIM, true, null, null));
 			return id;
 		}
 
@@ -276,13 +307,36 @@ class ResponderAvisoTest {
 			}
 			avisos.put(idIntento, new AvisoRespondible(aviso.idIntento(), aviso.idAlerta(), aviso.numero(),
 					aviso.alias(), aviso.tipo(), aviso.severidad(), aviso.fechaHora(), aviso.estado(), respuesta,
-					fecha, aviso.llegada(), aviso.telefonoReloj(), aviso.delReloj()));
+					fecha, aviso.llegada(), aviso.telefonoReloj(), aviso.delReloj(),
+					aviso.idCoordinador(), aviso.resultadoLlamada()));
 			return true;
 		}
 
 		@Override
 		public boolean registrarLlamada(UUID idIntento, Instant fecha) {
 			return llamadas.putIfAbsent(idIntento, fecha) == null;
+		}
+
+		/** Solo la primera vez y solo en un aviso a un contacto del paciente, como la base. */
+		@Override
+		public boolean registrarResultadoLlamada(UUID idIntento, ResultadoLlamadaContacto resultado, Instant fecha) {
+			AvisoRespondible aviso = avisos.get(idIntento);
+			if (aviso.resultadoLlamada() != null || aviso.idCoordinador() != null) {
+				return false;
+			}
+			avisos.put(idIntento, new AvisoRespondible(aviso.idIntento(), aviso.idAlerta(), aviso.numero(),
+					aviso.alias(), aviso.tipo(), aviso.severidad(), aviso.fechaHora(), aviso.estado(),
+					aviso.respuesta(), aviso.fechaRespuesta(), aviso.llegada(), aviso.telefonoReloj(), aviso.delReloj(),
+					aviso.idCoordinador(), resultado));
+			return true;
+		}
+
+		/** @return un aviso nuevo a un coordinador, de una alerta en ese estado */
+		UUID agregarDeCoordinador(EstadoContacto estado) {
+			UUID id = UUID.randomUUID();
+			avisos.put(id, new AvisoRespondible(id, ALERTA, 142, "Rosa", TipoEvento.CAIDA, Severidad.GRAVE,
+					DETECCION, estado, null, null, null, SIM, true, UUID.randomUUID(), null));
+			return id;
 		}
 
 		@Override
@@ -293,7 +347,8 @@ class ResponderAvisoTest {
 			}
 			avisos.put(idIntento, new AvisoRespondible(aviso.idIntento(), aviso.idAlerta(), aviso.numero(),
 					aviso.alias(), aviso.tipo(), aviso.severidad(), aviso.fechaHora(), aviso.estado(),
-					aviso.respuesta(), aviso.fechaRespuesta(), fecha, aviso.telefonoReloj(), aviso.delReloj()));
+					aviso.respuesta(), aviso.fechaRespuesta(), fecha, aviso.telefonoReloj(), aviso.delReloj(),
+					aviso.idCoordinador(), aviso.resultadoLlamada()));
 			return true;
 		}
 
@@ -304,7 +359,8 @@ class ResponderAvisoTest {
 			avisos.replaceAll((id, aviso) -> new AvisoRespondible(aviso.idIntento(), aviso.idAlerta(),
 					aviso.numero(), aviso.alias(), aviso.tipo(), aviso.severidad(), aviso.fechaHora(),
 					EstadoContacto.RESUELTA, aviso.respuesta(), aviso.fechaRespuesta(), aviso.llegada(),
-					aviso.telefonoReloj(), aviso.delReloj()));
+					aviso.telefonoReloj(), aviso.delReloj(),
+					aviso.idCoordinador(), aviso.resultadoLlamada()));
 			return true;
 		}
 

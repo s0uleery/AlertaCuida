@@ -96,10 +96,7 @@ class RequisitosWebhookWhatsappTest {
 				.param("nombre", cifrado.cifrar("Hija", ColumnaCifrada.CONTACTO_NOMBRE))
 				.param("whatsapp", cifrado.cifrar("+56911111111", ColumnaCifrada.CONTACTO_WHATSAPP))
 				.query(UUID.class).single();
-		UUID vinculo = jdbc.sql("""
-				INSERT INTO contacto_paciente (id_paciente, id_contacto, codigo_tipo_contacto, orden_prioridad)
-				VALUES (:p, :c, 'FAMILIA', 1) RETURNING id_contacto_paciente""")
-				.param("p", paciente).param("c", persona).query(UUID.class).single();
+		UUID vinculo = BaseDePrueba.vincular(jdbc, paciente, persona, "TERCERO_SIGNIFICATIVO", 1);
 		intento = jdbc.sql("""
 				INSERT INTO registro_intento (event_id, id_alerta, id_contacto_paciente, canal, ronda, id_externo,
 				fecha_hora_envio) VALUES (gen_random_uuid(), :a, :v, 'WHATSAPP', 1, :w, :t) RETURNING id_intento""")

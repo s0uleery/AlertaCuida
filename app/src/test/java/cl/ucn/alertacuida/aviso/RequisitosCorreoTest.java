@@ -16,6 +16,7 @@ import cl.ucn.alertacuida.application.comun.puerto.Transacciones;
 import cl.ucn.alertacuida.configuracion.PropiedadesCorreo;
 import cl.ucn.alertacuida.domain.calendario.CalendarioHabil;
 import cl.ucn.alertacuida.domain.comun.ZonaHoraria;
+import cl.ucn.alertacuida.soporte.BaseDePrueba;
 import cl.ucn.alertacuida.soporte.PostgresDePrueba;
 import com.icegreen.greenmail.junit5.GreenMailExtension;
 import com.icegreen.greenmail.util.ServerSetupTest;
@@ -462,13 +463,7 @@ class RequisitosCorreoTest {
 				.param("correo", correo == null ? null : cifrado.cifrar(correo, ColumnaCifrada.CONTACTO_CORREO))
 				.param("hashC", correo == null ? null : "hash-c-" + nombre)
 				.query(UUID.class).single();
-		return jdbc.sql("""
-				INSERT INTO contacto_paciente (id_paciente, id_contacto, codigo_tipo_contacto, orden_prioridad)
-				VALUES (:paciente, :persona, 'OTRO', :prioridad) RETURNING id_contacto_paciente""")
-				.param("paciente", paciente)
-				.param("persona", persona)
-				.param("prioridad", prioridad)
-				.query(UUID.class).single();
+		return BaseDePrueba.vincular(jdbc, paciente, persona, "OTRO", prioridad);
 	}
 
 	/**

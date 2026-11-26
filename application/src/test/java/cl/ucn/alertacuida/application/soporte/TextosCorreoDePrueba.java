@@ -36,7 +36,10 @@ public final class TextosCorreoDePrueba {
 				new TextosCorreo.Activacion("Active su cuenta, {nombre}",
 						"Hola, {nombre}.\n\nActivar: {enlace}\n\nVence el {vence}.\n\n{pie}\n"),
 				new TextosCorreo.Activacion("Recupere su contraseña, {nombre}",
-						"Hola, {nombre}.\n\nRestablecer: {enlace}\n\nVence el {vence}.\n\n{pie}\n"));
+						"Hola, {nombre}.\n\nRestablecer: {enlace}\n\nVence el {vence}.\n\n{pie}\n"),
+				new TextosCorreo.RecordatorioLlegada("Recordatorio: alerta {folio}{deQuien}",
+						"¿Llegó el personal a la alerta {folio}{deQuien}?\n\nResponder: {responder}"
+								+ "\n\nVer: {dashboard}\n\n{pie}\n"));
 	}
 
 }

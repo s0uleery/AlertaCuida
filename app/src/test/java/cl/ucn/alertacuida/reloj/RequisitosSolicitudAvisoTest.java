@@ -11,6 +11,7 @@ import cl.ucn.alertacuida.application.aviso.EncolarCorreos;
 import cl.ucn.alertacuida.application.aviso.EnviarCorreosPendientes;
 import cl.ucn.alertacuida.application.aviso.EnviarWhatsappPendientes;
 import cl.ucn.alertacuida.application.comun.puerto.SecretosUnSoloUso;
+import cl.ucn.alertacuida.soporte.BaseDePrueba;
 import cl.ucn.alertacuida.soporte.PostgresDePrueba;
 import com.jayway.jsonpath.JsonPath;
 import java.sql.Timestamp;
@@ -260,12 +261,7 @@ class RequisitosSolicitudAvisoTest {
 				.param("hashC", correo == null ? null : "hash-c-" + nombre)
 				.param("optIn", optIn ? Timestamp.from(ahora.minus(1, ChronoUnit.DAYS)) : null)
 				.query(UUID.class).single();
-		return jdbc.sql("""
-				INSERT INTO contacto_paciente (id_paciente, id_contacto, codigo_tipo_contacto, orden_prioridad, activo)
-				VALUES (:paciente, :persona, 'OTRO', :prioridad, :activo) RETURNING id_contacto_paciente""")
-				.param("paciente", paciente).param("persona", persona).param("prioridad", prioridad)
-				.param("activo", activo)
-				.query(UUID.class).single();
+		return BaseDePrueba.vincular(jdbc, paciente, persona, "OTRO", prioridad, activo);
 	}
 
 }

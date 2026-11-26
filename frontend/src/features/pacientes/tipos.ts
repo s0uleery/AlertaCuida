@@ -162,11 +162,14 @@ export interface ZonaSegura {
 /** Variable de un umbral. */
 export type VariableUmbral = 'FC' | 'SPO2';
 
-/** Quién es el contacto respecto del usuario (familia, vecino…). */
+/** Quién es el contacto respecto del usuario (tercero significativo, Carabineros…). */
 export interface TipoContacto {
   codigo: string;
   nombre: string;
 }
+
+/** Gravedad de una alerta: cada una tiene su propia lista ordenada de contactos. */
+export type GravedadContacto = 'LEVE' | 'MEDIA' | 'GRAVE';
 
 /** Medio por el que el servidor avisa a un contacto. */
 export type Canal = 'WHATSAPP' | 'CORREO';
@@ -186,8 +189,11 @@ export interface Contacto {
   tipo: string;
   parentesco: string | null;
   cuidadorPrincipal: boolean;
-  /** 1 = el primero al que avisa el reloj */
-  prioridad: number;
+  /**
+   * Lugar en la lista de cada gravedad donde está (1 = el primero al que avisa el reloj en esas alertas).
+   * Vacío si está desactivado.
+   */
+  prioridades: Partial<Record<GravedadContacto, number>>;
   /** "HH:mm"; null = todo el día */
   horaInicio: string | null;
   horaFin: string | null;
@@ -220,4 +226,6 @@ export interface DatosContacto {
   cuidadorPrincipal: boolean;
   horaInicio: string | null;
   horaFin: string | null;
+  /** De qué alertas recibe avisos (al menos una) */
+  gravedades: GravedadContacto[];
 }

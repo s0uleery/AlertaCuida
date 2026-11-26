@@ -35,7 +35,7 @@ import java.util.stream.Collectors;
  * @param severidadTendencia gravedad con que el reloj envía esa alerta
  * @param minutosEspera   antes de pasar al siguiente contacto
  * @param rondas          veces que el reloj recorre la lista de contactos
- * @param contactos       activos y con algún canal usable, por prioridad
+ * @param contactos       activos y con algún canal usable, cada uno con su lugar en cada gravedad
  * @param horarioHabil    tramo de cada día hábil, de lunes a domingo
  * @param feriados        del año en curso y el siguiente, ordenados
  */
@@ -91,7 +91,10 @@ public record ContenidoConfiguracion(Modulos modulos, boolean gpsActivo, boolean
 		for (ContactoConfigurado contacto : contactos) {
 			Horario horario = contacto.horario();
 			texto.append("contacto=").append(contacto.idContacto()).append('|').append(contacto.nombre()).append('|')
-					.append(contacto.tipo()).append('|').append(contacto.prioridad()).append('|')
+					.append(contacto.tipo()).append('|')
+					.append(contacto.prioridades().entrySet().stream()
+							.map(prioridad -> prioridad.getKey().name() + ":" + prioridad.getValue())
+							.collect(Collectors.joining(","))).append('|')
 					.append(horario == null ? "" : horario.inicio() + "-" + horario.fin()).append('|')
 					.append(contacto.canales().stream().map(Canal::name).collect(Collectors.joining(",")))
 					.append('\n');

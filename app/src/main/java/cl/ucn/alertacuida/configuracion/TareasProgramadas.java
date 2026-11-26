@@ -3,6 +3,7 @@ package cl.ucn.alertacuida.configuracion;
 import cl.ucn.alertacuida.application.aviso.EncolarCorreos;
 import cl.ucn.alertacuida.application.aviso.EnviarCorreosPendientes;
 import cl.ucn.alertacuida.application.aviso.EnviarWhatsappPendientes;
+import cl.ucn.alertacuida.application.aviso.RecordarLlegada;
 import cl.ucn.alertacuida.application.avisoreloj.EnviarAvisosReloj;
 import cl.ucn.alertacuida.application.escalamiento.AvisarOficina;
 import cl.ucn.alertacuida.application.escalamiento.VigilarEscalamiento;
@@ -25,6 +26,7 @@ public class TareasProgramadas {
 	private final EnviarWhatsappPendientes enviarWhatsapp;
 	private final VigilarEscalamiento vigilarEscalamiento;
 	private final AvisarOficina avisarOficina;
+	private final RecordarLlegada recordarLlegada;
 
 	/**
 	 * @param limpiarTokens       borra los tokens de renovación vencidos
@@ -35,11 +37,12 @@ public class TareasProgramadas {
 	 * @param enviarWhatsapp      envía los WhatsApp pendientes (del reloj y de la oficina), con reintentos
 	 * @param vigilarEscalamiento avisa a los coordinadores de las alertas cuyo reloj dejó de pedir avisos
 	 * @param avisarOficina       deja en la bandeja de salida los avisos de cada alerta a los coordinadores
+	 * @param recordarLlegada     recuerda a la oficina el personal asignado que no ha llegado
 	 */
 	public TareasProgramadas(LimpiarTokensVencidos limpiarTokens, VigilarRelojes vigilarRelojes,
 			EncolarCorreos encolarCorreos, EnviarCorreosPendientes enviarCorreos,
 			EnviarAvisosReloj enviarAvisosReloj, EnviarWhatsappPendientes enviarWhatsapp,
-			VigilarEscalamiento vigilarEscalamiento, AvisarOficina avisarOficina) {
+			VigilarEscalamiento vigilarEscalamiento, AvisarOficina avisarOficina, RecordarLlegada recordarLlegada) {
 		this.limpiarTokens = limpiarTokens;
 		this.vigilarRelojes = vigilarRelojes;
 		this.encolarCorreos = encolarCorreos;
@@ -48,6 +51,7 @@ public class TareasProgramadas {
 		this.enviarWhatsapp = enviarWhatsapp;
 		this.vigilarEscalamiento = vigilarEscalamiento;
 		this.avisarOficina = avisarOficina;
+		this.recordarLlegada = recordarLlegada;
 	}
 
 	/** Revisa las alertas trabadas cada cierto tiempo; la primera vez, un intervalo después de arrancar. */
@@ -55,6 +59,13 @@ public class TareasProgramadas {
 			initialDelayString = "${alertacuida.escalamiento.intervalo}")
 	void vigilarEscalamiento() {
 		vigilarEscalamiento.vigilar();
+	}
+
+	/** Revisa el personal asignado que no ha llegado; la primera vez, un intervalo después de arrancar. */
+	@Scheduled(fixedDelayString = "${alertacuida.oficina.intervalo}",
+			initialDelayString = "${alertacuida.oficina.intervalo}")
+	void recordarLlegada() {
+		recordarLlegada.recordar();
 	}
 
 	/**

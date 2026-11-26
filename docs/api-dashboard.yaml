@@ -1193,7 +1193,7 @@ paths:
     get:
       tags: [Contactos]
       operationId: listarContactos
-      summary: Contactos activos por prioridad, luego los desactivados, y las horas sin cobertura
+      summary: Contactos activos con su lugar en cada gravedad, luego los desactivados, y las horas sin cobertura
       description: 'Permiso: `USUARIOS:VER`.'
       responses:
         '200':
@@ -1207,8 +1207,8 @@ paths:
     post:
       tags: [Contactos]
       operationId: agregarContacto
-      summary: Agrega un contacto al final de la lista
-      description: 'Permiso: `USUARIOS:EDITAR`.'
+      summary: Agrega un contacto al final de cada gravedad elegida
+      description: 'Permiso: `USUARIOS:EDITAR`. 400 si es el primer contacto activo y no va en las tres gravedades.'
       requestBody:
         required: true
         content:
@@ -1228,8 +1228,8 @@ paths:
     put:
       tags: [Contactos]
       operationId: reordenarContactos
-      summary: Nuevo orden de aviso
-      description: 'Permiso: `USUARIOS:EDITAR`. Debe traer a todos los contactos activos, cada uno una vez.'
+      summary: Nuevo orden de aviso de una gravedad
+      description: 'Permiso: `USUARIOS:EDITAR`. Debe traer a todos los contactos de esa gravedad, cada uno una vez.'
       requestBody:
         required: true
         content:
@@ -1296,14 +1296,15 @@ paths:
     post:
       tags: [Contactos]
       operationId: desactivarContacto
-      summary: Saca al contacto de la lista sin borrarlo
-      description: 'Permiso: `USUARIOS:EDITAR`.'
+      summary: Saca al contacto de la lista y de todas sus gravedades, sin borrarlo
+      description: 'Permiso: `USUARIOS:EDITAR`. 409 si era el único contacto de alguna gravedad.'
       responses:
         '204': { description: Desactivado. }
         '400': { $ref: '#/components/responses/Invalido' }
         '401': { $ref: '#/components/responses/SinToken' }
         '403': { $ref: '#/components/responses/SinPermiso' }
         '404': { $ref: '#/components/responses/NoEncontrado' }
+        '409': { $ref: '#/components/responses/Conflicto' }
 
   /api/pacientes/{idPaciente}/contactos/{idContacto}/reactivar:
     parameters:
@@ -1312,10 +1313,16 @@ paths:
     post:
       tags: [Contactos]
       operationId: reactivarContacto
-      summary: Devuelve al contacto al final de la lista
+      summary: Devuelve al contacto al final de cada gravedad elegida
       description: 'Permiso: `USUARIOS:EDITAR`.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SolicitudReactivar' }
       responses:
         '204': { description: Reactivado. }
+        '400': { $ref: '#/components/responses/Invalido' }
         '401': { $ref: '#/components/responses/SinToken' }
         '403': { $ref: '#/components/responses/SinPermiso' }
         '404': { $ref: '#/components/responses/NoEncontrado' }
@@ -2250,8 +2257,11 @@ components:
       type: object
       required: [codigo, nombre]
       properties:
-        codigo: { type: string, examples: [FAMILIA], description: 'PRLAC, FAMILIA, INSTITUCION, SEGURIDAD_CIUDADANA, VECINO u OTRO.' }
-        nombre: { type: string, examples: [Familia] }
+        codigo: { type: string, examples: [TERCERO_SIGNIFICATIVO], description: 'TERCERO_SIGNIFICATIVO, CARABINEROS, CESFAM, SEGURIDAD_CIUDADANA, PRLAC, INSTITUCION u OTRO.' }
+        nombre: { type: string, examples: [Tercero significativo] }
+    Gravedad:
+      type: string
+      enum: [LEVE, MEDIA, GRAVE]
     Canal:
       type: string
       enum: [WHATSAPP, CORREO]
@@ -2266,10 +2276,17 @@ components:
         whatsapp: { type: ['string', 'null'], maxLength: 30, examples: ['+56912345678'] }
         correo: { type: ['string', 'null'], maxLength: 254 }
         tipo: { type: string, description: Código de `GET /api/tipos-contacto`. }
-        parentesco: { type: ['string', 'null'], maxLength: 60, description: Solo si el tipo es FAMILIA. }
+        parentesco: { type: ['string', 'null'], maxLength: 60, description: Solo si el tipo es TERCERO_SIGNIFICATIVO. }
         cuidadorPrincipal: { type: boolean, default: false }
         horaInicio: { type: ['string', 'null'], examples: ['08:00'] }
         horaFin: { type: ['string', 'null'], examples: ['22:00'] }
+        gravedades:
+          type: array
+          description: |
+            De qué alertas recibe avisos (al menos una en un contacto activo). Una gravedad nueva lo deja al final
+            de esa lista. 409 si una gravedad quedaría sin contactos.
+          items: { $ref: '#/components/schemas/Gravedad' }
+          uniqueItems: true
     Contacto:
       type: object
       properties:
@@ -2283,7 +2300,15 @@ components:
         tipo: { type: string }
         parentesco: { type: ['string', 'null'] }
         cuidadorPrincipal: { type: boolean }
-        prioridad: { type: integer, description: 1 es el primero en recibir el aviso. }
+        prioridades:
+          type: object
+          description: Lugar en la lista de cada gravedad donde está (1 = primero en recibir el aviso). Vacío si está desactivado.
+          properties:
+            LEVE: { type: integer, minimum: 1 }
+            MEDIA: { type: integer, minimum: 1 }
+            GRAVE: { type: integer, minimum: 1 }
+          additionalProperties: false
+          examples: [{ LEVE: 1, MEDIA: 1, GRAVE: 3 }]
         horaInicio: { type: ['string', 'null'] }
         horaFin: { type: ['string', 'null'] }
         activo: { type: boolean }
@@ -2315,12 +2340,23 @@ components:
         aceptado: { type: boolean, description: false registra que lo revocó. }
     SolicitudOrden:
       type: object
-      required: [orden]
+      required: [gravedad, orden]
       properties:
+        gravedad: { $ref: '#/components/schemas/Gravedad' }
         orden:
           type: array
-          description: Ids de todos los contactos activos, en el orden de aviso.
+          description: Ids de todos los contactos de esa gravedad, en el orden de aviso.
           items: { type: string, format: uuid }
+    SolicitudReactivar:
+      type: object
+      required: [gravedades]
+      properties:
+        gravedades:
+          type: array
+          minItems: 1
+          description: De qué alertas vuelve a recibir avisos; queda al final de cada una.
+          items: { $ref: '#/components/schemas/Gravedad' }
+          uniqueItems: true
 
     EstadoReloj:
       type: string

@@ -1,7 +1,7 @@
 // Endpoints públicos de la respuesta de un contacto desde su correo. El token va en el cuerpo, nunca en la
 // dirección, para que no quede en los registros del servidor.
 import { pedir } from '../../api/cliente';
-import type { RespuestaContacto, VistaRespuesta } from './tipos';
+import type { PasoOficina, RespuestaContacto, ResultadoLlamadaContacto, VistaRespuesta } from './tipos';
 
 export const respuestaApi = {
   /** La alerta del enlace y lo que ya respondió. No registra nada. */
@@ -19,4 +19,18 @@ export const respuestaApi = {
   /** Registra que llegó donde el paciente; resuelve la alerta si seguía abierta. 409 si no dijo que iba. */
   llegar: (token: string) =>
     pedir<VistaRespuesta>('/respuestas-contacto/llegada', { method: 'POST', body: JSON.stringify({ token }) }),
+
+  /** El contacto dice si le contestaron después de llamar (vale el primero). */
+  resultadoLlamada: (token: string, resultado: ResultadoLlamadaContacto) =>
+    pedir<VistaRespuesta>('/respuestas-contacto/resultado-llamada', {
+      method: 'POST',
+      body: JSON.stringify({ token, resultado }),
+    }),
+
+  /** Un paso de la oficina; 409 si ya no corresponde (otra persona la tiene o la alerta avanzó). */
+  paso: (token: string, paso: PasoOficina, comentario?: string) =>
+    pedir<VistaRespuesta>('/respuestas-contacto/paso', {
+      method: 'POST',
+      body: JSON.stringify({ token, paso, comentario }),
+    }),
 };

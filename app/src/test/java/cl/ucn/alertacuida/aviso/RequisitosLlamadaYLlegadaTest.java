@@ -326,10 +326,7 @@ class RequisitosLlamadaYLlegadaTest {
 				.param("nombre", cifrado.cifrar("Hija", ColumnaCifrada.CONTACTO_NOMBRE))
 				.param("correo", cifrado.cifrar("hija@correo.cl", ColumnaCifrada.CONTACTO_CORREO))
 				.query(UUID.class).single();
-		return jdbc.sql("""
-				INSERT INTO contacto_paciente (id_paciente, id_contacto, codigo_tipo_contacto, orden_prioridad)
-				VALUES (:paciente, :persona, 'OTRO', 1) RETURNING id_contacto_paciente""")
-				.param("paciente", paciente).param("persona", persona).query(UUID.class).single();
+		return BaseDePrueba.vincular(jdbc, paciente, persona, "OTRO", 1);
 	}
 
 	/** @return el aviso por correo, ya enviado, a ese vínculo en la ronda 1 */

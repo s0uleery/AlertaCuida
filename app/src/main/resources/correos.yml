@@ -68,19 +68,21 @@ alertacuida:
         de-quien-con-alias: " de {alias}"
 
       # A cada coordinador, por una alerta de salud, a la vez que su WhatsApp (aviso a la oficina). Solo en
-      # horario laboral. Si confirma en el enlace, la alerta queda confirmada y el reloj deja de avisar.
+      # horario laboral. En el enlace la toma, llama al usuario y registra cada paso (los mismos de WhatsApp); la
+      # alerta queda confirmada, y el reloj deja de avisar, cuando la persona está bien o se asigna personal.
       #   {alerta}    "alerta grave #142", igual que en alerta-equipo
       #   {deQuien}   " de Mary", o vacío si el paciente no tiene alias
       #   {folio}     folio de la alerta, ej. #142
       #   {dashboard} dirección del dashboard
       #   {pie}       pie-equipo (solo en el cuerpo)
-      #   {responder} enlace para confirmar que va (obligatorio en el cuerpo)
+      #   {responder} enlace a los pasos de la oficina: tomar la alerta, llamar y registrar la atención (obligatorio
+      #               en el cuerpo)
       aviso-oficina:
         asunto: "AlertaCuida: {alerta}{deQuien}"
         cuerpo: |
           Hay una {alerta}{deQuien}. El reloj ya está avisando a sus contactos.
 
-          Si usted va a atenderla, confírmelo aquí. En el mismo enlace puede llamar al usuario y avisar cuando llegue:
+          Para tomar la alerta, abra este enlace. Ahí podrá llamar al usuario y registrar cada paso de la atención:
           {responder}
 
           Revísela en el dashboard: {dashboard}
@@ -159,13 +161,33 @@ alertacuida:
       #   {folio}     folio de la alerta, ej. #142
       #   {dashboard} dirección del dashboard
       #   {pie}       pie-equipo (solo en el cuerpo)
-      #   {responder} enlace para confirmar que va (obligatorio en el cuerpo)
+      #   {responder} enlace a los pasos de la oficina: tomar la alerta, llamar y registrar la atención (obligatorio
+      #               en el cuerpo)
       agravamiento:
         asunto: "AlertaCuida: la alerta {folio}{deQuien} pasó a grave"
         cuerpo: |
           La alerta {folio}{deQuien} pasó a grave y sigue abierta.
 
-          Si usted va a atenderla, confírmelo aquí. En el mismo enlace puede llamar al usuario y avisar cuando llegue:
+          Para tomar la alerta, abra este enlace. Ahí podrá llamar al usuario y registrar cada paso de la atención:
+          {responder}
+
+          Revísela en el dashboard: {dashboard}
+
+          {pie}
+
+      # A quien tiene la alerta a cargo en la oficina, cuando el personal que asignó desde el enlace lleva 30 minutos
+      # (alertacuida.oficina.recordatorio-llegada) sin que se registre su llegada. Una vez por alerta.
+      #   {deQuien}   " de Mary", o vacío si el paciente no tiene alias
+      #   {folio}     folio de la alerta, ej. #142
+      #   {dashboard} dirección del dashboard
+      #   {pie}       pie-equipo (solo en el cuerpo)
+      #   {responder} enlace a la misma página de los pasos de la oficina (obligatorio en el cuerpo)
+      recordatorio-llegada:
+        asunto: "AlertaCuida: ¿llegó el personal a la alerta {folio}{deQuien}?"
+        cuerpo: |
+          Aún no se registra la llegada del personal a la alerta {folio}{deQuien}.
+
+          Cuando le avise que llegó, regístrelo aquí, o indique que sigue en camino:
           {responder}
 
           Revísela en el dashboard: {dashboard}

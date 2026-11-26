@@ -223,19 +223,23 @@ class ModeloDatosTest {
 	/**
 	 * INSERT de un contacto en la lista de un paciente (contacto_paciente).
 	 *
-	 * @param prio orden de prioridad en la lista
 	 * @param cols columnas extra, empezando con coma, o ""
 	 * @param vals sus valores, en el mismo orden
 	 */
-	private static String vinculo(String pac, String cont, String tipo, int prio, String cols, String vals) {
-		return "INSERT INTO contacto_paciente (id_contacto_paciente, id_paciente, id_contacto, codigo_tipo_contacto,"
-				+ " orden_prioridad" + cols + ") VALUES (gen_random_uuid(), '{" + pac + "}', '{" + cont + "}', '"
-				+ tipo + "', " + prio + vals + ")";
+	private static String vinculo(String pac, String cont, String tipo, String cols, String vals) {
+		return "INSERT INTO contacto_paciente (id_contacto_paciente, id_paciente, id_contacto, codigo_tipo_contacto"
+				+ cols + ") VALUES (gen_random_uuid(), '{" + pac + "}', '{" + cont + "}', '" + tipo + "'" + vals + ")";
 	}
 
 	/** INSERT de un contacto en la lista de un paciente, sin columnas extra. */
-	private static String vinculo(String pac, String cont, String tipo, int prio) {
-		return vinculo(pac, cont, tipo, prio, "", "");
+	private static String vinculo(String pac, String cont, String tipo) {
+		return vinculo(pac, cont, tipo, "", "");
+	}
+
+	/** INSERT del lugar de un vínculo en la lista de una gravedad (orden_contacto). */
+	private static String orden(String vinculo, String severidad, int orden) {
+		return "INSERT INTO orden_contacto (id_contacto_paciente, severidad, orden) VALUES ('{" + vinculo + "}', '"
+				+ severidad + "', " + orden + ")";
 	}
 
 	/**
@@ -286,13 +290,13 @@ class ModeloDatosTest {
 	private DynamicContainer estructura() {
 		return grupo("1. Estructura de la base (migraciones)",
 			c.vale("Migraciones aplicadas por Flyway", """
-					SELECT count(*) n FROM flyway_schema_history WHERE success AND version IS NOT NULL""", 18),
+					SELECT count(*) n FROM flyway_schema_history WHERE success AND version IS NOT NULL""", 20),
 			c.vale("Cantidad de tablas", """
 					SELECT count(*) n FROM information_schema.tables WHERE table_schema = 'public'
-					AND table_type = 'BASE TABLE' AND table_name <> 'flyway_schema_history'""", 32),
+					AND table_type = 'BASE TABLE' AND table_name <> 'flyway_schema_history'""", 33),
 			c.vale("Cantidad de relaciones (claves foráneas)", """
 					SELECT count(*) n FROM information_schema.table_constraints
-					WHERE table_schema = 'public' AND constraint_type = 'FOREIGN KEY'""", 35),
+					WHERE table_schema = 'public' AND constraint_type = 'FOREIGN KEY'""", 36),
 			// Sueltas a propósito: emparejamiento_reloj (V15) guarda códigos de minutos, pedidos por un
 			// reloj que todavía no se sabe cuál es ni de quién; al usarse, su token pasa a asignacion_reloj.
 			// horario_habil (V18) tampoco: es la jornada del programa entero, no un dato de alguien
@@ -529,12 +533,14 @@ class ModeloDatosTest {
 					VALUES (gen_random_uuid(), 'rut-z', '2026-10-01')""", NULO));
 	}
 
-	/** Contactos compartidos y exclusivos, prioridades, horarios y opt-in. */
+	/** Contactos compartidos y exclusivos, orden por gravedad, horarios y opt-in. */
 	private DynamicContainer contactos() {
-		return grupo("5. Contactos (compartidos, exclusivos y horarios)",
-			c.vale("Tipos de contacto iniciales de la migración", """
-					SELECT count(*) n FROM tipo_contacto
-					WHERE codigo IN ('FAMILIA', 'VECINO', 'SEGURIDAD_CIUDADANA', 'OTRO')""", 4),
+		return grupo("5. Contactos (compartidos, exclusivos, horarios y orden por gravedad)",
+			c.vale("Tipos de contacto de las migraciones (V20: tercero significativo, Carabineros y CESFAM)", """
+					SELECT count(*) n FROM tipo_contacto WHERE codigo IN ('TERCERO_SIGNIFICATIVO', 'PRLAC',
+					'SEGURIDAD_CIUDADANA', 'CARABINEROS', 'CESFAM', 'INSTITUCION', 'OTRO')""", 7),
+			c.vale("Familia y Vecino ya no existen: son tercero significativo",
+					"SELECT count(*) n FROM tipo_contacto WHERE codigo IN ('FAMILIA', 'VECINO')", 0),
 			c.acepta("Cuatro personas de contacto (una solo con correo)", """
 			INSERT INTO contacto (id_contacto, nombre, whatsapp, whatsapp_hash, fecha_opt_in, correo, correo_hash)
 					VALUES ('{HIJA}', 'Hija de María', '+56911', 'w-hija', now(), null, null),
@@ -544,14 +550,27 @@ class ModeloDatosTest {
 			c.acepta("Listas de contactos: Seguridad Ciudadana en los tres pacientes; la cuidadora de Pedro de noche",
 					"""
 					INSERT INTO contacto_paciente (id_contacto_paciente, id_paciente, id_contacto, codigo_tipo_contacto,
-					parentesco, es_cuidador_principal, orden_prioridad, hora_inicio, hora_fin) VALUES
-					('{M1}', '{MARIA}', '{HIJA}', 'FAMILIA', 'hija', true, 1, null, null),
-					('{M2}', '{MARIA}', '{SEG_CIUDADANA}', 'SEGURIDAD_CIUDADANA', null, false, 2, null, null),
-					('{P1}', '{PEDRO}', '{CUIDADORA}', 'OTRO', null, true, 1, '22:00', '07:00'),
-					('{P2}', '{PEDRO}', '{SEG_CIUDADANA}', 'SEGURIDAD_CIUDADANA', null, false, 2, null, null),
-					('{P3}', '{PEDRO}', '{VECINO}', 'VECINO', null, false, 3, null, null),
-					('{R1}', '{ROSA}', '{SEG_CIUDADANA}', 'SEGURIDAD_CIUDADANA', null, false, 1, null, null),
-					('{R2}', '{ROSA}', '{VECINO}', 'VECINO', null, false, 2, null, null)"""),
+					parentesco, es_cuidador_principal, hora_inicio, hora_fin) VALUES
+					('{M1}', '{MARIA}', '{HIJA}', 'TERCERO_SIGNIFICATIVO', 'hija', true, null, null),
+					('{M2}', '{MARIA}', '{SEG_CIUDADANA}', 'SEGURIDAD_CIUDADANA', null, false, null, null),
+					('{P1}', '{PEDRO}', '{CUIDADORA}', 'OTRO', null, true, '22:00', '07:00'),
+					('{P2}', '{PEDRO}', '{SEG_CIUDADANA}', 'SEGURIDAD_CIUDADANA', null, false, null, null),
+					('{P3}', '{PEDRO}', '{VECINO}', 'TERCERO_SIGNIFICATIVO', null, false, null, null),
+					('{R1}', '{ROSA}', '{SEG_CIUDADANA}', 'SEGURIDAD_CIUDADANA', null, false, null, null),
+					('{R2}', '{ROSA}', '{VECINO}', 'TERCERO_SIGNIFICATIVO', null, false, null, null)"""),
+			c.acepta("Cada vínculo con su lugar en las tres gravedades (en grave, Seguridad Ciudadana va primero "
+					+ "con María)", """
+					INSERT INTO orden_contacto (id_contacto_paciente, severidad, orden)
+					SELECT v.id::uuid, g, CASE WHEN g = 'GRAVE' AND v.id = '{M1}' THEN 2
+						WHEN g = 'GRAVE' AND v.id = '{M2}' THEN 1 ELSE v.orden END
+					FROM (VALUES ('{M1}', 1), ('{M2}', 2), ('{P1}', 1), ('{P2}', 2), ('{P3}', 3), ('{R1}', 1),
+						('{R2}', 2)) AS v (id, orden)
+					CROSS JOIN unnest(ARRAY['LEVE', 'MEDIA', 'GRAVE']) AS g"""),
+			c.vale("La lista de grave de María empieza por Seguridad Ciudadana", """
+					SELECT cp.codigo_tipo_contacto n FROM orden_contacto oc
+					JOIN contacto_paciente cp USING (id_contacto_paciente)
+					WHERE cp.id_paciente = '{MARIA}' AND oc.severidad = 'GRAVE' ORDER BY oc.orden LIMIT 1""",
+					"SEGURIDAD_CIUDADANA"),
 			c.vale("Seguridad Ciudadana está guardada una sola vez",
 					"SELECT count(*) n FROM contacto WHERE whatsapp_hash = 'w-sc'", 1),
 			c.vale("Seguridad Ciudadana es contacto de tres pacientes (compartido)",
@@ -579,21 +598,25 @@ class ModeloDatosTest {
 					INSERT INTO contacto (id_contacto, nombre, correo, correo_hash, fecha_revocacion_opt_in)
 					VALUES (gen_random_uuid(), 'X', 'x@x.cl', 'm-x', now())""", CHECK),
 			c.rechaza("La misma persona dos veces en la lista de un paciente",
-					vinculo("MARIA", "HIJA", "FAMILIA", 5), UNICO),
-			c.rechaza("Dos contactos activos con la misma prioridad", vinculo("MARIA", "VECINO", "VECINO", 1), UNICO),
-			c.acepta("Repetir prioridad con un contacto inactivo (se deshace)",
-					"BEGIN; " + vinculo("MARIA", "VECINO", "VECINO", 1, ", activo", ", false") + "; ROLLBACK"),
+					vinculo("MARIA", "HIJA", "TERCERO_SIGNIFICATIVO"), UNICO),
 			c.rechaza("Dos cuidadores principales activos para el mismo paciente",
-					vinculo("MARIA", "VECINO", "VECINO", 3, ", es_cuidador_principal", ", true"), UNICO),
-			c.rechaza("Prioridad 0", vinculo("MARIA", "VECINO", "VECINO", 0), CHECK),
+					vinculo("MARIA", "VECINO", "TERCERO_SIGNIFICATIVO", ", es_cuidador_principal", ", true"), UNICO),
 			c.rechaza("Horario con inicio pero sin fin",
-					vinculo("MARIA", "VECINO", "VECINO", 3, ", hora_inicio", ", '08:00'"), CHECK),
+					vinculo("MARIA", "VECINO", "TERCERO_SIGNIFICATIVO", ", hora_inicio", ", '08:00'"), CHECK),
 			c.rechaza("Horario que empieza y termina a la misma hora",
-					vinculo("MARIA", "VECINO", "VECINO", 3, ", hora_inicio, hora_fin", ", '08:00', '08:00'"), CHECK),
-			c.rechaza("Parentesco en un contacto que no es FAMILIA",
-					vinculo("MARIA", "VECINO", "VECINO", 3, ", parentesco", ", 'sobrino'"), CHECK),
-			c.rechaza("Tipo de contacto que no existe (AMBULANCIA)", vinculo("MARIA", "VECINO", "AMBULANCIA", 3),
-					FORANEA));
+					vinculo("MARIA", "VECINO", "TERCERO_SIGNIFICATIVO", ", hora_inicio, hora_fin",
+							", '08:00', '08:00'"), CHECK),
+			c.rechaza("Parentesco en un contacto que no es tercero significativo",
+					vinculo("MARIA", "VECINO", "OTRO", ", parentesco", ", 'sobrino'"), CHECK),
+			c.acepta("Parentesco en un tercero significativo (se deshace)", "BEGIN; "
+					+ vinculo("MARIA", "VECINO", "TERCERO_SIGNIFICATIVO", ", parentesco", ", 'sobrino'")
+					+ "; ROLLBACK"),
+			c.rechaza("Tipo de contacto que no existe (AMBULANCIA)", vinculo("MARIA", "VECINO", "AMBULANCIA"),
+					FORANEA),
+			c.rechaza("Un vínculo dos veces en la misma gravedad", orden("M1", "LEVE", 9), UNICO),
+			c.rechaza("Orden 0 en una gravedad", orden("R2", "LEVE", 0), CHECK),
+			c.rechaza("Gravedad que no existe (URGENTE)", orden("R2", "URGENTE", 3), CHECK),
+			c.rechaza("Orden de un vínculo que no existe", orden("INEXISTENTE", "LEVE", 3), FORANEA));
 	}
 
 	/** Configuración clínica versionada y umbrales. */
@@ -1166,8 +1189,8 @@ class ModeloDatosTest {
 					"INSERT INTO contacto (id_contacto, id_usuario) VALUES (gen_random_uuid(), '{INEXISTENTE}')",
 					FORANEA),
 			c.rechaza("El contacto interno en la lista de un paciente (el reloj no recorre al equipo)", """
-					INSERT INTO contacto_paciente (id_contacto_paciente, id_paciente, id_contacto, codigo_tipo_contacto,
-					orden_prioridad) VALUES (gen_random_uuid(), '{ROSA}', '{INTERNO_ANA}', 'OTRO', 9)""", CHECK),
+					INSERT INTO contacto_paciente (id_contacto_paciente, id_paciente, id_contacto, codigo_tipo_contacto)
+					VALUES (gen_random_uuid(), '{ROSA}', '{INTERNO_ANA}', 'OTRO')""", CHECK),
 			c.rechaza("Cambiar un vínculo de la lista para que apunte al contacto interno",
 					"UPDATE contacto_paciente SET id_contacto = '{INTERNO_ANA}' WHERE id_contacto_paciente = '{R2}'",
 					CHECK),

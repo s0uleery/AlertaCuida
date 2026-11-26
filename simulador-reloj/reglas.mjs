@@ -74,18 +74,17 @@ export function lecturasTendencia(umbrales, hasta, minutos, intervaloMs) {
 }
 
 /**
- * Los contactos en el orden en que el reloj los avisa: por prioridad. Con el botón de ayuda, primero los
- * VECINO (por prioridad) y después el resto (contrato de la configuración).
+ * Los contactos en el orden en que el reloj los avisa: solo los de la lista de la gravedad de la alerta, por su
+ * lugar en ella (`prioridades` del contrato de la configuración). El botón de ayuda es leve: usa la lista de
+ * leve. Si la alerta se agrava, se vuelve a llamar con GRAVE y se empieza por el primero.
  * @param {object[]} contactos los de la configuración
- * @param {string} tipoEvento el de la alerta
+ * @param {string} severidad LEVE, MEDIA o GRAVE
  * @returns {object[]} una copia ordenada
  */
-export function contactosEnOrden(contactos, tipoEvento) {
-	const porPrioridad = [...contactos].sort((a, b) => a.prioridad - b.prioridad);
-	if (tipoEvento !== 'BOTON_AYUDA') {
-		return porPrioridad;
-	}
-	return [...porPrioridad.filter((c) => c.tipo === 'VECINO'), ...porPrioridad.filter((c) => c.tipo !== 'VECINO')];
+export function contactosEnOrden(contactos, severidad) {
+	return contactos
+		.filter((c) => c.prioridades?.[severidad] !== undefined)
+		.sort((a, b) => a.prioridades[severidad] - b.prioridades[severidad]);
 }
 
 /**

@@ -86,13 +86,13 @@ const REGLAS: Record<Tramo, { grave: ReactNode; leve: ReactNode }> = {
   HABIL: {
     grave: (
       <Pasos
-        pasos={['Oficina PRLAC: correo y WhatsApp a los coordinadores', 'El reloj avisa a los contactos del usuario, por prioridad']}
+        pasos={['Oficina PRLAC: correo y WhatsApp a los coordinadores', 'El reloj avisa a los contactos de la lista de esa gravedad, en su orden']}
         nota="Los dos al mismo tiempo. El reloj espera la respuesta de cada contacto antes de pasar al siguiente."
       />
     ),
     leve: (
       <Pasos
-        pasos={['Oficina PRLAC: correo y WhatsApp a los coordinadores', 'El reloj avisa a los contactos del usuario, por prioridad']}
+        pasos={['Oficina PRLAC: correo y WhatsApp a los coordinadores', 'El reloj avisa a los contactos de la lista de esa gravedad, en su orden']}
         nota="Igual que una grave, pero sin la indicación de llamar al 131."
       />
     ),
@@ -100,7 +100,7 @@ const REGLAS: Record<Tramo, { grave: ReactNode; leve: ReactNode }> = {
   FUERA: {
     grave: (
       <Pasos
-        pasos={['El reloj avisa a los contactos disponibles a esa hora, por prioridad']}
+        pasos={['El reloj avisa a los contactos de la lista de esa gravedad disponibles a esa hora, en su orden']}
         nota="La oficina PRLAC no recibe aviso fuera de horario: la alerta queda en el dashboard."
       />
     ),
@@ -111,7 +111,7 @@ const REGLAS: Record<Tramo, { grave: ReactNode; leve: ReactNode }> = {
   SIN_JORNADA: {
     grave: (
       <Pasos
-        pasos={['El reloj avisa a los contactos disponibles a esa hora, por prioridad']}
+        pasos={['El reloj avisa a los contactos de la lista de esa gravedad disponibles a esa hora, en su orden']}
         nota="Fin de semana o feriado: la oficina PRLAC no recibe aviso."
       />
     ),

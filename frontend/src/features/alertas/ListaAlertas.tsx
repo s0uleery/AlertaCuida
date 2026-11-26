@@ -45,7 +45,8 @@ function normalizar(texto: string): string {
  */
 export function ListaAlertas() {
   const navegar = useNavigate();
-  const { datos, error, cargando } = useDatos(alertasApi.listar);
+  // Se vuelve a pedir cada 15 s para ver las alertas nuevas sin refrescar la página
+  const { datos, error, cargando } = useDatos(alertasApi.listar, '', { cadaMs: 15_000 });
   const [pestana, setPestana] = useState<CategoriaAlerta>('SALUD');
   const [filtro, setFiltro] = useState<FiltroEstado>('ABIERTAS');
   const [gravedad, setGravedad] = useState<Severidad | ''>('');

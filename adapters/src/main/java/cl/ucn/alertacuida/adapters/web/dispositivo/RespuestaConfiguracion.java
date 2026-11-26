@@ -14,6 +14,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -69,11 +70,13 @@ public record RespuestaConfiguracion(String version, Modulos modulos, boolean gp
 	/**
 	 * Un contacto, sin número ni correo.
 	 *
-	 * @param tipo    FAMILIA, VECINO, PRLAC...: con el botón de ayuda el reloj avisa primero a los VECINO
-	 * @param horario vacío = todo el día; si inicio &gt; fin, cruza la medianoche
+	 * @param tipo        TERCERO_SIGNIFICATIVO, CARABINEROS, SEGURIDAD_CIUDADANA, CESFAM, PRLAC...
+	 * @param prioridades lugar en la lista de cada gravedad donde está (1 = primero), ej. {"GRAVE": 1}: una
+	 *                    alerta recorre solo los contactos de su gravedad, y al agravarse, los de GRAVE
+	 * @param horario     vacío = todo el día; si inicio &gt; fin, cruza la medianoche
 	 */
-	public record Contacto(UUID idContacto, String nombre, String tipo, int prioridad, Tramo horario,
-			List<Canal> canales) {
+	public record Contacto(UUID idContacto, String nombre, String tipo, Map<Severidad, Integer> prioridades,
+			Tramo horario, List<Canal> canales) {
 	}
 
 	/** Un tramo horario: desde "inicio", incluida, hasta "fin", sin incluirla. */
@@ -107,7 +110,7 @@ public record RespuestaConfiguracion(String version, Modulos modulos, boolean gp
 				new Escalamiento(c.minutosEspera(), c.rondas()),
 				c.contactos().stream()
 						.map(contacto -> new Contacto(contacto.idContacto(), contacto.nombre(), contacto.tipo(),
-								contacto.prioridad(), tramo(contacto.horario()), contacto.canales()))
+								contacto.prioridades(), tramo(contacto.horario()), contacto.canales()))
 						.toList(),
 				new Calendario(ZonaHoraria.CHILE.getId(),
 						c.horarioHabil().entrySet().stream()

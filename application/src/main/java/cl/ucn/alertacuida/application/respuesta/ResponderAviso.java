@@ -5,6 +5,8 @@ import cl.ucn.alertacuida.application.comun.puerto.Transacciones;
 import cl.ucn.alertacuida.application.respuesta.error.EnlaceRespuestaInvalido;
 import cl.ucn.alertacuida.application.respuesta.modelo.AvisoRespondible;
 import cl.ucn.alertacuida.application.respuesta.modelo.RespuestaContacto;
+import cl.ucn.alertacuida.application.respuesta.modelo.ResultadoLlamadaContacto;
+import cl.ucn.alertacuida.application.respuesta.modelo.VistaOficina;
 import cl.ucn.alertacuida.application.respuesta.modelo.VistaRespuesta;
 import cl.ucn.alertacuida.application.respuesta.puerto.FirmaRespuesta;
 import cl.ucn.alertacuida.application.respuesta.puerto.RespuestasContacto;
@@ -13,6 +15,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Function;
 
 /**
  * Respuesta de un contacto del paciente desde los enlaces de su correo ("Confirmo que voy" y "No puedo
@@ -34,24 +37,35 @@ import java.util.UUID;
  * alerta sigue abierta, la resuelve el sistema y avisa al reloj. El equipo completa después la clasificación y
  * las observaciones.</li>
  * </ul>
+ * Decisiones del 26-11-2026:
+ * <ul>
+ * <li>Después de "Llamar al paciente", el contacto dice si le contestaron ({@link #registrarResultadoLlamada}),
+ * y recién entonces elige si va o no. Vale el primero.</li>
+ * <li>El enlace de un coordinador muestra los pasos de la oficina ({@link AtenderDesdeEnlace}); la vista los
+ * trae en {@link VistaRespuesta#oficina()}.</li>
+ * </ul>
  */
 public class ResponderAviso {
 
 	private final FirmaRespuesta firma;
 	private final RespuestasContacto respuestas;
+	private final Function<AvisoRespondible, VistaOficina> vistaOficina;
 	private final Transacciones transacciones;
 	private final Clock reloj;
 
 	/**
 	 * Recibe lo que usa; lo arma ConfiguracionRespuestaContacto.
 	 *
-	 * @param firma      reconoce el token del enlace
-	 * @param respuestas los avisos y sus respuestas
+	 * @param firma        reconoce el token del enlace
+	 * @param respuestas   los avisos y sus respuestas
+	 * @param vistaOficina arma los pasos de la oficina de un aviso a un coordinador (ArmarVistaOficina::de);
+	 *                     devuelve null si el aviso es de un contacto del paciente
 	 */
-	public ResponderAviso(FirmaRespuesta firma, RespuestasContacto respuestas, Transacciones transacciones,
-			Clock reloj) {
+	public ResponderAviso(FirmaRespuesta firma, RespuestasContacto respuestas,
+			Function<AvisoRespondible, VistaOficina> vistaOficina, Transacciones transacciones, Clock reloj) {
 		this.firma = firma;
 		this.respuestas = respuestas;
+		this.vistaOficina = vistaOficina;
 		this.transacciones = transacciones;
 		this.reloj = reloj;
 	}
@@ -62,7 +76,40 @@ public class ResponderAviso {
 	 * @throws EnlaceRespuestaInvalido si el token no sirve
 	 */
 	public VistaRespuesta consultar(String token) {
-		return vista(buscar(idDe(token)));
+		return consultarIntento(idDe(token));
+	}
+
+	/**
+	 * @param idIntento el aviso, ya reconocido
+	 * @return cómo está ahora
+	 * @throws EnlaceRespuestaInvalido si ese aviso no pide respuesta
+	 */
+	public VistaRespuesta consultarIntento(UUID idIntento) {
+		return vista(buscar(idIntento));
+	}
+
+	/**
+	 * Registra lo que dijo el contacto del paciente después de llamar: solo la primera vez y con la alerta abierta.
+	 *
+	 * @param token     el del enlace del correo
+	 * @param resultado si le contestaron
+	 * @return cómo quedó
+	 * @throws EnlaceRespuestaInvalido si el token no sirve
+	 * @throws Conflicto               si el enlace es de un coordinador, que registra la llamada en sus pasos
+	 */
+	public VistaRespuesta registrarResultadoLlamada(String token, ResultadoLlamadaContacto resultado) {
+		Objects.requireNonNull(resultado, "resultado");
+		UUID idIntento = idDe(token);
+		return transacciones.ejecutar(() -> {
+			AvisoRespondible aviso = buscar(idIntento);
+			if (aviso.idCoordinador() != null) {
+				throw new Conflicto("Registre la llamada en los pasos de la oficina");
+			}
+			if (!cerrada(aviso.estado())) {
+				respuestas.registrarResultadoLlamada(idIntento, resultado, reloj.instant());
+			}
+			return vista(buscar(idIntento));
+		});
 	}
 
 	/**
@@ -158,12 +205,15 @@ public class ResponderAviso {
 		return estado == EstadoContacto.RESUELTA || estado == EstadoContacto.CANCELADA;
 	}
 
-	/** @return lo que ve el contacto; el número para llamar, solo con la alerta abierta */
-	private static VistaRespuesta vista(AvisoRespondible aviso) {
+	/**
+	 * @return lo que ve quien abrió el enlace; el número para llamar, solo con la alerta abierta, y los pasos de
+	 *         la oficina, solo si es un coordinador
+	 */
+	private VistaRespuesta vista(AvisoRespondible aviso) {
 		boolean cerrada = cerrada(aviso.estado());
 		return new VistaRespuesta(aviso.numero(), aviso.alias(), aviso.tipo(), aviso.severidad(), aviso.fechaHora(),
 				aviso.respuesta(), aviso.fechaRespuesta(), cerrada, cerrada ? null : aviso.telefonoReloj(),
-				aviso.llegada());
+				aviso.llegada(), aviso.resultadoLlamada(), vistaOficina.apply(aviso));
 	}
 
 }

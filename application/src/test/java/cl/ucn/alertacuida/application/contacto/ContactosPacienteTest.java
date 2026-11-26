@@ -14,6 +14,7 @@ import cl.ucn.alertacuida.application.contacto.puerto.HashMedioContacto;
 import cl.ucn.alertacuida.application.paciente.modelo.DatosPaciente;
 import cl.ucn.alertacuida.application.soporte.ContactosEnMemoria;
 import cl.ucn.alertacuida.application.soporte.PacientesEnMemoria;
+import cl.ucn.alertacuida.domain.alerta.Severidad;
 import cl.ucn.alertacuida.domain.contacto.Canal;
 import cl.ucn.alertacuida.domain.contacto.Cobertura;
 import cl.ucn.alertacuida.domain.contacto.Correo;
@@ -24,7 +25,9 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,6 +37,10 @@ import org.junit.jupiter.api.Test;
 class ContactosPacienteTest {
 
 	private static final UUID COORDINADOR = UUID.randomUUID();
+	/** Tipo de contacto de familiares, vecinos y personas cercanas. */
+	private static final String TERCERO = "TERCERO_SIGNIFICATIVO";
+	/** Las tres gravedades. */
+	private static final Set<Severidad> TODAS = EnumSet.allOf(Severidad.class);
 
 	private final PacientesEnMemoria pacientes = new PacientesEnMemoria();
 	private final ContactosEnMemoria guardados = new ContactosEnMemoria();
@@ -75,7 +82,9 @@ class ContactosPacienteTest {
 
 		List<ContactoDelPaciente> lista = contactos.listar(maria).contactos();
 		assertThat(lista).extracting(ContactoDelPaciente::id).containsExactly(ana, luis);
-		assertThat(lista).extracting(ContactoDelPaciente::prioridad).containsExactly(1, 2);
+		for (Severidad gravedad : Severidad.values()) {
+			assertThat(lista).extracting(contacto -> contacto.orden(gravedad)).containsExactly(1, 2);
+		}
 		assertThat(lista.getFirst().persona().whatsapp()).isEqualTo("+56912345678");
 		assertThat(lista.getLast().persona().correo()).isEqualTo("luis@mail.cl");
 		assertThat(auditoria).containsExactly("CREAR CONTACTO", "CREAR CONTACTO_PACIENTE", "CREAR CONTACTO",
@@ -94,17 +103,86 @@ class ContactosPacienteTest {
 		assertThat(contactos.listar(maria).contactos()).isEmpty();
 	}
 
-	/** Sin medio de contacto, con un tipo inexistente, parentesco sin ser familia o media hora, se rechaza. */
+	/**
+	 * Sin medio de contacto, con un tipo inexistente, parentesco sin ser tercero significativo, media hora o sin
+	 * ninguna gravedad, se rechaza.
+	 */
 	@Test
 	void rechazaDatosQueNoCumplenLasReglas() {
 		assertThatThrownBy(() -> contactos.agregar(maria, vecino("Luis", null, null), COORDINADOR, "ip"))
 				.isInstanceOf(SolicitudRechazada.class);
 		assertThatThrownBy(() -> contactos.agregar(maria, new DatosContacto("Luis", null, "l@mail.cl", "AMIGO", null,
-				false, null, null), COORDINADOR, "ip")).isInstanceOf(SolicitudRechazada.class);
-		assertThatThrownBy(() -> contactos.agregar(maria, new DatosContacto("Luis", null, "l@mail.cl", "VECINO",
-				"hijo", false, null, null), COORDINADOR, "ip")).isInstanceOf(SolicitudRechazada.class);
-		assertThatThrownBy(() -> contactos.agregar(maria, new DatosContacto("Luis", null, "l@mail.cl", "VECINO",
-				null, false, LocalTime.of(8, 0), null), COORDINADOR, "ip")).isInstanceOf(SolicitudRechazada.class);
+				false, null, null, TODAS), COORDINADOR, "ip")).isInstanceOf(SolicitudRechazada.class);
+		assertThatThrownBy(() -> contactos.agregar(maria, new DatosContacto("Luis", null, "l@mail.cl", "CARABINEROS",
+				"hijo", false, null, null, TODAS), COORDINADOR, "ip")).isInstanceOf(SolicitudRechazada.class);
+		assertThatThrownBy(() -> contactos.agregar(maria, new DatosContacto("Luis", null, "l@mail.cl", TERCERO,
+				null, false, LocalTime.of(8, 0), null, TODAS), COORDINADOR, "ip"))
+				.isInstanceOf(SolicitudRechazada.class);
+		assertThatThrownBy(() -> contactos.agregar(maria, new DatosContacto("Luis", null, "l@mail.cl", TERCERO,
+				null, false, null, null, Set.of()), COORDINADOR, "ip")).isInstanceOf(SolicitudRechazada.class);
+		assertThat(contactos.listar(maria).contactos()).isEmpty();
+	}
+
+	/** Cada gravedad tiene su propio orden, y un contacto puede estar en varias. */
+	@Test
+	void cadaGravedadTieneSuOrden() {
+		UUID ana = contactos.agregar(maria, familiar("Ana", "912345678", null), COORDINADOR, "ip");
+		UUID carabineros = contactos.agregar(maria, carabineros("Carabineros 1.ª Comisaría", "cuadrante@carabineros.cl",
+				EnumSet.of(Severidad.GRAVE)), COORDINADOR, "ip");
+		UUID seguridad = contactos.agregar(maria, new DatosContacto("Seguridad Ciudadana", null, "seg@muni.cl",
+				"SEGURIDAD_CIUDADANA", null, false, null, null, EnumSet.of(Severidad.MEDIA, Severidad.GRAVE)),
+				COORDINADOR, "ip");
+
+		contactos.reordenar(maria, Severidad.GRAVE, List.of(carabineros, seguridad, ana), COORDINADOR, "ip");
+
+		assertThat(enOrden(Severidad.GRAVE)).containsExactly(carabineros, seguridad, ana);
+		assertThat(enOrden(Severidad.MEDIA)).containsExactly(ana, seguridad);
+		assertThat(enOrden(Severidad.LEVE)).containsExactly(ana);
+	}
+
+	/** El primer contacto activo del paciente debe recibir avisos de las tres gravedades. */
+	@Test
+	void elPrimerContactoVaEnLasTresGravedades() {
+		assertThatThrownBy(() -> contactos.agregar(maria, carabineros("Carabineros", "c@carabineros.cl",
+				EnumSet.of(Severidad.GRAVE)), COORDINADOR, "ip"))
+				.isInstanceOf(SolicitudRechazada.class)
+				.hasMessageContaining("tres gravedades");
+		assertThat(contactos.listar(maria).contactos()).isEmpty();
+	}
+
+	/** Al editar, sumar una gravedad lo deja al final de ella y quitarla sube a los siguientes. */
+	@Test
+	void editarCambiaLasGravedadesSinDejarHuecos() {
+		UUID ana = contactos.agregar(maria, familiar("Ana", "912345678", null), COORDINADOR, "ip");
+		UUID luis = contactos.agregar(maria, vecino("Luis", null, "luis@mail.cl"), COORDINADOR, "ip");
+		UUID rosa = contactos.agregar(maria, carabineros("Rosa", "rosa@mail.cl", EnumSet.of(Severidad.GRAVE)),
+				COORDINADOR, "ip");
+
+		contactos.editar(maria, luis, new DatosContacto("Luis", null, "luis@mail.cl", TERCERO, null, false, null,
+				null, EnumSet.of(Severidad.LEVE)), COORDINADOR, "ip");
+		contactos.editar(maria, rosa, carabineros("Rosa", "rosa@mail.cl", EnumSet.of(Severidad.GRAVE,
+				Severidad.MEDIA)), COORDINADOR, "ip");
+
+		assertThat(enOrden(Severidad.LEVE)).containsExactly(ana, luis);
+		assertThat(enOrden(Severidad.MEDIA)).containsExactly(ana, rosa);
+		assertThat(enOrden(Severidad.GRAVE)).containsExactly(ana, rosa);
+		assertThat(posiciones(Severidad.GRAVE)).containsExactly(1, 2);
+	}
+
+	/** No se puede dejar una gravedad sin contactos, ni al editar ni al desactivar. */
+	@Test
+	void ningunaGravedadQuedaSinContactos() {
+		UUID ana = contactos.agregar(maria, familiar("Ana", "912345678", null), COORDINADOR, "ip");
+		contactos.agregar(maria, carabineros("Carabineros", "c@carabineros.cl", EnumSet.of(Severidad.GRAVE)),
+				COORDINADOR, "ip");
+
+		assertThatThrownBy(() -> contactos.editar(maria, ana, new DatosContacto("Ana", "912345678", null, TERCERO,
+				"hija", false, null, null, EnumSet.of(Severidad.LEVE, Severidad.GRAVE)), COORDINADOR, "ip"))
+				.isInstanceOf(Conflicto.class)
+				.hasMessageContaining("media");
+		assertThatThrownBy(() -> contactos.desactivar(maria, ana, COORDINADOR, "ip"))
+				.isInstanceOf(Conflicto.class);
+		assertThat(enOrden(Severidad.MEDIA)).containsExactly(ana);
 	}
 
 	/** Una persona ya registrada en otro paciente se reutiliza; en el mismo paciente no se repite. */
@@ -192,7 +270,10 @@ class ContactosPacienteTest {
 				.containsExactly(false, true);
 	}
 
-	/** Desactivar sube a los siguientes sin dejar huecos; reactivar lo deja al final. */
+	/**
+	 * Desactivar lo saca de todas sus gravedades y sube a los siguientes; reactivar pide las gravedades y lo deja
+	 * al final de cada una.
+	 */
 	@Test
 	void desactivarSubeALosSiguientesYReactivarDejaAlFinal() {
 		UUID ana = contactos.agregar(maria, familiar("Ana", "912345678", null), COORDINADOR, "ip");
@@ -202,58 +283,81 @@ class ContactosPacienteTest {
 		contactos.desactivar(maria, ana, COORDINADOR, "ip");
 		List<ContactoDelPaciente> lista = contactos.listar(maria).contactos();
 		assertThat(lista).extracting(ContactoDelPaciente::id).containsExactly(luis, rosa, ana);
-		assertThat(lista).extracting(ContactoDelPaciente::prioridad).startsWith(1, 2);
 		assertThat(lista.getLast().activo()).isFalse();
+		assertThat(lista.getLast().ordenes()).isEmpty();
+		assertThat(posiciones(Severidad.LEVE)).containsExactly(1, 2);
 
-		contactos.reactivar(maria, ana, COORDINADOR, "ip");
-		assertThat(contactos.listar(maria).contactos()).extracting(ContactoDelPaciente::prioridad)
-				.containsExactly(1, 2, 3);
-		assertThat(contactos.listar(maria).contactos().getLast().id()).isEqualTo(ana);
+		assertThatThrownBy(() -> contactos.reactivar(maria, ana, Set.of(), COORDINADOR, "ip"))
+				.isInstanceOf(SolicitudRechazada.class);
+		contactos.reactivar(maria, ana, EnumSet.of(Severidad.GRAVE), COORDINADOR, "ip");
+		assertThat(enOrden(Severidad.GRAVE)).containsExactly(luis, rosa, ana);
+		assertThat(enOrden(Severidad.LEVE)).containsExactly(luis, rosa);
 	}
 
-	/** Reordenar exige a todos los activos, una vez cada uno. */
+	/** Reordenar una gravedad exige a todos sus contactos, una vez cada uno, y no toca las otras. */
 	@Test
-	void reordenarExigeATodosLosActivos() {
+	void reordenarExigeATodosLosDeEsaGravedad() {
 		UUID ana = contactos.agregar(maria, familiar("Ana", "912345678", null), COORDINADOR, "ip");
 		UUID luis = contactos.agregar(maria, vecino("Luis", null, "luis@mail.cl"), COORDINADOR, "ip");
 
-		assertThatThrownBy(() -> contactos.reordenar(maria, List.of(luis), COORDINADOR, "ip"))
+		assertThatThrownBy(() -> contactos.reordenar(maria, Severidad.LEVE, List.of(luis), COORDINADOR, "ip"))
 				.isInstanceOf(SolicitudRechazada.class);
-		assertThatThrownBy(() -> contactos.reordenar(maria, List.of(luis, luis), COORDINADOR, "ip"))
+		assertThatThrownBy(() -> contactos.reordenar(maria, Severidad.LEVE, List.of(luis, luis), COORDINADOR, "ip"))
 				.isInstanceOf(SolicitudRechazada.class);
-		contactos.reordenar(maria, List.of(luis, ana), COORDINADOR, "ip");
+		assertThatThrownBy(() -> contactos.reordenar(maria, null, List.of(luis, ana), COORDINADOR, "ip"))
+				.isInstanceOf(SolicitudRechazada.class);
+		contactos.reordenar(maria, Severidad.LEVE, List.of(luis, ana), COORDINADOR, "ip");
 
-		assertThat(contactos.listar(maria).contactos()).extracting(ContactoDelPaciente::id).containsExactly(luis, ana);
+		assertThat(enOrden(Severidad.LEVE)).containsExactly(luis, ana);
+		assertThat(enOrden(Severidad.GRAVE)).containsExactly(ana, luis);
 	}
 
 	/** Un contacto de 08:00 a 20:00 deja la noche sin cobertura. */
 	@Test
 	void informaLasHorasSinCobertura() {
-		contactos.agregar(maria, new DatosContacto("Luis", null, "luis@mail.cl", "VECINO", null, false,
-				LocalTime.of(8, 0), LocalTime.of(20, 0)), COORDINADOR, "ip");
+		contactos.agregar(maria, new DatosContacto("Luis", null, "luis@mail.cl", TERCERO, null, false,
+				LocalTime.of(8, 0), LocalTime.of(20, 0), TODAS), COORDINADOR, "ip");
 
 		assertThat(contactos.listar(maria).sinCobertura())
 				.containsExactly(new Cobertura.Tramo(LocalTime.of(20, 0), LocalTime.of(8, 0)));
 	}
 
-	/** @return un familiar sin horario (todo el día) */
+	/** @return los contactos de esa gravedad, del primero al último */
+	private List<UUID> enOrden(Severidad gravedad) {
+		return contactos.listar(maria).contactos().stream().filter(contacto -> contacto.orden(gravedad) != null)
+				.sorted(java.util.Comparator.comparing(contacto -> contacto.orden(gravedad)))
+				.map(ContactoDelPaciente::id).toList();
+	}
+
+	/** @return los números de orden de esa gravedad, de menor a mayor */
+	private List<Integer> posiciones(Severidad gravedad) {
+		return contactos.listar(maria).contactos().stream().map(contacto -> contacto.orden(gravedad))
+				.filter(java.util.Objects::nonNull).sorted().toList();
+	}
+
+	/** @return un tercero significativo (hija) sin horario, en las tres gravedades */
 	private static DatosContacto familiar(String nombre, String whatsapp, String correo) {
-		return new DatosContacto(nombre, whatsapp, correo, "FAMILIA", "hija", false, null, null);
+		return new DatosContacto(nombre, whatsapp, correo, TERCERO, "hija", false, null, null, TODAS);
 	}
 
-	/** @return un familiar que es el cuidador principal */
+	/** @return un tercero significativo que es el cuidador principal */
 	private static DatosContacto cuidador(String nombre, String whatsapp) {
-		return new DatosContacto(nombre, whatsapp, null, "FAMILIA", null, true, null, null);
+		return new DatosContacto(nombre, whatsapp, null, TERCERO, null, true, null, null, TODAS);
 	}
 
-	/** @return un vecino sin horario */
+	/** @return un tercero significativo sin parentesco ni horario, en las tres gravedades */
 	private static DatosContacto vecino(String nombre, String whatsapp, String correo) {
-		return new DatosContacto(nombre, whatsapp, correo, "VECINO", null, false, null, null);
+		return new DatosContacto(nombre, whatsapp, correo, TERCERO, null, false, null, null, TODAS);
 	}
 
-	/** @return Seguridad Ciudadana con correo */
+	/** @return Seguridad Ciudadana con correo, en las tres gravedades */
 	private static DatosContacto seguridad(String nombre, String correo) {
-		return new DatosContacto(nombre, null, correo, "SEGURIDAD_CIUDADANA", null, false, null, null);
+		return new DatosContacto(nombre, null, correo, "SEGURIDAD_CIUDADANA", null, false, null, null, TODAS);
+	}
+
+	/** @return Carabineros con correo, en esas gravedades */
+	private static DatosContacto carabineros(String nombre, String correo, Set<Severidad> gravedades) {
+		return new DatosContacto(nombre, null, correo, "CARABINEROS", null, false, null, null, gravedades);
 	}
 
 }

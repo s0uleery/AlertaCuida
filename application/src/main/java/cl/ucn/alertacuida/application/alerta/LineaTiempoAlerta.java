@@ -5,6 +5,7 @@ import cl.ucn.alertacuida.application.alerta.modelo.AvisoRelojRegistrado;
 import cl.ucn.alertacuida.application.alerta.modelo.HistorialAlerta;
 import cl.ucn.alertacuida.application.alerta.modelo.IntentoRegistrado;
 import cl.ucn.alertacuida.application.alerta.modelo.PasoAlerta;
+import cl.ucn.alertacuida.application.alerta.modelo.PasosOficinaRegistrados;
 import cl.ucn.alertacuida.application.alerta.modelo.TipoPaso;
 import cl.ucn.alertacuida.application.aviso.modelo.PoliticaReintentos;
 import java.time.Instant;
@@ -36,6 +37,7 @@ final class LineaTiempoAlerta {
 		agregarDelReloj(pasos, historial);
 		agregarAvisos(pasos, historial.intentos());
 		agregarAtencion(pasos, historial);
+		agregarPasosOficina(pasos, historial);
 		agregarAvisosReloj(pasos, historial, politica, ahora);
 		agregarSimple(pasos, historial.cierreSeguimiento(), TipoPaso.SEGUIMIENTO_CERRADO, null);
 		pasos.sort(Comparator.comparing(PasoAlerta::fechaHora));
@@ -79,7 +81,28 @@ final class LineaTiempoAlerta {
 		agregarDeAviso(pasos, intento.fallo(), TipoPaso.AVISO_FALLIDO, intento, intento.motivoFallo());
 		agregarDeAviso(pasos, intento.fechaRespuesta(), TipoPaso.RESPUESTA_CONTACTO, intento, intento.respuesta());
 		agregarDeAviso(pasos, intento.llamada(), TipoPaso.LLAMADA_PACIENTE, intento, null);
+		agregarDeAviso(pasos, intento.fechaResultadoLlamada(), TipoPaso.RESULTADO_LLAMADA, intento,
+				intento.resultadoLlamada());
 		agregarDeAviso(pasos, intento.llegada(), TipoPaso.LLEGADA_CONTACTO, intento, null);
+	}
+
+	/** Los pasos que dio la oficina desde el enlace del correo; los da quien tiene el caso a cargo. */
+	private static void agregarPasosOficina(List<PasoAlerta> pasos, HistorialAlerta historial) {
+		PasosOficinaRegistrados oficina = historial.oficina();
+		String quien = historial.responsable();
+		agregarDeOficina(pasos, oficina.llamada(), TipoPaso.LLAMADA_OFICINA, oficina.resultadoLlamada(), quien);
+		agregarDeOficina(pasos, oficina.personalAsignado(), TipoPaso.PERSONAL_ASIGNADO, null, quien);
+		agregarDeOficina(pasos, oficina.sinDisponibilidad(), TipoPaso.SIN_DISPONIBILIDAD, null, quien);
+		agregarDeOficina(pasos, oficina.llegada(), TipoPaso.LLEGADA_PERSONAL, null, quien);
+		agregarDeOficina(pasos, oficina.visita(), TipoPaso.RESULTADO_VISITA, oficina.resultadoVisita(), quien);
+	}
+
+	/** Agrega el paso de la oficina si ocurrió, con quien lo dio. */
+	private static void agregarDeOficina(List<PasoAlerta> pasos, Instant fecha, TipoPaso tipo, String detalle,
+			String usuario) {
+		if (fecha != null) {
+			pasos.add(new PasoAlerta(fecha, tipo, null, null, null, detalle, usuario));
+		}
 	}
 
 	/**

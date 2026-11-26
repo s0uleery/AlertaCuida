@@ -38,7 +38,7 @@ export interface Calendario {
 export interface PasoSimulado {
   orden: number;
   nombre: string;
-  /** FAMILIA, VECINO, PRLAC, SEGURIDAD_CIUDADANA… */
+  /** TERCERO_SIGNIFICATIVO, CARABINEROS, SEGURIDAD_CIUDADANA, CESFAM… */
   tipo: string;
   parentesco: string | null;
   cuidadorPrincipal: boolean;

@@ -35,6 +35,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneOffset;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -111,7 +112,7 @@ class ConfiguracionDelRelojTest {
 		assertThat(contenido.feriados()).containsExactly(LocalDate.of(2026, 9, 18), LocalDate.of(2027, 1, 1));
 	}
 
-	/** Solo viajan los activos con un canal usable, por prioridad: WhatsApp con opt-in o correo. */
+	/** Solo viajan los activos con un canal usable, con su lugar en cada gravedad: WhatsApp con opt-in o correo. */
 	@Test
 	void soloViajanLosContactosQuePuedenRecibirAvisos() {
 		UUID ana = contactos.agregar(maria, contacto("Ana", "9 1234 5678", null, "08:00", "20:00"), COORDINADOR, "ip");
@@ -126,10 +127,11 @@ class ConfiguracionDelRelojTest {
 
 		assertThat(lista).extracting(ContactoConfigurado::idContacto).containsExactly(ana, seguridad);
 		assertThat(lista.getFirst().nombre()).isEqualTo("Ana");
-		assertThat(lista.getFirst().prioridad()).isEqualTo(1);
+		assertThat(lista.getFirst().prioridades())
+				.isEqualTo(Map.of(Severidad.LEVE, 1, Severidad.MEDIA, 1, Severidad.GRAVE, 1));
 		assertThat(lista.getFirst().horario()).isEqualTo(Horario.de(LocalTime.of(8, 0), LocalTime.of(20, 0)));
 		assertThat(lista.getFirst().canales()).containsExactly(Canal.WHATSAPP);
-		assertThat(lista.get(1).prioridad()).isEqualTo(3);
+		assertThat(lista.get(1).prioridades()).containsEntry(Severidad.GRAVE, 3);
 		assertThat(lista.get(1).canales()).containsExactly(Canal.CORREO);
 	}
 
@@ -170,12 +172,33 @@ class ConfiguracionDelRelojTest {
 		assertThat(configuraciones.de(maria)).isNotEqualTo(apagada);
 	}
 
-	/** Cada contacto viaja con su tipo, para que el botón de ayuda avise primero a los vecinos. */
+	/** Cada contacto viaja con su tipo y solo con las gravedades donde está, con su lugar en cada una. */
 	@Test
-	void cadaContactoViajaConSuTipo() {
+	void cadaContactoViajaConSuTipoYSusGravedades() {
 		contactos.agregar(maria, contacto("Ana", null, "ana@mail.cl", null, null), COORDINADOR, "ip");
+		UUID carabineros = contactos.agregar(maria, new DatosContacto("Carabineros", null, "turno@carabineros.cl",
+				"CARABINEROS", null, false, null, null, EnumSet.of(Severidad.GRAVE)), COORDINADOR, "ip");
+		contactos.reordenar(maria, Severidad.GRAVE, List.of(carabineros,
+				contactos.listar(maria).contactos().getFirst().id()), COORDINADOR, "ip");
 
-		assertThat(configuraciones.armar(maria).contenido().contactos().getFirst().tipo()).isEqualTo("VECINO");
+		List<ContactoConfigurado> lista = configuraciones.armar(maria).contenido().contactos();
+		assertThat(lista.getFirst().tipo()).isEqualTo("TERCERO_SIGNIFICATIVO");
+		ContactoConfigurado deCarabineros = lista.stream().filter(c -> c.idContacto().equals(carabineros))
+				.findFirst().orElseThrow();
+		assertThat(deCarabineros.tipo()).isEqualTo("CARABINEROS");
+		assertThat(deCarabineros.prioridades()).isEqualTo(Map.of(Severidad.GRAVE, 1));
+	}
+
+	/** Cambiar el orden de una gravedad cambia la versión: el reloj debe descargar la lista nueva. */
+	@Test
+	void laVersionCambiaAlReordenarUnaGravedad() {
+		UUID ana = contactos.agregar(maria, contacto("Ana", null, "ana@mail.cl", null, null), COORDINADOR, "ip");
+		UUID luis = contactos.agregar(maria, contacto("Luis", null, "luis@mail.cl", null, null), COORDINADOR, "ip");
+		String antes = configuraciones.de(maria);
+
+		contactos.reordenar(maria, Severidad.MEDIA, List.of(luis, ana), COORDINADOR, "ip");
+
+		assertThat(configuraciones.de(maria)).isNotEqualTo(antes);
 	}
 
 	/** Cambiar el tiempo o la gravedad de la regla de tendencia cambia la versión: el reloj debe descargarlos. */
@@ -208,10 +231,11 @@ class ConfiguracionDelRelojTest {
 				Severidad.MEDIA, reloj);
 	}
 
-	/** @return un vecino, con horario si vienen las dos horas ("08:00") */
+	/** @return un tercero significativo en las tres gravedades, con horario si vienen las dos horas ("08:00") */
 	private static DatosContacto contacto(String nombre, String whatsapp, String correo, String inicio, String fin) {
-		return new DatosContacto(nombre, whatsapp, correo, "VECINO", null, false,
-				inicio == null ? null : LocalTime.parse(inicio), fin == null ? null : LocalTime.parse(fin));
+		return new DatosContacto(nombre, whatsapp, correo, "TERCERO_SIGNIFICATIVO", null, false,
+				inicio == null ? null : LocalTime.parse(inicio), fin == null ? null : LocalTime.parse(fin),
+				EnumSet.allOf(Severidad.class));
 	}
 
 	private static BigDecimal numero(int valor) {

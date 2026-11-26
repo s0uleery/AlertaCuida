@@ -3,7 +3,9 @@ package cl.ucn.alertacuida.paciente;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.hasItems;
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -134,8 +136,8 @@ class PerfilYContactosTest {
 	/** Los contactos se guardan cifrados y con hash; la lista muestra canales y horas sin cobertura. */
 	@Test
 	void losContactosQuedanCifradosYLaListaMuestraLaCobertura() throws Exception {
-		String ana = agregar(maria, contacto("Ana Rojas", "9 1234 5678", null, "FAMILIA", null, null));
-		agregar(maria, contacto("Luis Pérez", null, "Luis@Mail.cl", "VECINO", "08:00", "20:00"));
+		String ana = agregar(maria, contacto("Ana Rojas", "9 1234 5678", null, "TERCERO_SIGNIFICATIVO", null, null));
+		agregar(maria, contacto("Luis Pérez", null, "Luis@Mail.cl", "TERCERO_SIGNIFICATIVO", "08:00", "20:00"));
 
 		mvc.perform(conToken(get(contactos(maria)), coordinador))
 				.andExpect(status().isOk())
@@ -176,28 +178,55 @@ class PerfilYContactosTest {
 				.andExpect(jsonPath("$.contactos[0].otrosPacientes").value(1));
 	}
 
-	/** Reordenar y desactivar respetan el índice único de prioridad sin dejar huecos. */
+	/**
+	 * Cada gravedad se ordena por separado; desactivar sube a los siguientes y reactivar pide las gravedades. Las
+	 * filas quedan en orden_contacto.
+	 */
 	@Test
-	void reordenarYDesactivarRespetanLaPrioridadUnica() throws Exception {
-		String ana = agregar(maria, contacto("Ana", "912345678", null, "FAMILIA", null, null));
-		String luis = agregar(maria, contacto("Luis", null, "luis@mail.cl", "VECINO", null, null));
+	void cadaGravedadSeOrdenaPorSeparado() throws Exception {
+		String ana = agregar(maria, contacto("Ana", "912345678", null, "TERCERO_SIGNIFICATIVO", null, null));
+		String luis = agregar(maria, contacto("Luis", null, "luis@mail.cl", "TERCERO_SIGNIFICATIVO", null, null));
 
 		conJson(put(contactos(maria) + "/orden"), "{\"orden\": [\"" + luis + "\", \"" + ana + "\"]}")
+				.andExpect(status().isBadRequest());
+		conJson(put(contactos(maria) + "/orden"),
+				"{\"gravedad\": \"GRAVE\", \"orden\": [\"" + luis + "\", \"" + ana + "\"]}")
 				.andExpect(status().isNoContent());
 		mvc.perform(conToken(get(contactos(maria)), coordinador))
-				.andExpect(jsonPath("$.contactos[0].id").value(luis))
-				.andExpect(jsonPath("$.contactos[0].prioridad").value(1));
+				.andExpect(jsonPath("$.contactos[?(@.id == '" + luis + "')].prioridades.GRAVE", contains(1)))
+				.andExpect(jsonPath("$.contactos[?(@.id == '" + luis + "')].prioridades.LEVE", contains(2)))
+				.andExpect(jsonPath("$.contactos[?(@.id == '" + ana + "')].prioridades.GRAVE", contains(2)));
+		assertThat(jdbc.sql("SELECT count(*) FROM orden_contacto").query(Integer.class).single()).isEqualTo(6);
+
 		mvc.perform(conToken(post(contactos(maria) + "/" + luis + "/desactivar"), coordinador))
 				.andExpect(status().isNoContent());
 		mvc.perform(conToken(get(contactos(maria)), coordinador))
 				.andExpect(jsonPath("$.contactos[0].id").value(ana))
-				.andExpect(jsonPath("$.contactos[0].prioridad").value(1))
+				.andExpect(jsonPath("$.contactos[0].prioridades.GRAVE").value(1))
 				.andExpect(jsonPath("$.contactos[1].activo").value(false));
-		mvc.perform(conToken(post(contactos(maria) + "/" + luis + "/reactivar"), coordinador))
+		conJson(post(contactos(maria) + "/" + luis + "/reactivar"), "{\"gravedades\": []}")
+				.andExpect(status().isBadRequest());
+		conJson(post(contactos(maria) + "/" + luis + "/reactivar"), "{\"gravedades\": [\"GRAVE\"]}")
 				.andExpect(status().isNoContent());
 		mvc.perform(conToken(get(contactos(maria)), coordinador))
 				.andExpect(jsonPath("$.contactos[1].id").value(luis))
-				.andExpect(jsonPath("$.contactos[1].prioridad").value(2));
+				.andExpect(jsonPath("$.contactos[1].prioridades.GRAVE").value(2))
+				.andExpect(jsonPath("$.contactos[1].prioridades.LEVE").doesNotExist());
+	}
+
+	/** El primer contacto va en las tres gravedades, y ninguna gravedad puede quedar sin contactos. */
+	@Test
+	void ningunaGravedadQuedaSinContactos() throws Exception {
+		conJson(post(contactos(maria)), contacto("Carabineros", null, "turno@carabineros.cl", "CARABINEROS", null,
+				null, "[\"GRAVE\"]")).andExpect(status().isBadRequest());
+		String ana = agregar(maria, contacto("Ana", "912345678", null, "TERCERO_SIGNIFICATIVO", null, null));
+		agregar(maria, contacto("Carabineros", null, "turno@carabineros.cl", "CARABINEROS", null, null,
+				"[\"GRAVE\"]"));
+
+		mvc.perform(conToken(post(contactos(maria) + "/" + ana + "/desactivar"), coordinador))
+				.andExpect(status().isConflict());
+		conJson(put(contactos(maria) + "/" + ana), contacto("Ana", "912345678", null, "TERCERO_SIGNIFICATIVO", null,
+				null, "[\"GRAVE\"]")).andExpect(status().isConflict());
 	}
 
 	/** El rol PERSONAL no ve contactos ni perfil clínico; el catálogo de tipos lo ve el coordinador. */
@@ -209,7 +238,10 @@ class PerfilYContactosTest {
 		mvc.perform(conToken(get(perfil()), personal)).andExpect(status().isForbidden());
 		mvc.perform(conToken(get("/api/tipos-contacto"), coordinador))
 				.andExpect(status().isOk())
-				.andExpect(jsonPath("$[*].codigo", hasItem("FAMILIA")));
+				.andExpect(jsonPath("$[*].codigo", hasItems("TERCERO_SIGNIFICATIVO", "CARABINEROS", "CESFAM",
+						"SEGURIDAD_CIUDADANA")))
+				.andExpect(jsonPath("$[*].codigo", not(hasItem("FAMILIA"))))
+				.andExpect(jsonPath("$[*].codigo", not(hasItem("VECINO"))));
 	}
 
 	/** @return la ruta del perfil clínico de María */
@@ -225,10 +257,19 @@ class PerfilYContactosTest {
 	/** @return el cuerpo JSON de un contacto; las horas "HH:mm" o null para todo el día */
 	private static String contacto(String nombre, String whatsapp, String correo, String tipo, String inicio,
 			String fin) {
+		return contacto(nombre, whatsapp, correo, tipo, inicio, fin, "[\"LEVE\", \"MEDIA\", \"GRAVE\"]");
+	}
+
+	/**
+	 * @param gravedades arreglo JSON de las gravedades, por ejemplo ["GRAVE"]
+	 * @return el cuerpo del contacto, en esas gravedades
+	 */
+	private static String contacto(String nombre, String whatsapp, String correo, String tipo, String inicio,
+			String fin, String gravedades) {
 		return """
 				{"nombre": "%s", "whatsapp": %s, "correo": %s, "tipo": "%s", "cuidadorPrincipal": false,
-				"horaInicio": %s, "horaFin": %s}""".formatted(nombre, texto(whatsapp), texto(correo), tipo,
-				texto(inicio), texto(fin));
+				"horaInicio": %s, "horaFin": %s, "gravedades": %s}""".formatted(nombre, texto(whatsapp), texto(correo),
+				tipo, texto(inicio), texto(fin), gravedades);
 	}
 
 	/** @return el valor entre comillas, o null */

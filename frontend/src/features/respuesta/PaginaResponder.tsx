@@ -7,7 +7,8 @@ import { formatearFechaHora } from '../../comun/fechas';
 import { CONDICION, InsigniaGravedad } from '../alertas/etiquetas';
 import { PlantillaAcceso } from '../../navegacion/PlantillaAcceso';
 import { respuestaApi } from './respuestaApi';
-import type { RespuestaContacto, VistaRespuesta } from './tipos';
+import { PasosOficina } from './PasosOficina';
+import type { RespuestaContacto, ResultadoLlamadaContacto, VistaRespuesta } from './tipos';
 
 /** Texto de cada botón, igual al del correo. */
 const TEXTO: Record<RespuestaContacto, string> = {
@@ -22,13 +23,17 @@ const TEXTO: Record<RespuestaContacto, string> = {
  * después de "#" y se borra de la barra de direcciones.
  *
  * Mientras la alerta está abierta, lo primero es "Llamar al paciente" (al número de la SIM del reloj), y quien
- * confirmó que va avisa con "Llegué donde el paciente" al llegar: eso resuelve la alerta (24-11-2026).
+ * confirmó que va avisa con "Llegué donde el paciente" al llegar: eso resuelve la alerta (24-11-2026). Después de
+ * llamar, el contacto dice si le contestaron y recién entonces elige si va (26-11-2026).
+ *
+ * El enlace de un coordinador muestra, en cambio, los pasos de la oficina ({@link PasosOficina}): los mismos de los
+ * mensajes de WhatsApp N1 (26-11-2026).
  */
 export function PaginaResponder() {
   const [token] = useState(() => window.location.hash.slice(1));
   const [vista, setVista] = useState<VistaRespuesta | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [enviando, setEnviando] = useState<RespuestaContacto | 'LLEGADA' | null>(null);
+  const [enviando, setEnviando] = useState<RespuestaContacto | ResultadoLlamadaContacto | 'LLEGADA' | null>(null);
   const confirmar = useConfirmar();
 
   useEffect(() => {
@@ -51,6 +56,19 @@ export function PaginaResponder() {
     setError(null);
     try {
       setVista(await respuestaApi.responder(token, respuesta));
+    } catch (e) {
+      setError(mensaje(e));
+    } finally {
+      setEnviando(null);
+    }
+  }
+
+  /** Registra si le contestaron; recién entonces se muestran "Confirmo que voy" y "No puedo asistir". */
+  async function registrarLlamada(resultado: ResultadoLlamadaContacto) {
+    setEnviando(resultado);
+    setError(null);
+    try {
+      setVista(await respuestaApi.resultadoLlamada(token, resultado));
     } catch (e) {
       setError(mensaje(e));
     } finally {
@@ -94,7 +112,9 @@ export function PaginaResponder() {
 
             {vista.telefonoPaciente && <LlamarAlPaciente token={token} telefono={vista.telefonoPaciente} />}
 
-            {vista.respuesta ? (
+            {vista.oficina ? (
+              <PasosOficina vista={{ ...vista, oficina: vista.oficina }} token={token} alCambiar={setVista} />
+            ) : vista.respuesta ? (
               <div className="space-y-3">
                 <Respondida vista={vista} />
                 {error && <Aviso tono="error">{error}</Aviso>}
@@ -111,8 +131,36 @@ export function PaginaResponder() {
               </div>
             ) : vista.cerrada ? (
               <Aviso tono="info">El equipo ya atendió esta alerta. No es necesario que responda.</Aviso>
+            ) : vista.telefonoPaciente && !vista.resultadoLlamada ? (
+              <div className="space-y-3">
+                <p className="text-sm text-apagado">Después de llamar, cuéntenos si le contestó:</p>
+                {error && <Aviso tono="error">{error}</Aviso>}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => registrarLlamada('CONTESTA')}
+                    disabled={enviando !== null}
+                    className={`${claseBoton('principal')} py-3 text-base`}
+                  >
+                    {enviando === 'CONTESTA' ? 'Enviando…' : 'Contestó'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => registrarLlamada('NO_CONTESTA')}
+                    disabled={enviando !== null}
+                    className={`${claseBoton('contorno')} py-3 text-base`}
+                  >
+                    {enviando === 'NO_CONTESTA' ? 'Enviando…' : 'No contestó'}
+                  </button>
+                </div>
+              </div>
             ) : (
               <div className="space-y-3">
+                {vista.resultadoLlamada && (
+                  <p className="text-[13px] text-apagado">
+                    {vista.resultadoLlamada === 'CONTESTA' ? 'Le contestó la llamada.' : 'No le contestó la llamada.'}
+                  </p>
+                )}
                 <p className="text-sm text-apagado">Cuéntenos si puede ir a ver a la persona:</p>
                 {error && <Aviso tono="error">{error}</Aviso>}
                 <button

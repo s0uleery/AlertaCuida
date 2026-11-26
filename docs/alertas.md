@@ -12,7 +12,7 @@ El reloj y el servidor son dos sistemas aparte, y la app del reloj está fuera d
 |---|---|
 | Evalúa sus lecturas con los parámetros del paciente y detecta la emergencia | Entrega esos parámetros en la configuración |
 | Vibra 30 segundos para que el paciente pueda cancelar | Guarda cada alerta sin descartar ninguna y marca lo que no calza |
-| Elige el contacto por prioridad y horario, espera y pasa al siguiente | Envía el WhatsApp o el correo que pide el reloj (la clave de Meta queda solo aquí) |
+| Elige el contacto según la lista de la gravedad y su horario, espera y pasa al siguiente | Envía el WhatsApp o el correo que pide el reloj (la clave de Meta queda solo aquí) |
 | Al terminar la lista, la repite una vez e informa `SIN_RESPUESTA` | Recibe la respuesta del contacto, avisa al reloj por FCM y registra el recorrido |
 | | Avisa a la oficina PRLAC de las alertas de salud, crea las técnicas y las avisa por correo |
 
@@ -42,16 +42,20 @@ El servidor solo puede crear alertas técnicas y simulacros: lo impide un `CHECK
 
 La regla está fija en el código (`ReglaEnrutamiento`). El horario de cada contacto se respeta siempre, también en horario hábil.
 
+Cada gravedad tiene **su propia lista ordenada** de contactos (26-11-2026, tabla `orden_contacto`), y una alerta recorre **solo** la de su gravedad. Un contacto puede estar en varias, con un lugar distinto en cada una. Por ejemplo, en las graves: 1 Carabineros, 2 Seguridad Ciudadana, 3 el tercero significativo. Si la alerta se agrava mientras el reloj avisa, el reloj cambia a la lista de grave desde el primero.
+
 | Gravedad | En horario hábil | Fuera del horario hábil |
 |---|---|---|
-| `LEVE` | Avisa a los contactos | No avisa: espera al día hábil (`espera_dia_habil`) |
-| `MEDIA` | Avisa a los contactos | Avisa a los contactos disponibles a esa hora |
-| `GRAVE` | Avisa a los contactos | Avisa a los contactos disponibles a esa hora |
+| `LEVE` | Avisa a la lista de leve | No avisa: espera al día hábil (`espera_dia_habil`) |
+| `MEDIA` | Avisa a la lista de media | Avisa a los de la lista de media disponibles a esa hora |
+| `GRAVE` | Avisa a la lista de grave | Avisa a los de la lista de grave disponibles a esa hora |
 
 - **Horario hábil:** al inicio, lunes a jueves de 08:30 a 17:30 y viernes de 08:30 a 16:30, hora de Chile, sin feriados nacionales. El inicio cuenta y el fin no: a las 17:30 en punto ya es fuera de horario. Desde el 25-11-2026 la jornada se edita en Calendario > Jornada hábil y feriados (`ADMINISTRACION:EDITAR`) y rige al tiro, también para el reloj; queda en la auditoría. Los feriados no se editan desde el dashboard.
 - **Simulador de canales** (Calendario, 25-11-2026): con un día, una hora, una gravedad y, si se quiere, un usuario, muestra qué haría el sistema con estas mismas reglas: si espera al día hábil, si avisa a la oficina PRLAC y a qué contactos avisaría el reloj, en orden. No avisa a nadie.
 - Cada paciente debe tener contactos disponibles a toda hora, porque las medias y las graves avisan siempre.
-- Con el botón de ayuda van primero los contactos `VECINO`, por prioridad, y después el resto, por prioridad.
+- **Ninguna gravedad queda vacía:** mientras el paciente tenga contactos activos, cada gravedad tiene al menos uno. Por eso el primer contacto va en las tres, y no se puede desactivar ni quitar de una gravedad a su último contacto.
+- El botón de ayuda es leve: usa la lista de leve. Desde el 26-11-2026 ya no hay vecinos: familia y vecino son "tercero significativo".
+- **Tipos de contacto:** tercero significativo (familia, vecinos y personas cercanas; único con parentesco), Carabineros, CESFAM, Seguridad Ciudadana, equipo PRLAC, institución y otro.
 
 ## Reglas que aplica el reloj
 
@@ -138,6 +142,15 @@ Definido el 05-11-2026, programado el 13-11-2026 y cambiado el 16-11-2026 en la 
 - **Solo alertas de salud.** Las técnicas no van a la oficina: se avisan por correo a las cuentas con `recibe_avisos` (ver abajo).
 - A todas las cuentas activas con rol `COORDINADOR`, a la vez, en paralelo al escalamiento del reloj y sin opción de apagarlo. A cada una le llegan **un correo y, si tiene teléfono y opt-in vigente, también un WhatsApp**.
 - **El coordinador puede confirmar.** El correo lleva el enlace a `/responder` (texto `aviso-oficina` en `correos.yml`), y el WhatsApp tendrá sus botones con la 2.9. La primera respuesta "Voy en camino" de un coordinador, por cualquier canal, confirma la alerta y detiene al reloj, igual que la de un contacto del paciente. El reloj recibe en `confirmadaPor.idContacto` el contacto interno del coordinador, que no está en su lista.
+- **Pasos de la oficina en el enlace del correo (26-11-2026).** El enlace de un coordinador ya no muestra "Confirmo que voy": muestra los mismos pasos de los mensajes de WhatsApp N1-02 a N1-11 que se arman en Meta. Los pasos son **de la alerta** (en `atencion_alerta`, V19), así que todos los enlaces del coordinador (aviso, agravamiento, recordatorio) muestran la misma etapa.
+  1. **Tomo la alerta**: queda a cargo (igual que "Asumir el caso" en el dashboard). **No confirma**: el reloj sigue avisando a los contactos.
+  2. **Resultado de la llamada** al reloj: *Paciente está bien* (confirma: el reloj deja de avisar) → se pide si el evento ocurrió: *Sí ocurrió* (`POSITIVA`, en seguimiento) o *Falsa alarma*. *Necesita atención* o *No contesta* → coordinar la visita.
+  3. **Coordinar la visita**: *Personal asignado* confirma la alerta. *Sin disponibilidad* **no** la confirma: el reloj sigue avisando, y la página muestra el último contacto avisado y el enlace a la ficha. El coordinador sigue a cargo.
+  4. **Ya llegó** (no resuelve la alerta) → resultado de la visita: *Persona bien* (vuelve a preguntar si ocurrió), *Apoyo no urgente* (`POSITIVA`, en seguimiento: se coordina con el CESFAM y se cierra desde la plataforma) o *Emergencia* → *Trasladada* (`POSITIVA` y derivación a SAMU), *Atendida en casa* u *Otro resultado* (`POSITIVA`).
+  5. Cerrada, el responsable puede **agregar un comentario**, que se suma a las observaciones del cierre.
+  - **Recordatorio:** si pasan 30 minutos (`alertacuida.oficina.recordatorio-llegada`) desde *Personal asignado* sin *Ya llegó*, sale **un correo** al responsable (propósito `RECORDATORIO`, una vez por alerta, también fuera de horario porque la oficina ya la está atendiendo). La página ofrece entonces *Ya llegó* y *Sigue en camino* (queda como nota en el seguimiento).
+  - Los demás coordinadores ven "La alerta está a cargo de …" y el botón de llamar, sin pasos. Un paso fuera de su etapa responde 409 y no cambia nada. Cada cierre pasa por `AtenderAlerta`: queda en la auditoría y, si la alerta es del reloj, avisa `ALERTA_RESUELTA`. Las observaciones dicen cómo se cerró ("Cerrada desde el enlace del correo: …").
+  - El webhook todavía **no** reconoce los botones `BTN_*` del flujo de Meta: llegan y se ignoran. Conectarlos a estos mismos pasos queda pendiente.
 - Si la alerta pasa a grave después del aviso, se avisa de nuevo de la misma forma (correo con enlace y WhatsApp), solo si el agravamiento ocurrió en horario laboral. El texto dice "pasó a grave" sin nombrar qué se detectó (texto `agravamiento`). Si ya era grave cuando salió el primer aviso, no se repite.
 - Si la alerta llegó fuera de horario (sin primer aviso) y se agrava en horario laboral, se avisa en ese momento con el texto de agravamiento (16-11-2026).
 - No se avisa de simulacros ni de alertas canceladas o resueltas.
@@ -162,7 +175,8 @@ Programado el 10-11-2026. Detalle técnico en [backend.md](backend.md#correo-ins
   - "Voy" confirma la alerta y deja el aviso `ALERTA_CONFIRMADA` al reloj para que deje de escalar. "No puedo" queda registrado y el reloj sigue con el siguiente.
   - El correo al contacto sale cuando el reloj pide avisarle por correo, o como respaldo de su WhatsApp fallido.
   - El aviso a la oficina y el de agravamiento a los coordinadores también llevan el enlace (16-11-2026). El correo del vigilante y los de las técnicas no lo llevan: no piden confirmar.
-  - **Llamar al paciente (24-11-2026):** mientras la alerta está abierta, lo primero en la página es "Llamar al paciente", que llama al número de la SIM del reloj (`smartwatch.numero_sim`). Si el reloj no tiene número, no aparece. El clic queda registrado (`registro_intento.fecha_hora_llamada`, solo el primero) y en la línea de tiempo; no se sabe si contestaron.
+  - **Llamar al paciente (24-11-2026):** mientras la alerta está abierta, lo primero en la página es "Llamar al paciente", que llama al número de la SIM del reloj (`smartwatch.numero_sim`). Si el reloj no tiene número, no aparece. El clic queda registrado (`registro_intento.fecha_hora_llamada`, solo el primero) y en la línea de tiempo.
+  - **¿Le contestó? (26-11-2026):** después del botón de llamar, el contacto del paciente elige *Contestó* o *No contestó* (`registro_intento.resultado_llamada`, V19, vale el primero), y recién entonces aparecen "Confirmo que voy" y "No puedo asistir". Si el reloj no tiene número, se salta este paso.
   - **Llegué donde el paciente (24-11-2026):** quien respondió "Voy en camino" avisa al llegar. Queda en `fecha_hora_llegada` (V17 exige que antes haya dicho que iba) y, si la alerta seguía abierta, **la resuelve el sistema**: sin responsable nuevo, clasificación ni observaciones, con el aviso `ALERTA_RESUELTA` al reloj. Si el equipo ya la había resuelto, solo se registra la llegada. La ficha muestra "Resuelta por la llegada de …" y el botón **Completar cierre**, donde el equipo agrega la clasificación y las observaciones; con `POSITIVA`, quien completa queda como responsable y se abre el seguimiento.
 - **Registro:** cada correo queda en `registro_intento`. Las cuentas del equipo figuran como **contacto interno**, que es solo un enlace a su cuenta y nunca entra en la lista que recorre el reloj. Estos avisos no cambian el estado de contacto de la alerta.
 
@@ -227,7 +241,7 @@ Los de `application.properties` requieren reiniciar el backend.
 | 05-11-2026 | Tendencia por tiempo fuera del rango normal: 120 minutos, alerta media | Reemplaza parámetros que esperaban el Anexo B | Confirmada, valor provisional |
 | 05-11-2026 | Una sola alerta de tendencia hasta volver a lo normal | | Confirmada, sujeta a validación clínica |
 | 05-11-2026 | Vuelve la zona segura, con gravedad por paciente | Revierte la eliminación de la v7 | Confirmada |
-| 05-11-2026 | Botón de ayuda leve, primero a vecinos | Revierte "sin botón de pánico" | Confirmada |
+| 05-11-2026 | Botón de ayuda leve, primero a vecinos | Revierte "sin botón de pánico" | Reemplazada el 26-11 (usa la lista de leve) |
 | 05-11-2026 | Radio de zona de 50 a 5000 m; botón activo por defecto; la zona viaja solo con el módulo activo | | Sin confirmar |
 | 05-11-2026 | Botón con otra gravedad se guarda como leve | No perder un pedido de ayuda | Sin confirmar |
 | 05-11-2026 | Aviso a todo `COORDINADOR` por WhatsApp, solo en horario laboral, con correo de respaldo | Que a la oficina le lleguen siempre a la vez | Confirmada |
@@ -312,6 +326,19 @@ Los de `application.properties` requieren reiniciar el backend.
 | 24-11-2026 | En la página del enlace, primero "Llamar al paciente", al número de la SIM del reloj, solo con la alerta abierta; el clic queda en la línea de tiempo | El paciente no tiene teléfono guardado; el reloj tiene SIM | Confirmada |
 | 24-11-2026 | WhatsApp real (2.9) según la guía de webhooks de Meta: plantillas aprobadas (leve, grave, simulacro) con botones de payload `VOY_EN_CAMINO`/`NO_PUEDO`; un 4xx de Meta no se reintenta y sale el correo; la baja del opt-in sigue manual y no se guarda el contenido de los webhooks | Lo más simple que cumple con Meta; las plantillas se leen de Meta en vez de copiarlas | Confirmada |
 | 24-11-2026 | "Llegué donde el paciente", solo para quien dijo "Voy en camino": resuelve la alerta por el sistema, y el equipo completa la clasificación y las observaciones después | Que la llegada cierre el caso sin esperar al equipo, sin perder la clasificación | Confirmada |
+| 26-11-2026 | El enlace del correo de un coordinador sigue los mismos pasos que los mensajes de WhatsApp N1-02 a N1-11; los contactos del paciente siguen con su página | Que la oficina atienda igual por correo y por WhatsApp | Confirmada |
+| 26-11-2026 | El reloj deja de avisar con "Paciente está bien" o "Personal asignado", no con "Tomo la alerta"; "Sin disponibilidad" deja que siga | No hace falta un aviso nuevo al reloj para que vuelva a escalar | Confirmada |
+| 26-11-2026 | Clasificación nueva `NO_CONFIRMADA` ("No se pudo confirmar"): se cierra sin seguimiento | Pedido en N1-03 | Reemplazada el 26-11 |
+| 26-11-2026 | Se quita `NO_CONFIRMADA`: si la persona está bien, se cierra como *Sí ocurrió* (`POSITIVA`) o *Falsa alarma* | Si la persona está bien, la alerta se cierra; basta con falsa alarma | Confirmada |
+| 26-11-2026 | Cada gravedad tiene su lista ordenada de contactos (`orden_contacto`); un contacto puede estar en varias con un lugar distinto; una alerta recorre solo la de su gravedad | Que las graves vayan primero a Carabineros y Seguridad Ciudadana sin cambiar las leves | Confirmada |
+| 26-11-2026 | Ninguna gravedad queda vacía; el primer contacto va en las tres; los contactos de antes quedan en las tres con su orden | Que el reloj siempre tenga a quién avisar | Confirmada |
+| 26-11-2026 | Si la alerta se agrava mientras el reloj avisa, cambia a la lista de grave desde el primero | La gravedad nueva decide la lista | Confirmada |
+| 26-11-2026 | Familia y vecino pasan a "tercero significativo"; se agregan Carabineros y CESFAM | Tipos del nuevo escalamiento | Confirmada |
+| 26-11-2026 | Emergencia: se cierra `POSITIVA`; "Trasladada" queda como derivación a SAMU | | Confirmada |
+| 26-11-2026 | Correo recordatorio al responsable a los 30 min de "Personal asignado" sin llegada, una vez por alerta | Una página web no avisa sola | Confirmada |
+| 26-11-2026 | Con la alerta tomada, los demás coordinadores solo ven quién la tiene | | Confirmada |
+| 26-11-2026 | El contacto del paciente dice si le contestaron antes de elegir si va; queda en su aviso | | Confirmada |
+| 26-11-2026 | La lista de alertas y la ficha se actualizan solas cada 15 s mientras la pestaña está a la vista | Antes había que refrescar para ver los avisos nuevos | Confirmada |
 
 ## Qué falta
 

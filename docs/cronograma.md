@@ -331,6 +331,8 @@ Depende de: 1.5. Listo cuando: la regla de enrutamiento está configurada, cada 
 | [x] | 1.9.3 | Pruebas, incluidos los días de cambio de hora | 3 |
 
 Nota (25-11-2026): la jornada hábil pasó a la base (V18, `horario_habil`) y se edita en Calendario con `ADMINISTRACION:EDITAR`; rige sin reiniciar y queda en la auditoría. Los feriados siguen en `calendario.yml`. Se agregó un simulador de canales en Calendario que muestra, con las reglas de hoy, qué pasaría con una alerta en un día, una hora y una gravedad dadas. Pruebas en `RequisitosCalendarioTest`. El nuevo flujo de escalamiento (PRLAC, tercero significativo, CESFAM o Carabineros) es una tarea aparte, después del rediseño.
+
+Nota (26-11-2026): primer paso del nuevo escalamiento. Cada gravedad tiene su propia lista ordenada de contactos (V20, `orden_contacto`): un contacto puede estar en varias con un lugar distinto, y una alerta recorre solo la de su gravedad (al agravarse, la de grave desde el primero). Ninguna gravedad queda vacía y el primer contacto va en las tres; los contactos de antes quedaron en las tres con su orden. Familia y vecino pasan a "tercero significativo" y se agregan Carabineros y CESFAM; el botón de ayuda ya no avisa primero a los vecinos, usa la lista de leve. La configuración del reloj cambia `prioridad` por `prioridades` (hay que avisar a quien hace el reloj). Dashboard: pestañas Leve / Media / Grave en los contactos del usuario. Pruebas en `ContactosPacienteTest`, `ReglaEnrutamientoTest`, `ConfiguracionDelRelojTest`, `PerfilYContactosTest`, `ModeloDatosTest` y `MigracionTendenciaTest`.
  
 ---
 
