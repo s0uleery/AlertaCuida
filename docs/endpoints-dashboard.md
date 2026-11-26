@@ -319,7 +319,7 @@ Vuelve al umbral base.
 ## Contactos de emergencia
 
 ### `GET /api/tipos-contacto`
-`[{ "codigo": "FAMILIA", "nombre": "Familia" }, { "codigo": "VECINO", "nombre": "Vecino o vecina" }, …]` (también `PRLAC`, `INSTITUCION`, `SEGURIDAD_CIUDADANA`, `OTRO`)
+`[{ "codigo": "TERCERO_SIGNIFICATIVO", "nombre": "Tercero significativo" }, { "codigo": "CARABINEROS", "nombre": "Carabineros" }, …]` (también `CESFAM`, `SEGURIDAD_CIUDADANA`, `PRLAC`, `INSTITUCION`, `OTRO`). Desde el 26-11-2026 no hay `FAMILIA` ni `VECINO`: son `TERCERO_SIGNIFICATIVO`.
 
 ### `GET /api/pacientes/{id}/contactos`
 ```json
@@ -328,15 +328,16 @@ Vuelve al umbral base.
     {
       "id": "…", "nombre": "Pedro Soto", "whatsapp": "+56912345678", "correo": null,
       "optInVigente": true, "fechaOptIn": "2026-10-20T13:00:00Z", "fechaRevocacion": null,
-      "tipo": "FAMILIA", "parentesco": "Hijo", "cuidadorPrincipal": true,
-      "prioridad": 1, "horaInicio": "08:00", "horaFin": "22:00",
+      "tipo": "TERCERO_SIGNIFICATIVO", "parentesco": "Hijo", "cuidadorPrincipal": true,
+      "prioridades": { "LEVE": 1, "MEDIA": 1, "GRAVE": 3 }, "horaInicio": "08:00", "horaFin": "22:00",
       "activo": true, "otrosPacientes": 0, "canales": ["WHATSAPP"]
     }
   ],
   "sinCobertura": [ { "inicio": "22:00", "fin": "08:00" } ]
 }
 ```
-- Primero van los activos, por `prioridad`, y después los desactivados.
+- Primero van los activos, por su lugar en leve, luego en media y luego en grave, y después los desactivados.
+- `prioridades`: el lugar del contacto en la lista de cada gravedad donde está (1 = primero). Una alerta recorre solo la lista de su gravedad. Un desactivado viene con `{}`.
 - `sinCobertura`: horas del día en que ningún contacto activo recibe avisos. Es una advertencia, no un error.
 - `otrosPacientes`: de cuántos otros pacientes es contacto esta misma persona.
 
@@ -344,13 +345,14 @@ Vuelve al umbral base.
 ```json
 {
   "nombre": "Pedro Soto", "whatsapp": "+56912345678", "correo": null,
-  "tipo": "FAMILIA", "parentesco": "Hijo", "cuidadorPrincipal": true,
-  "horaInicio": "08:00", "horaFin": "22:00"
+  "tipo": "TERCERO_SIGNIFICATIVO", "parentesco": "Hijo", "cuidadorPrincipal": true,
+  "horaInicio": "08:00", "horaFin": "22:00", "gravedades": ["LEVE", "MEDIA", "GRAVE"]
 }
 ```
 - Hay que poner al menos WhatsApp o correo. Sin horario, recibe avisos las 24 horas.
-- `parentesco` solo se indica si el tipo es `FAMILIA`.
-- El alta lo deja al final de la lista.
+- `parentesco` solo se indica si el tipo es `TERCERO_SIGNIFICATIVO`.
+- `gravedades`: de qué alertas recibe avisos (al menos una). El alta lo deja al final de cada una. Al editar, una gravedad nueva lo deja al final de esa lista y una que se quita sube a los siguientes; en un contacto desactivado no se usan.
+- 400 si el primer contacto activo del paciente no va en las tres gravedades. 409 si una gravedad quedaría sin contactos.
 - No se aceptan los números de emergencia (SAMU, 131).
 - Si cambia el WhatsApp, se pierde el opt-in.
 - Solo puede haber un cuidador principal, y no puede estar desactivado.
@@ -360,13 +362,13 @@ Vuelve al umbral base.
 `{ "aceptado": true }` registra que aceptó recibir WhatsApp; `false`, que lo revocó.
 
 ### `POST …/contactos/{idContacto}/desactivar` y `/reactivar`
-Sin cuerpo. Desactivar lo saca de la lista sin borrarlo; reactivar lo devuelve al final.
+Desactivar, sin cuerpo, lo saca de la lista sin borrarlo y de todas sus gravedades (409 si era el único de alguna). Reactivar pide `{ "gravedades": ["GRAVE"] }` y lo deja al final de cada una.
 
 ### `PUT /api/pacientes/{id}/contactos/orden`
 ```json
-{ "orden": ["idContacto1", "idContacto2", "idContacto3"] }
+{ "gravedad": "GRAVE", "orden": ["idContacto1", "idContacto2", "idContacto3"] }
 ```
-Debe traer **todos** los activos, cada uno una vez.
+Ordena la lista de una gravedad. Debe traer **todos** los contactos de esa gravedad, cada uno una vez; las otras gravedades no cambian.
 
 ## Reloj de un paciente
 
@@ -632,10 +634,10 @@ Reemplaza la jornada: los días que no van dejan de ser hábiles. Rige al tiro y
 
 ```json
 { "habil": false, "feriado": false, "esperaDiaHabil": false, "avisoOficina": false,
-  "contactos": [ { "orden": 1, "nombre": "Hija", "tipo": "FAMILIA", "parentesco": "Hija", "cuidadorPrincipal": true, "canales": ["WHATSAPP", "CORREO"] } ] }
+  "contactos": [ { "orden": 1, "nombre": "Hija", "tipo": "TERCERO_SIGNIFICATIVO", "parentesco": "Hija", "cuidadorPrincipal": true, "canales": ["WHATSAPP", "CORREO"] } ] }
 ```
 
-Con las reglas que el sistema aplica hoy. `idPaciente` es opcional: sin él, `contactos` va vacía. Una leve fuera de horario responde `esperaDiaHabil: true` y sin contactos. No guarda nada.
+Con las reglas que el sistema aplica hoy: `contactos` es la lista de esa gravedad, en su orden. `idPaciente` es opcional: sin él, `contactos` va vacía. Una leve fuera de horario responde `esperaDiaHabil: true` y sin contactos. No guarda nada.
 
 ### Exportar reportes
 

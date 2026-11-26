@@ -4,7 +4,7 @@ import type { ClasificacionAlerta, PasoAlerta } from './tipos';
 
 /** Qué le avisa el servidor al reloj, en palabras. */
 const AVISO_RELOJ: Record<string, string> = {
-  ALERTA_CONFIRMADA: 'un contacto confirmó',
+  ALERTA_CONFIRMADA: 'la alerta quedó confirmada',
   ALERTA_RESUELTA: 'la alerta quedó resuelta',
   SIMULACRO: 'simulacro',
   CONFIGURACION_NUEVA: 'configuración nueva',
@@ -14,6 +14,20 @@ const AVISO_RELOJ: Record<string, string> = {
 const RESPUESTA: Record<string, string> = {
   VOY_EN_CAMINO: 'Voy en camino',
   NO_PUEDO: 'No puedo',
+};
+
+/** Cómo se muestra el resultado de la llamada de la oficina desde el enlace del correo. */
+const LLAMADA_OFICINA: Record<string, string> = {
+  BIEN: 'está bien',
+  NECESITA_ATENCION: 'necesita atención',
+  NO_CONTESTA: 'no contestó',
+};
+
+/** Cómo se muestra lo que encontró el personal al llegar. */
+const RESULTADO_VISITA: Record<string, string> = {
+  BIEN: 'la persona está bien',
+  APOYO_NO_URGENTE: 'requiere apoyo no urgente',
+  EMERGENCIA: 'emergencia',
 };
 
 /** Tono de cada paso: los problemas en rojo, las buenas noticias en verde y el resto en gris. */
@@ -77,6 +91,34 @@ function describir(paso: PasoAlerta): { texto: string; detalle: string | null; t
       };
     case 'LLEGADA_CONTACTO':
       return { texto: `${paso.contacto ?? 'El contacto'} llegó donde el usuario`, detalle: null, tono: 'bien' };
+    case 'RESULTADO_LLAMADA':
+      return {
+        texto: `${paso.contacto ?? 'El contacto'} indicó que el usuario ${paso.detalle === 'CONTESTA' ? 'contestó' : 'no contestó'} la llamada`,
+        detalle: null,
+        tono: paso.detalle === 'CONTESTA' ? 'normal' : 'problema',
+      };
+    case 'LLAMADA_OFICINA':
+      return {
+        texto: `${paso.usuario ?? 'La oficina'} llamó al usuario: ${LLAMADA_OFICINA[paso.detalle ?? ''] ?? paso.detalle}`,
+        detalle: null,
+        tono: paso.detalle === 'BIEN' ? 'bien' : 'problema',
+      };
+    case 'PERSONAL_ASIGNADO':
+      return { texto: `${paso.usuario ?? 'La oficina'} asignó personal para ir al domicilio`, detalle: null, tono: 'bien' };
+    case 'SIN_DISPONIBILIDAD':
+      return {
+        texto: `${paso.usuario ?? 'La oficina'} no tenía personal disponible: el reloj sigue avisando a los contactos`,
+        detalle: null,
+        tono: 'problema',
+      };
+    case 'LLEGADA_PERSONAL':
+      return { texto: 'El personal asignado llegó al domicilio', detalle: null, tono: 'bien' };
+    case 'RESULTADO_VISITA':
+      return {
+        texto: `Resultado de la visita: ${RESULTADO_VISITA[paso.detalle ?? ''] ?? paso.detalle}`,
+        detalle: null,
+        tono: paso.detalle === 'EMERGENCIA' ? 'problema' : 'normal',
+      };
     case 'SIN_RESPUESTA':
       return { texto: 'El reloj terminó la lista y nadie confirmó', detalle: null, tono: 'problema' };
     case 'CASO_ASUMIDO':

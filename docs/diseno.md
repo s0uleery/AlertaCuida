@@ -39,7 +39,7 @@ Los nombres antiguos (`marino`, `tinta`, `prlac`) apuntan a `navy` para que nada
 
 ## Reglas
 
-- Nada del mockup sin respaldo en el backend: si un dato no existe, no se muestra (por ejemplo, el "tiempo medio de respuesta" o Carabineros y CESFAM, que llegan con el nuevo escalamiento).
+- Nada del mockup sin respaldo en el backend: si un dato no existe, no se muestra (por ejemplo, el "tiempo medio de respuesta" o el flujo propio de Carabineros y CESFAM, que llega con el nuevo escalamiento; desde el 26-11-2026 ya existen como tipos de contacto).
 - Ancho de trabajo: escritorio, 760 px y 390 px. Las tablas se desplazan de lado en vez de romper la página.
 - Foco visible en teal y contraste AA en textos sobre los tintes.
 - Las constantes `CLASE_*` de `comun/estilos.ts` siguen para los formularios; ya usan los tokens.

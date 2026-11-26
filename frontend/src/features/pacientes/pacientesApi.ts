@@ -7,6 +7,7 @@ import type {
   DatosContacto,
   DatosPaciente,
   DetallePaciente,
+  GravedadContacto,
   ListaContactos,
   PerfilClinico,
   ResumenPaciente,
@@ -79,10 +80,10 @@ export const pacientesApi = {
   /** Tipos de contacto que se pueden elegir. */
   tiposContacto: () => pedir<TipoContacto[]>('/tipos-contacto'),
 
-  /** Activos por prioridad y luego desactivados, con las horas sin cobertura. */
+  /** Activos por su orden en leve, media y grave, y luego desactivados, con las horas sin cobertura. */
   contactos: (id: string) => pedir<ListaContactos>(`/pacientes/${id}/contactos`),
 
-  /** Agrega un contacto al final de la lista; si la persona ya existe, se reutiliza. */
+  /** Agrega un contacto al final de cada gravedad elegida; si la persona ya existe, se reutiliza. */
   agregarContacto: (id: string, datos: DatosContacto) =>
     pedir<{ id: string }>(`/pacientes/${id}/contactos`, { method: 'POST', body: JSON.stringify(datos) }),
 
@@ -97,17 +98,20 @@ export const pacientesApi = {
       body: JSON.stringify({ aceptado }),
     }),
 
-  /** Saca al contacto de la lista sin borrarlo. */
+  /** Saca al contacto de la lista sin borrarlo; 409 si era el único de alguna gravedad. */
   desactivarContacto: (id: string, idContacto: string) =>
     pedir<void>(`/pacientes/${id}/contactos/${idContacto}/desactivar`, { method: 'POST' }),
 
-  /** Vuelve a poner al contacto en la lista, al final. */
-  reactivarContacto: (id: string, idContacto: string) =>
-    pedir<void>(`/pacientes/${id}/contactos/${idContacto}/reactivar`, { method: 'POST' }),
+  /** Vuelve a poner al contacto al final de cada gravedad elegida. */
+  reactivarContacto: (id: string, idContacto: string, gravedades: GravedadContacto[]) =>
+    pedir<void>(`/pacientes/${id}/contactos/${idContacto}/reactivar`, {
+      method: 'POST',
+      body: JSON.stringify({ gravedades }),
+    }),
 
-  /** Nuevo orden de aviso; debe incluir a todos los activos. */
-  reordenarContactos: (id: string, orden: string[]) =>
-    pedir<void>(`/pacientes/${id}/contactos/orden`, { method: 'PUT', body: JSON.stringify({ orden }) }),
+  /** Nuevo orden de aviso de una gravedad; debe incluir a todos los contactos de esa gravedad. */
+  reordenarContactos: (id: string, gravedad: GravedadContacto, orden: string[]) =>
+    pedir<void>(`/pacientes/${id}/contactos/orden`, { method: 'PUT', body: JSON.stringify({ gravedad, orden }) }),
 
   /** Entrega un reloj a un paciente que no tiene, con el código de emparejamiento que muestra el reloj. */
   vincular: (id: string, idDispositivo: string, codigoEmparejamiento: string) =>

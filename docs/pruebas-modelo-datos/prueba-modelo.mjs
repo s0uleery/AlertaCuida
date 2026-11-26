@@ -159,14 +159,14 @@ await vale('Borrar la ficha no borra al paciente', `SELECT count(*) n FROM "PACI
 db = dbPrincipal;
 
 nuevoGrupo('1. Estructura de la base');
-await vale('Cantidad de tablas', `SELECT count(*) n FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'`, 30);
-await vale('Tablas sueltas (sin ninguna relación)', `SELECT count(*) n FROM information_schema.tables t
-  WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+await vale('Cantidad de tablas', `SELECT count(*) n FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'`, 33);
+await vale('Tablas sueltas (sin ninguna relación), salvo los códigos de emparejamiento y el horario hábil', `SELECT count(*) n FROM information_schema.tables t
+  WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name NOT IN ('EMPAREJAMIENTO_RELOJ', 'HORARIO_HABIL')
   AND NOT EXISTS (SELECT 1 FROM information_schema.table_constraints c WHERE c.constraint_type = 'FOREIGN KEY' AND c.table_name = t.table_name)
   AND NOT EXISTS (SELECT 1 FROM information_schema.constraint_column_usage u
                   JOIN information_schema.table_constraints c ON c.constraint_name = u.constraint_name AND c.constraint_type = 'FOREIGN KEY'
                   WHERE u.table_name = t.table_name)`, 0);
-await vale('Cantidad de relaciones (claves foráneas)', `SELECT count(*) n FROM information_schema.table_constraints WHERE constraint_type = 'FOREIGN KEY'`, 35);
+await vale('Cantidad de relaciones (claves foráneas)', `SELECT count(*) n FROM information_schema.table_constraints WHERE constraint_type = 'FOREIGN KEY'`, 36);
 await vale('Cantidad de tipos (Enum)', `SELECT count(*) n FROM pg_type t JOIN pg_namespace s ON s.oid = t.typnamespace WHERE s.nspname = 'public' AND t.typtype = 'e'`, 22);
 await vale('Vistas de datos calculados', `SELECT count(*) n FROM information_schema.views WHERE table_schema = 'public'`, 1);
 await vale('Ninguna columna jsonb en la configuración clínica', `SELECT count(*) n FROM information_schema.columns
@@ -278,23 +278,29 @@ await rechaza('Sexo que no existe en el catálogo', `INSERT INTO "PACIENTE"(id_p
 await rechaza('Paciente con rut_hash pero sin el RUN cifrado', `INSERT INTO "PACIENTE"(id_paciente, rut_hash, fecha_ingreso) VALUES (gen_random_uuid(), 'rut-z', '2026-10-01')`, 'nulo');
 
 // =====================================================================
-nuevoGrupo('5. Contactos (compartidos, exclusivos y horarios)');
+nuevoGrupo('5. Contactos (compartidos, exclusivos, horarios y orden por gravedad)');
 await acepta('Catálogo de tipos de contacto', `INSERT INTO "TIPO_CONTACTO"(codigo, nombre) VALUES
-  ('FAMILIA', 'Familia'), ('VECINO', 'Vecino'), ('SEGURIDAD_CIUDADANA', 'Seguridad Ciudadana'), ('OTRO', 'Otro')`);
+  ('TERCERO_SIGNIFICATIVO', 'Tercero significativo'), ('SEGURIDAD_CIUDADANA', 'Seguridad Ciudadana'), ('CARABINEROS', 'Carabineros'), ('OTRO', 'Otro')`);
 await acepta('Cuatro personas de contacto (una solo con correo)', `INSERT INTO "CONTACTO"(id_contacto, nombre, whatsapp, whatsapp_hash, fecha_opt_in, correo, correo_hash) VALUES
   ('${HIJA}', 'Hija de María', '+56911', 'w-hija', now(), null, null),
   ('${SEG_CIUDADANA}', 'Seguridad Ciudadana', '+56922', 'w-sc', now(), 'sc@muni.cl', 'm-sc'),
   ('${VECINO}', 'Vecino Juan', null, null, null, 'juan@mail.cl', 'm-juan'),
   ('${CUIDADORA}', 'Cuidadora de Pedro', '+56944', 'w-cuid', now(), null, null)`);
 await acepta('Listas de contactos: Seguridad Ciudadana en los tres pacientes; la cuidadora de Pedro de noche (22:00–07:00)', `INSERT INTO "CONTACTO_PACIENTE"
-  (id_contacto_paciente, id_paciente, id_contacto, codigo_tipo_contacto, parentesco, es_cuidador_principal, orden_prioridad, hora_inicio, hora_fin) VALUES
-  ('${M1}', '${MARIA}', '${HIJA}', 'FAMILIA', 'hija', true, 1, null, null),
-  ('${M2}', '${MARIA}', '${SEG_CIUDADANA}', 'SEGURIDAD_CIUDADANA', null, false, 2, null, null),
-  ('${P1}', '${PEDRO}', '${CUIDADORA}', 'OTRO', null, true, 1, '22:00', '07:00'),
-  ('${P2}', '${PEDRO}', '${SEG_CIUDADANA}', 'SEGURIDAD_CIUDADANA', null, false, 2, null, null),
-  ('${P3}', '${PEDRO}', '${VECINO}', 'VECINO', null, false, 3, null, null),
-  ('${R1}', '${ROSA}', '${SEG_CIUDADANA}', 'SEGURIDAD_CIUDADANA', null, false, 1, null, null),
-  ('${R2}', '${ROSA}', '${VECINO}', 'VECINO', null, false, 2, null, null)`);
+  (id_contacto_paciente, id_paciente, id_contacto, codigo_tipo_contacto, parentesco, es_cuidador_principal, hora_inicio, hora_fin) VALUES
+  ('${M1}', '${MARIA}', '${HIJA}', 'TERCERO_SIGNIFICATIVO', 'hija', true, null, null),
+  ('${M2}', '${MARIA}', '${SEG_CIUDADANA}', 'SEGURIDAD_CIUDADANA', null, false, null, null),
+  ('${P1}', '${PEDRO}', '${CUIDADORA}', 'OTRO', null, true, '22:00', '07:00'),
+  ('${P2}', '${PEDRO}', '${SEG_CIUDADANA}', 'SEGURIDAD_CIUDADANA', null, false, null, null),
+  ('${P3}', '${PEDRO}', '${VECINO}', 'TERCERO_SIGNIFICATIVO', null, false, null, null),
+  ('${R1}', '${ROSA}', '${SEG_CIUDADANA}', 'SEGURIDAD_CIUDADANA', null, false, null, null),
+  ('${R2}', '${ROSA}', '${VECINO}', 'TERCERO_SIGNIFICATIVO', null, false, null, null)`);
+await acepta('Cada vínculo con su lugar en las tres gravedades; en grave, Seguridad Ciudadana va primero con María', `INSERT INTO "ORDEN_CONTACTO"(id_contacto_paciente, severidad, orden)
+  SELECT v.id::uuid, g::severidad, CASE WHEN g = 'GRAVE' AND v.id = '${M1}' THEN 2 WHEN g = 'GRAVE' AND v.id = '${M2}' THEN 1 ELSE v.orden END
+  FROM (VALUES ('${M1}', 1), ('${M2}', 2), ('${P1}', 1), ('${P2}', 2), ('${P3}', 3), ('${R1}', 1), ('${R2}', 2)) AS v (id, orden)
+  CROSS JOIN unnest(ARRAY['LEVE', 'MEDIA', 'GRAVE']) AS g`);
+await vale('La lista de grave de María empieza por Seguridad Ciudadana', `SELECT cp.codigo_tipo_contacto n FROM "ORDEN_CONTACTO" oc JOIN "CONTACTO_PACIENTE" cp USING (id_contacto_paciente)
+  WHERE cp.id_paciente = '${MARIA}' AND oc.severidad = 'GRAVE' ORDER BY oc.orden LIMIT 1`, 'SEGURIDAD_CIUDADANA');
 await vale('Seguridad Ciudadana está guardada una sola vez', `SELECT count(*) n FROM "CONTACTO" WHERE whatsapp_hash = 'w-sc'`, 1);
 await vale('Seguridad Ciudadana es contacto de tres pacientes (compartido)', `SELECT count(*) n FROM "CONTACTO_PACIENTE" WHERE id_contacto = '${SEG_CIUDADANA}'`, 3);
 const disponible = (vinculo, hora) => `SELECT (hora_inicio IS NULL OR (hora_inicio < hora_fin AND '${hora}'::time >= hora_inicio AND '${hora}'::time < hora_fin)
@@ -308,18 +314,20 @@ await rechaza('Persona sin WhatsApp ni correo', `INSERT INTO "CONTACTO"(id_conta
 await rechaza('WhatsApp sin su hash', `INSERT INTO "CONTACTO"(id_contacto, nombre, whatsapp) VALUES (gen_random_uuid(), 'X', '+56999')`, 'check');
 await rechaza('Correo sin su hash', `INSERT INTO "CONTACTO"(id_contacto, nombre, correo) VALUES (gen_random_uuid(), 'X', 'x@x.cl')`, 'check');
 await rechaza('Baja del opt-in sin opt-in previo', `INSERT INTO "CONTACTO"(id_contacto, nombre, correo, correo_hash, fecha_revocacion_opt_in) VALUES (gen_random_uuid(), 'X', 'x@x.cl', 'm-x', now())`, 'check');
-const vinculo = (pac, cont, tipo, prio, extraCols = '', extraVals = '') =>
-  `INSERT INTO "CONTACTO_PACIENTE"(id_contacto_paciente, id_paciente, id_contacto, codigo_tipo_contacto, orden_prioridad${extraCols})
-   VALUES (gen_random_uuid(), '${pac}', '${cont}', '${tipo}', ${prio}${extraVals})`;
-await rechaza('La misma persona dos veces en la lista de un paciente', vinculo(MARIA, HIJA, 'FAMILIA', 5), 'unico');
-await rechaza('Dos contactos activos con la misma prioridad', vinculo(MARIA, VECINO, 'VECINO', 1), 'unico');
-await acepta('Repetir prioridad con un contacto inactivo (se deshace)', `BEGIN; ${vinculo(MARIA, VECINO, 'VECINO', 1, ', activo', ', false')}; ROLLBACK`);
-await rechaza('Dos cuidadores principales activos para el mismo paciente', vinculo(MARIA, VECINO, 'VECINO', 3, ', es_cuidador_principal', ', true'), 'unico');
-await rechaza('Prioridad 0', vinculo(MARIA, VECINO, 'VECINO', 0), 'check');
-await rechaza('Horario con inicio pero sin fin', vinculo(MARIA, VECINO, 'VECINO', 3, ', hora_inicio', `, '08:00'`), 'check');
-await rechaza('Horario que empieza y termina a la misma hora', vinculo(MARIA, VECINO, 'VECINO', 3, ', hora_inicio, hora_fin', `, '08:00', '08:00'`), 'check');
-await rechaza('Parentesco en un contacto que no es FAMILIA', vinculo(MARIA, VECINO, 'VECINO', 3, ', parentesco', `, 'sobrino'`), 'check');
-await rechaza('Tipo de contacto que no existe (AMBULANCIA)', vinculo(MARIA, VECINO, 'AMBULANCIA', 3), 'foranea');
+const vinculo = (pac, cont, tipo, extraCols = '', extraVals = '') =>
+  `INSERT INTO "CONTACTO_PACIENTE"(id_contacto_paciente, id_paciente, id_contacto, codigo_tipo_contacto${extraCols})
+   VALUES (gen_random_uuid(), '${pac}', '${cont}', '${tipo}'${extraVals})`;
+const orden = (vinculo, severidad, n) =>
+  `INSERT INTO "ORDEN_CONTACTO"(id_contacto_paciente, severidad, orden) VALUES ('${vinculo}', '${severidad}', ${n})`;
+await rechaza('La misma persona dos veces en la lista de un paciente', vinculo(MARIA, HIJA, 'TERCERO_SIGNIFICATIVO'), 'unico');
+await rechaza('Dos cuidadores principales activos para el mismo paciente', vinculo(MARIA, VECINO, 'TERCERO_SIGNIFICATIVO', ', es_cuidador_principal', ', true'), 'unico');
+await rechaza('Horario con inicio pero sin fin', vinculo(MARIA, VECINO, 'TERCERO_SIGNIFICATIVO', ', hora_inicio', `, '08:00'`), 'check');
+await rechaza('Horario que empieza y termina a la misma hora', vinculo(MARIA, VECINO, 'TERCERO_SIGNIFICATIVO', ', hora_inicio, hora_fin', `, '08:00', '08:00'`), 'check');
+await rechaza('Parentesco en un contacto que no es tercero significativo', vinculo(MARIA, VECINO, 'OTRO', ', parentesco', `, 'sobrino'`), 'check');
+await rechaza('Tipo de contacto que no existe (AMBULANCIA)', vinculo(MARIA, VECINO, 'AMBULANCIA'), 'foranea');
+await rechaza('Un vínculo dos veces en la misma gravedad', orden(M1, 'LEVE', 9), 'unico');
+await rechaza('Orden 0 en una gravedad', orden(R2, 'LEVE', 0), 'check');
+await rechaza('Gravedad que no existe (URGENTE)', orden(R2, 'URGENTE', 3), 'enum');
 
 // =====================================================================
 nuevoGrupo('6. Configuración clínica y umbrales (historiales separados)');
@@ -614,8 +622,8 @@ await rechaza('Contacto externo sin nombre',
 await rechaza('Contacto interno de una cuenta que no existe',
   `INSERT INTO "CONTACTO"(id_contacto, id_usuario) VALUES (gen_random_uuid(), '${id(99)}')`, 'foranea');
 await rechaza('El contacto interno en la lista de un paciente (el reloj no recorre al equipo)',
-  `INSERT INTO "CONTACTO_PACIENTE"(id_contacto_paciente, id_paciente, id_contacto, codigo_tipo_contacto, orden_prioridad)
-   VALUES (gen_random_uuid(), '${ROSA}', '${INTERNO_ANA}', 'OTRO', 9)`, 'disparador');
+  `INSERT INTO "CONTACTO_PACIENTE"(id_contacto_paciente, id_paciente, id_contacto, codigo_tipo_contacto)
+   VALUES (gen_random_uuid(), '${ROSA}', '${INTERNO_ANA}', 'OTRO')`, 'disparador');
 await rechaza('Cambiar un vínculo de la lista para que apunte al contacto interno',
   `UPDATE "CONTACTO_PACIENTE" SET id_contacto = '${INTERNO_ANA}' WHERE id_contacto_paciente = '${R2}'`, 'disparador');
 await rechaza('Convertir en interno a una persona de la lista',

@@ -26,6 +26,8 @@ import java.util.regex.Pattern;
  * <li>Alerta, al equipo: las graves y el respaldo de un WhatsApp a la oficina.</li>
  * <li>Alerta que no avanza, al equipo (vigilante del escalamiento): el reloj dejó de pedir avisos.</li>
  * <li>Alerta que pasó a grave después de su aviso, a los coordinadores.</li>
+ * <li>Recordatorio de llegada, a quien tiene la alerta a cargo en la oficina: el personal asignado no ha llegado.
+ * Lleva el enlace a la misma página de los pasos de la oficina.</li>
  * <li>Aviso a un contacto del paciente (respaldo de su WhatsApp): en las graves, le indica llamar al 131.
  * Lleva un solo enlace a la página /responder del dashboard, donde elige "Confirmo que voy" o "No puedo
  * asistir", con el token firmado del aviso después de "#"; sin ese marcador en su cuerpo, el backend no
@@ -81,6 +83,7 @@ public class PlantillasCorreo {
 		return switch (correo.proposito()) {
 			case VIGILANTE -> alertaQueNoAvanza(correo);
 			case AGRAVAMIENTO -> alertaAgravada(correo);
+			case RECORDATORIO -> recordatorioLlegada(correo);
 			case AVISO -> avisoAlEquipo(correo);
 		};
 	}
@@ -143,6 +146,14 @@ public class PlantillasCorreo {
 	/** La alerta de salud pasó a grave: a los coordinadores, con el enlace para confirmar que van. */
 	private Mensaje alertaAgravada(CorreoPendiente correo) {
 		TextosCorreo.Agravamiento t = textos.agravamiento();
+		Map<String, String> valores = Map.of("deQuien", deQuien(correo), "folio", folio(correo),
+				"dashboard", urlDashboard, "pie", textos.pieEquipo(), "responder", enlaceRespuesta(correo));
+		return mensaje(correo, t.asunto(), t.cuerpo(), valores);
+	}
+
+	/** El personal que asignó la oficina no ha llegado: a quien tiene la alerta a cargo, con el mismo enlace. */
+	private Mensaje recordatorioLlegada(CorreoPendiente correo) {
+		TextosCorreo.RecordatorioLlegada t = textos.recordatorioLlegada();
 		Map<String, String> valores = Map.of("deQuien", deQuien(correo), "folio", folio(correo),
 				"dashboard", urlDashboard, "pie", textos.pieEquipo(), "responder", enlaceRespuesta(correo));
 		return mensaje(correo, t.asunto(), t.cuerpo(), valores);
@@ -281,6 +292,11 @@ public class PlantillasCorreo {
 		revisar("aviso-oficina.cuerpo", oficina.cuerpo(),
 				Set.of("alerta", "deQuien", "folio", "dashboard", "pie", "responder"));
 		exigir("aviso-oficina.cuerpo", oficina.cuerpo(), ENLACE);
+		TextosCorreo.RecordatorioLlegada recordatorio = requerido("recordatorio-llegada", textos.recordatorioLlegada());
+		revisar("recordatorio-llegada.asunto", recordatorio.asunto(), Set.of("deQuien", "folio", "dashboard"));
+		revisar("recordatorio-llegada.cuerpo", recordatorio.cuerpo(),
+				Set.of("deQuien", "folio", "dashboard", "pie", "responder"));
+		exigir("recordatorio-llegada.cuerpo", recordatorio.cuerpo(), ENLACE);
 		revisarConEnlace("activacion", textos.activacion());
 		revisarConEnlace("recuperacion", textos.recuperacion());
 		for (Severidad severidad : Severidad.values()) {

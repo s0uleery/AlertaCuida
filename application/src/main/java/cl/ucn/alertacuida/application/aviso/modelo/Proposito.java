@@ -13,6 +13,9 @@ public enum Proposito {
 	VIGILANTE,
 
 	/** A los coordinadores: la alerta pasó a grave después de su primer aviso. */
-	AGRAVAMIENTO
+	AGRAVAMIENTO,
+
+	/** A quien tiene la alerta a cargo: el personal asignado aún no llega (pasos de la oficina, N1-08). */
+	RECORDATORIO
 
 }

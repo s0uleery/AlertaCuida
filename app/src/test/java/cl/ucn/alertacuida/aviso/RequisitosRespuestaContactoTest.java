@@ -11,6 +11,7 @@ import cl.ucn.alertacuida.application.aviso.PlantillasCorreo;
 import cl.ucn.alertacuida.application.aviso.modelo.CorreoPendiente;
 import cl.ucn.alertacuida.domain.alerta.Severidad;
 import cl.ucn.alertacuida.domain.alerta.TipoEvento;
+import cl.ucn.alertacuida.soporte.BaseDePrueba;
 import cl.ucn.alertacuida.soporte.PostgresDePrueba;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -233,11 +234,7 @@ class RequisitosRespuestaContactoTest {
 				.param("nombre", cifrado.cifrar("Hija", ColumnaCifrada.CONTACTO_NOMBRE))
 				.param("correo", cifrado.cifrar("hija@correo.cl", ColumnaCifrada.CONTACTO_CORREO))
 				.query(UUID.class).single();
-		return jdbc.sql("""
-				INSERT INTO contacto_paciente (id_paciente, id_contacto, codigo_tipo_contacto, orden_prioridad)
-				VALUES (:paciente, :persona, 'OTRO', 1) RETURNING id_contacto_paciente""")
-				.param("paciente", paciente).param("persona", persona)
-				.query(UUID.class).single();
+		return BaseDePrueba.vincular(jdbc, paciente, persona, "OTRO", 1);
 	}
 
 	/** @return el aviso por correo, ya enviado, a ese vínculo en la ronda 1 */

@@ -7,7 +7,7 @@ import cl.ucn.alertacuida.domain.contacto.Horario;
  * persona puede ser cuidadora de un paciente y vecina de otro, con otro horario.
  *
  * @param tipo              código de tipo_contacto
- * @param parentesco        solo si el tipo es FAMILIA, o vacío
+ * @param parentesco        solo si el tipo es TERCERO_SIGNIFICATIVO, o vacío
  * @param cuidadorPrincipal si es el cuidador principal del paciente
  * @param horario           cuándo recibe avisos; vacío = todo el día
  */

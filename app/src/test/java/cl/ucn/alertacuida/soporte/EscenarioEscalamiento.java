@@ -188,11 +188,7 @@ public final class EscenarioEscalamiento {
 				.param("correo", cifrado.cifrar(correo, ColumnaCifrada.CONTACTO_CORREO))
 				.param("hash", "hash-c-escalamiento-" + nombre)
 				.query(UUID.class).single();
-		return jdbc.sql("""
-				INSERT INTO contacto_paciente (id_paciente, id_contacto, codigo_tipo_contacto, orden_prioridad)
-				VALUES (:p, :c, 'OTRO', :prioridad) RETURNING id_contacto_paciente""")
-				.param("p", paciente).param("c", persona).param("prioridad", prioridad)
-				.query(UUID.class).single();
+		return BaseDePrueba.vincular(jdbc, paciente, persona, "OTRO", prioridad);
 	}
 
 }

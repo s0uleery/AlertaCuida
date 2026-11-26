@@ -108,7 +108,8 @@ class PlantillasCorreoTest {
 				base.alertaEquipo(), base.contacto(), base.vigilante(),
 				new TextosCorreo.Agravamiento(base.agravamiento().asunto(),
 						base.agravamiento().cuerpo() + "{minutos}"),
-				base.avisoOficina(), base.gravedades(), base.tecnicas(), base.activacion(), base.recuperacion());
+				base.avisoOficina(), base.gravedades(), base.tecnicas(), base.activacion(),
+				base.recuperacion(), base.recordatorioLlegada());
 
 		assertThatThrownBy(() -> plantillas(malo)).isInstanceOf(IllegalArgumentException.class)
 				.hasMessageContaining("agravamiento.cuerpo").hasMessageContaining("{minutos}");
@@ -122,7 +123,7 @@ class PlantillasCorreoTest {
 				base.alertaEquipo(), base.contacto(),
 				new TextosCorreo.Vigilante(base.vigilante().asunto(), base.vigilante().cuerpo() + "{responder}"),
 				base.agravamiento(), base.avisoOficina(), base.gravedades(), base.tecnicas(), base.activacion(),
-				base.recuperacion());
+				base.recuperacion(), base.recordatorioLlegada());
 
 		assertThatThrownBy(() -> plantillas(malo)).isInstanceOf(IllegalArgumentException.class)
 				.hasMessageContaining("vigilante.cuerpo");
@@ -197,7 +198,7 @@ class PlantillasCorreoTest {
 				new TextosCorreo.AlertaEquipo(a.asunto(), a.cuerpo() + "{responder}", a.alertaSalud(),
 						a.alertaTecnica(), a.deQuienConAlias()),
 				base.contacto(), base.vigilante(), base.agravamiento(), base.avisoOficina(), base.gravedades(),
-				base.tecnicas(), base.activacion(), base.recuperacion());
+				base.tecnicas(), base.activacion(), base.recuperacion(), base.recordatorioLlegada());
 
 		assertThatThrownBy(() -> plantillas(malo))
 				.isInstanceOf(IllegalArgumentException.class)
@@ -211,11 +212,11 @@ class PlantillasCorreoTest {
 		TextosCorreo sinEnlaceEnOficina = new TextosCorreo(base.pieEquipo(), base.pieContacto(),
 				base.silencioDatos(), base.alertaEquipo(), base.contacto(), base.vigilante(), base.agravamiento(),
 				new TextosCorreo.AvisoOficina("Oficina: {alerta}", "Hay una {alerta}.\n{pie}"), base.gravedades(),
-				base.tecnicas(), base.activacion(), base.recuperacion());
+				base.tecnicas(), base.activacion(), base.recuperacion(), base.recordatorioLlegada());
 		TextosCorreo sinEnlaceEnAgravamiento = new TextosCorreo(base.pieEquipo(), base.pieContacto(),
 				base.silencioDatos(), base.alertaEquipo(), base.contacto(), base.vigilante(),
 				new TextosCorreo.Agravamiento("Agravada {folio}", "Pasó a grave.\n{pie}"), base.avisoOficina(),
-				base.gravedades(), base.tecnicas(), base.activacion(), base.recuperacion());
+				base.gravedades(), base.tecnicas(), base.activacion(), base.recuperacion(), base.recordatorioLlegada());
 
 		assertThatThrownBy(() -> plantillas(sinEnlaceEnOficina)).isInstanceOf(IllegalArgumentException.class)
 				.hasMessageContaining("aviso-oficina.cuerpo").hasMessageContaining("{responder}");
@@ -293,7 +294,7 @@ class PlantillasCorreoTest {
 		gravedades.remove(Severidad.MEDIA);
 		TextosCorreo malo = new TextosCorreo(base.pieEquipo(), base.pieContacto(), base.silencioDatos(),
 				base.alertaEquipo(), base.contacto(), base.vigilante(), base.agravamiento(), base.avisoOficina(),
-				gravedades, base.tecnicas(), base.activacion(), base.recuperacion());
+				gravedades, base.tecnicas(), base.activacion(), base.recuperacion(), base.recordatorioLlegada());
 
 		assertThatThrownBy(() -> plantillas(malo))
 				.isInstanceOf(IllegalArgumentException.class)
@@ -308,7 +309,7 @@ class PlantillasCorreoTest {
 		tecnicas.remove(TipoEvento.EXCESO_ALERTAS);
 		TextosCorreo malo = new TextosCorreo(base.pieEquipo(), base.pieContacto(), base.silencioDatos(),
 				base.alertaEquipo(), base.contacto(), base.vigilante(), base.agravamiento(), base.avisoOficina(),
-				base.gravedades(), tecnicas, base.activacion(), base.recuperacion());
+				base.gravedades(), tecnicas, base.activacion(), base.recuperacion(), base.recordatorioLlegada());
 
 		assertThatThrownBy(() -> plantillas(malo))
 				.isInstanceOf(IllegalArgumentException.class)
@@ -322,11 +323,11 @@ class PlantillasCorreoTest {
 		TextosCorreo sinEnlace = new TextosCorreo(base.pieEquipo(), base.pieContacto(), base.silencioDatos(),
 				base.alertaEquipo(), base.contacto(), base.vigilante(), base.agravamiento(), base.avisoOficina(),
 				base.gravedades(), base.tecnicas(), new TextosCorreo.Activacion("Hola {nombre}", "Hola, {nombre}."),
-				base.recuperacion());
+				base.recuperacion(), base.recordatorioLlegada());
 		TextosCorreo conFolio = new TextosCorreo(base.pieEquipo(), base.pieContacto(), base.silencioDatos(),
 				base.alertaEquipo(), base.contacto(), base.vigilante(), base.agravamiento(), base.avisoOficina(),
 				base.gravedades(), base.tecnicas(), new TextosCorreo.Activacion("Hola {folio}", "{enlace}"),
-				base.recuperacion());
+				base.recuperacion(), base.recordatorioLlegada());
 
 		assertThatThrownBy(() -> plantillas(sinEnlace)).isInstanceOf(IllegalArgumentException.class)
 				.hasMessageContaining("activacion.cuerpo").hasMessageContaining("{enlace}");
@@ -355,7 +356,7 @@ class PlantillasCorreoTest {
 		TextosCorreo base = textos();
 		return new TextosCorreo(base.pieEquipo(), base.pieContacto(), base.silencioDatos(), base.alertaEquipo(),
 				contacto, base.vigilante(), base.agravamiento(), base.avisoOficina(), base.gravedades(),
-				base.tecnicas(), base.activacion(), base.recuperacion());
+				base.tecnicas(), base.activacion(), base.recuperacion(), base.recordatorioLlegada());
 	}
 
 	/** @return un correo pendiente a una cuenta del equipo por la alerta #142 */

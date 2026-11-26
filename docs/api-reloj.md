@@ -63,14 +63,14 @@ sequenceDiagram
     R->>R: Detecta el evento y vibra 30 s
     R->>S: POST /alertas (eventId A)
     S-->>R: 201 (estado RECIBIDA)
-    R->>S: POST /alertas/A/avisos (contacto prioridad 1, ronda 1)
+    R->>S: POST /alertas/A/avisos (1.º de la lista de su gravedad, ronda 1)
     S->>M: Plantilla con botones
     S-->>R: ACEPTADO
     M->>C: WhatsApp
     Note over R: Espera minutosEspera
     R->>S: GET /alertas/A
     S-->>R: AVISANDO_CONTACTO
-    R->>S: POST /alertas/A/avisos (prioridad 2, ronda 1)
+    R->>S: POST /alertas/A/avisos (2.º de esa lista, ronda 1)
     S-->>R: ACEPTADO
     C->>M: "Voy en camino"
     M->>S: Webhook (firmado)
@@ -95,6 +95,7 @@ Si nadie confirma, el reloj recorre la lista dos veces y termina con `POST /aler
 - **Hora del reloj desfasada:** se acepta igual. Si la diferencia con el servidor supera 120 s, la respuesta de la sincronización la informa (`desfaseRelojSegundos`) y el dashboard la muestra.
 - **Configuración por versión.** La `version` es un hash del contenido, el mismo que guarda la base (`hash_configuracion`). Cambia con cualquier dato, incluso el nombre o el horario de un contacto. La sincronización avisa si el reloj tiene una versión distinta (`configuracionNueva`); el reloj la descarga con `GET /configuracion` y `If-None-Match`, y el servidor responde 304 si ya es la vigente. Así no viaja en cada sincronización.
 - **La configuración trae todo para trabajar sin conexión:** módulos, umbrales (con los valores base si el paciente no tiene ajustes), plazo de espera, contactos, horario hábil y feriados. Los contactos van sin número ni correo: el reloj pide los avisos por `idContacto` (el vínculo `contacto_paciente`) y el servidor elige el número o el correo.
+- **Una lista por gravedad (26-11-2026).** Cada contacto trae `prioridades`, su lugar en la lista de cada gravedad donde está (ej. `{"GRAVE": 1}`). Una alerta recorre solo la lista de su gravedad, de menor a mayor; un contacto sin esa gravedad no se avisa. Si la alerta se agrava mientras el reloj avisa, cambia a la lista de `GRAVE` desde el primero (ronda 1). El servidor asegura que ninguna gravedad quede vacía mientras haya contactos activos.
 - **Un aviso rechazado no es un error.** Si el contacto no tiene opt-in, está inactivo o no es del paciente, la respuesta es 200 con `RECHAZADO` y el motivo, y el reloj pasa al siguiente. Cada respuesta trae el estado de la alerta: si ya está confirmada, resuelta o cancelada, `detenerEscalamiento` es `true`.
 - **`ACEPTADO` no significa entregado.** El servidor lo envía por WhatsApp y, si falla, intenta por correo (2.9.7). Las entregas y lecturas quedan en la línea de tiempo del dashboard; el reloj no las necesita.
 - **Acuse inmediato de los avisos FCM.** El reloj confirma cada aviso de una alerta apenas llega, con su `idAviso`. Si no llega en un plazo, el servidor lo reintenta (2.3.3). Esperar a la siguiente sincronización (hasta 2 h) no serviría para eso. Los avisos `CONFIGURACION_NUEVA` no se acusan: se nota cuando el reloj la descarga.
@@ -136,7 +137,7 @@ Si nadie confirma, el reloj recorre la lista dos veces y termina con `POST /aler
 7. La matriz FC × SpO2 queda pendiente del Anexo B (equipo clínico); por ahora solo viaja `reglas.versionMatriz`.
 8. **Regla de tendencia (`reglas.tendencia`, 05-11-2026):** el reloj alerta cuando FC o SpO2 lleva ese tiempo fuera de su rango normal, sin llegar al límite grave; la regla de 2 lecturas consecutivas queda solo para los valores más allá del límite grave. Definido: la alerta usa la gravedad de `reglas.tendencia.severidad` (hoy `MEDIA`), sin fijarla en el código del reloj; si una lectura vuelve al rango normal, el tiempo parte de cero; con los umbrales de cada paciente, `normalMin` y `normalMax` son normales, y `graveBajo` y `graveAlto` son zona intermedia. Definido además (05-11-2026): una sola alerta mientras el valor siga en esa zona; puede volver a alertar solo después de que una lectura vuelva al rango normal (sujeto a validación del equipo clínico).
 9. **Zona segura (`zonaSegura`, 05-11-2026):** viene solo con `modulos.zonaSegura` activo (y entonces `gpsActivo` es `true`). El reloj compara su GPS con el círculo (`latitud`, `longitud`, `radioMetros`) y, si la persona sale, envía una alerta `ZONA_SEGURA` con `zonaSegura.severidad` (media por defecto; se elige por paciente). Por definir con quien desarrolla el reloj: cada cuánto revisa el GPS (afecta la batería, por eso la zona se había eliminado en la v7), cuántas posiciones fuera del círculo exige antes de alertar (el GPS puede saltar) y si vuelve a alertar después de que la persona regresa.
-10. **Botón de ayuda (`modulos.botonAyuda`, 05-11-2026):** el reloj muestra un botón para pedir ayuda. Al presionarlo envía una alerta `BOTON_AYUDA` siempre `LEVE`, con la ventana de 30 s para cancelar. Como toda leve, fuera del horario hábil espera al día hábil. Avisa primero a los contactos con `tipo` `VECINO`, por prioridad, y después al resto, por prioridad. Por definir: dónde va el botón en la pantalla y cómo evitar que se presione por error.
+10. **Botón de ayuda (`modulos.botonAyuda`, 05-11-2026):** el reloj muestra un botón para pedir ayuda. Al presionarlo envía una alerta `BOTON_AYUDA` siempre `LEVE`, con la ventana de 30 s para cancelar. Como toda leve, fuera del horario hábil espera al día hábil. Desde el 26-11-2026 usa la lista de `LEVE`, como toda alerta leve (ya no hay contactos `VECINO`). Por definir: dónde va el botón en la pantalla y cómo evitar que se presione por error.
 11. **Inactividad como respaldo del servidor (08-11-2026):** hoy la sincronización no trae ningún dato de movimiento, así que el servidor no puede detectar una inactividad prolongada. ¿El reloj puede informar en cada lote un dato como los minutos sin movimiento? Si puede, faltaría definir el plazo con el equipo clínico.
 12. **Cuando nadie responde y confirmación de un coordinador (16-11-2026):** hoy el reloj recorre la lista dos veces (`escalamiento.rondas: 2`), informa `SIN_RESPUESTA` y se detiene, y el servidor rechaza con 400 un aviso de ronda 3 o mayor. Se quiere que el reloj vuelva a recorrer la lista mientras nadie responda: ¿sin límite hasta que la alerta se confirme o se resuelva, o con un máximo de vueltas? Además, en las alertas de salud los coordinadores del PRLAC reciben un aviso en paralelo y pueden confirmar: en ese caso `confirmadaPor.idContacto` (en la consulta de estado y en el aviso FCM `ALERTA_CONFIRMADA`) trae el id del coordinador, que no está en la lista de contactos del reloj. El reloj debe detenerse igual.
 

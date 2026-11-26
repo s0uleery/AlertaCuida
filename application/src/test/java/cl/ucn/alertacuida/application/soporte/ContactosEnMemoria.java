@@ -6,7 +6,10 @@ import cl.ucn.alertacuida.application.contacto.modelo.Persona;
 import cl.ucn.alertacuida.application.contacto.modelo.TipoContacto;
 import cl.ucn.alertacuida.application.contacto.modelo.Vinculo;
 import cl.ucn.alertacuida.application.contacto.puerto.Contactos;
+import cl.ucn.alertacuida.domain.alerta.Severidad;
 import java.time.Instant;
+import java.util.EnumMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,8 +18,9 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Doble de {@link Contactos} para las pruebas unitarias: guarda en mapas. Revisa, como la base,
- * que la prioridad y el cuidador principal no se repitan entre los activos.
+ * Doble de {@link Contactos} para las pruebas unitarias: guarda en mapas. Revisa, como la base, que el
+ * cuidador principal no se repita entre los activos y que solo los activos tengan orden en una gravedad
+ * (tabla orden_contacto).
  */
 public final class ContactosEnMemoria implements Contactos {
 
@@ -25,15 +29,18 @@ public final class ContactosEnMemoria implements Contactos {
 	}
 
 	/** Un vínculo con un paciente. */
-	private record FilaVinculo(UUID idPaciente, UUID idContacto, Vinculo vinculo, int prioridad, boolean activo) {
+	private record FilaVinculo(UUID idPaciente, UUID idContacto, Vinculo vinculo, boolean activo) {
 	}
 
 	private final Map<UUID, FilaPersona> personas = new LinkedHashMap<>();
 	private final Map<UUID, FilaVinculo> vinculos = new LinkedHashMap<>();
+	/** Orden de cada vínculo en cada gravedad. */
+	private final Map<UUID, Map<Severidad, Integer>> ordenes = new LinkedHashMap<>();
 
 	@Override
 	public List<TipoContacto> tipos() {
-		return List.of(new TipoContacto("FAMILIA", "Familia"), new TipoContacto("VECINO", "Vecino o vecina"),
+		return List.of(new TipoContacto("TERCERO_SIGNIFICATIVO", "Tercero significativo"),
+				new TipoContacto("CARABINEROS", "Carabineros"),
 				new TipoContacto("SEGURIDAD_CIUDADANA", "Seguridad Ciudadana"));
 	}
 
@@ -48,7 +55,7 @@ public final class ContactosEnMemoria implements Contactos {
 									&& !otro.idPaciente().equals(idPaciente))
 							.count();
 					return new ContactoDelPaciente(fila.getKey(), personas.get(vinculo.idContacto()).persona(),
-							vinculo.vinculo(), vinculo.prioridad(), vinculo.activo(), otros);
+							vinculo.vinculo(), ordenes.getOrDefault(fila.getKey(), Map.of()), vinculo.activo(), otros);
 				})
 				.toList();
 	}
@@ -87,9 +94,9 @@ public final class ContactosEnMemoria implements Contactos {
 	}
 
 	@Override
-	public UUID vincular(UUID idPaciente, UUID idContacto, Vinculo vinculo, int prioridad) {
+	public UUID vincular(UUID idPaciente, UUID idContacto, Vinculo vinculo) {
 		UUID id = UUID.randomUUID();
-		guardarVinculo(id, new FilaVinculo(idPaciente, idContacto, vinculo, prioridad, true));
+		guardarVinculo(id, new FilaVinculo(idPaciente, idContacto, vinculo, true));
 		return id;
 	}
 
@@ -97,14 +104,13 @@ public final class ContactosEnMemoria implements Contactos {
 	public void actualizarVinculo(UUID idContactoPaciente, Vinculo vinculo) {
 		FilaVinculo fila = vinculos.get(idContactoPaciente);
 		guardarVinculo(idContactoPaciente, new FilaVinculo(fila.idPaciente(), fila.idContacto(), vinculo,
-				fila.prioridad(), fila.activo()));
+				fila.activo()));
 	}
 
 	@Override
 	public void quitarCuidadorPrincipal(UUID idPaciente) {
 		vinculos.replaceAll((id, fila) -> fila.idPaciente().equals(idPaciente)
-				? new FilaVinculo(fila.idPaciente(), fila.idContacto(), sinCuidador(fila.vinculo()), fila.prioridad(),
-						fila.activo())
+				? new FilaVinculo(fila.idPaciente(), fila.idContacto(), sinCuidador(fila.vinculo()), fila.activo())
 				: fila);
 	}
 
@@ -112,22 +118,32 @@ public final class ContactosEnMemoria implements Contactos {
 	public void desactivar(UUID idContactoPaciente) {
 		FilaVinculo fila = vinculos.get(idContactoPaciente);
 		vinculos.put(idContactoPaciente, new FilaVinculo(fila.idPaciente(), fila.idContacto(),
-				sinCuidador(fila.vinculo()), fila.prioridad(), false));
+				sinCuidador(fila.vinculo()), false));
+		ordenes.remove(idContactoPaciente);
 	}
 
 	@Override
-	public void reactivar(UUID idContactoPaciente, int prioridad) {
+	public void reactivar(UUID idContactoPaciente) {
 		FilaVinculo fila = vinculos.get(idContactoPaciente);
 		guardarVinculo(idContactoPaciente, new FilaVinculo(fila.idPaciente(), fila.idContacto(), fila.vinculo(),
-				prioridad, true));
+				true));
 	}
 
 	@Override
-	public void reordenar(UUID idPaciente, List<UUID> orden) {
+	public void ordenar(UUID idPaciente, Severidad gravedad, List<UUID> orden) {
+		if (new HashSet<>(orden).size() != orden.size() || orden.stream().map(vinculos::get)
+				.anyMatch(fila -> fila == null || !fila.activo() || !fila.idPaciente().equals(idPaciente))) {
+			throw new IllegalStateException("Solo se ordenan vínculos activos del paciente, una vez cada uno");
+		}
+		vinculos.entrySet().stream().filter(fila -> fila.getValue().idPaciente().equals(idPaciente))
+				.forEach(fila -> {
+					Map<Severidad, Integer> delVinculo = ordenes.get(fila.getKey());
+					if (delVinculo != null) {
+						delVinculo.remove(gravedad);
+					}
+				});
 		for (int i = 0; i < orden.size(); i++) {
-			FilaVinculo fila = vinculos.get(orden.get(i));
-			vinculos.put(orden.get(i), new FilaVinculo(fila.idPaciente(), fila.idContacto(), fila.vinculo(), i + 1,
-					fila.activo()));
+			ordenes.computeIfAbsent(orden.get(i), id -> new EnumMap<>(Severidad.class)).put(gravedad, i + 1);
 		}
 	}
 
@@ -144,12 +160,12 @@ public final class ContactosEnMemoria implements Contactos {
 				revocacion), datos.whatsappHash(), datos.correoHash()));
 	}
 
-	/** Guarda el vínculo revisando, como los índices únicos, prioridad y cuidador entre los activos. */
+	/** Guarda el vínculo revisando, como los índices únicos, el cuidador entre los activos y que no se repita. */
 	private void guardarVinculo(UUID id, FilaVinculo nueva) {
-		boolean choca = nueva.activo() && vinculos.entrySet().stream().anyMatch(fila -> !fila.getKey().equals(id)
-				&& fila.getValue().activo() && fila.getValue().idPaciente().equals(nueva.idPaciente())
-				&& (fila.getValue().prioridad() == nueva.prioridad()
-						|| (nueva.vinculo().cuidadorPrincipal() && fila.getValue().vinculo().cuidadorPrincipal())));
+		boolean choca = nueva.activo() && nueva.vinculo().cuidadorPrincipal()
+				&& vinculos.entrySet().stream().anyMatch(fila -> !fila.getKey().equals(id)
+						&& fila.getValue().activo() && fila.getValue().idPaciente().equals(nueva.idPaciente())
+						&& fila.getValue().vinculo().cuidadorPrincipal());
 		boolean repetido = vinculos.entrySet().stream().anyMatch(fila -> !fila.getKey().equals(id)
 				&& fila.getValue().idPaciente().equals(nueva.idPaciente())
 				&& Objects.equals(fila.getValue().idContacto(), nueva.idContacto()));

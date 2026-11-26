@@ -74,7 +74,7 @@ Enum tipo_evento {
   TENDENCIA [note: 'Clínica']
   INACTIVIDAD [note: 'Clínica: la persona no mueve el reloj']
   ZONA_SEGURA [note: 'La persona salió del círculo de su zona segura; gravedad según ZONA_SEGURA.severidad']
-  BOTON_AYUDA [note: 'La persona presionó el botón de ayuda del reloj. Siempre LEVE; avisa primero a los VECINO']
+  BOTON_AYUDA [note: 'La persona presionó el botón de ayuda del reloj. Siempre LEVE; avisa a la lista de leve']
   SILENCIO_DATOS [note: 'Técnica: no llegan datos (sin señal, reloj apagado o plan vencido)']
   BATERIA_BAJA [note: 'Técnica']
   RELOJ_NO_PUESTO [note: 'Técnica']
@@ -113,6 +113,7 @@ Enum proposito_aviso {
   AVISO [note: 'El que pidió el reloj, el de la oficina, el de recibe_avisos o el respaldo de un WhatsApp']
   VIGILANTE [note: 'La alerta no avanza: el reloj no pide avisos (solo a cuentas del equipo)']
   AGRAVAMIENTO [note: 'La alerta pasó a grave después de su aviso a los coordinadores (solo a cuentas del equipo)']
+  RECORDATORIO [note: 'El personal asignado por la oficina no ha llegado (V19, solo al responsable)']
 }
 
 Enum tipo_aviso_fcm {
@@ -251,7 +252,7 @@ Table DOCUMENTO {
 // ==========================================
 
 Table TIPO_CONTACTO {
-  codigo varchar [pk, note: 'FAMILIA, VECINO, PRLAC, SEGURIDAD_CIUDADANA, INSTITUCION, OTRO...']
+  codigo varchar [pk, note: 'TERCERO_SIGNIFICATIVO, PRLAC, SEGURIDAD_CIUDADANA, CARABINEROS, CESFAM, INSTITUCION, OTRO']
   nombre varchar [not null]
   activo boolean [not null, default: true]
   Note: 'Quién es la persona respecto del paciente. Ser cuidador/a es un rol (CONTACTO_PACIENTE.es_cuidador_principal), no un tipo'
@@ -289,10 +290,9 @@ Table CONTACTO_PACIENTE {
   id_contacto_paciente uuid [pk]
   id_paciente uuid [not null]
   id_contacto uuid [not null]
-  codigo_tipo_contacto varchar [not null, note: 'Depende del paciente: alguien puede ser cuidadora de uno y vecina de otro']
-  parentesco varchar [note: 'Ej. hija, sobrino. Solo si el tipo es FAMILIA']
+  codigo_tipo_contacto varchar [not null, note: 'Depende del paciente: alguien puede ser cuidadora de uno y contacto de seguridad de otro']
+  parentesco varchar [note: 'Ej. hija, sobrino. Solo si el tipo es TERCERO_SIGNIFICATIVO']
   es_cuidador_principal boolean [not null, default: false]
-  orden_prioridad int [not null, note: '1, 2, 3...']
   hora_inicio time [note: 'Horario en que está disponible para este paciente. Vacío = todo el día']
   hora_fin time
   activo boolean [not null, default: true, note: 'Se desactiva, no se borra: sus intentos quedan en el historial']
@@ -304,12 +304,24 @@ Table CONTACTO_PACIENTE {
   La lista de contactos de cada paciente. Viaja al reloj sin número ni correo: el reloj escala y el servidor envía.
   Un cambio aquí cambia el hash de la configuración del reloj, que queda pendiente. El último cambio sale de REGISTRO_AUDITORIA.
   Si hora_inicio > hora_fin, el horario cruza la medianoche (ej. 22:00–07:00).
-  Índice único parcial: (id_paciente, orden_prioridad) WHERE activo.
   Índice único parcial: (id_paciente) WHERE es_cuidador_principal AND activo.
   CHECK ((hora_inicio IS NULL) = (hora_fin IS NULL)).
   CHECK (hora_inicio IS NULL OR hora_inicio <> hora_fin).
-  CHECK (orden_prioridad >= 1).
-  CHECK (parentesco IS NULL OR codigo_tipo_contacto = 'FAMILIA').
+  CHECK (parentesco IS NULL OR codigo_tipo_contacto = 'TERCERO_SIGNIFICATIVO').
+  Su lugar en la lista de cada gravedad está en ORDEN_CONTACTO.
+  '''
+}
+
+Table ORDEN_CONTACTO {
+  id_contacto_paciente uuid [pk]
+  severidad severidad [pk, note: 'La lista de qué alertas']
+  orden int [not null, note: '1 = el primero al que avisa el reloj en las alertas de esa gravedad']
+  Note: '''
+  El lugar de cada contacto activo en la lista de cada gravedad (V20). Un contacto puede estar en varias, con un lugar
+  distinto en cada una; una alerta recorre solo la lista de su gravedad (al agravarse, la de grave desde el primero).
+  Sin id_paciente (se sabe por el vínculo): que un lugar no se repita dentro de un paciente y gravedad, y que ninguna
+  gravedad quede vacía mientras haya contactos activos, lo revisa la aplicación. Al desactivar el contacto se borran sus filas.
+  CHECK (orden >= 1).
   '''
 }
 
@@ -585,6 +597,13 @@ Table ATENCION_ALERTA {
   clasificacion clasificacion_alerta [note: 'Solo alertas clínicas (lo valida el backend con ALERTA.tipo_evento)']
   observaciones_cierre text [note: 'cifrado']
   fecha_cierre_seguimiento timestamptz [note: 'Solo alertas POSITIVA']
+  resultado_llamada varchar [note: 'Pasos de la oficina (V19): BIEN, NECESITA_ATENCION o NO_CONTESTA']
+  fecha_hora_resultado_llamada timestamptz
+  fecha_hora_personal_asignado timestamptz [note: 'Confirma la alerta: el reloj deja de avisar']
+  fecha_hora_sin_disponibilidad timestamptz [note: 'No había personal: el reloj sigue avisando']
+  fecha_hora_llegada_personal timestamptz
+  resultado_visita varchar [note: 'BIEN, APOYO_NO_URGENTE o EMERGENCIA']
+  fecha_hora_resultado_visita timestamptz
   Indexes {
     (id_usuario_responsable) [note: 'Mis casos, en el dashboard']
   }
@@ -624,6 +643,8 @@ Table REGISTRO_INTENTO {
   fecha_hora_respuesta timestamptz
   fecha_hora_llamada timestamptz [note: 'Primer clic en Llamar al paciente desde el enlace del correo (V17)']
   fecha_hora_llegada timestamptz [note: 'Llegué donde el paciente: resuelve la alerta si seguía abierta (V17)']
+  resultado_llamada varchar [note: 'Solo contactos del paciente (V19): CONTESTA o NO_CONTESTA, después de llamar']
+  fecha_hora_resultado_llamada timestamptz
   Indexes {
     (id_alerta, id_contacto_paciente, canal, ronda) [unique, note: 'Un aviso por contacto, canal y ronda, aunque el reloj genere otro event_id (ej. tras reiniciarse)']
     (id_contacto_paciente) [note: 'Lo revisa la clave diferida al borrar vínculos']
@@ -839,6 +860,7 @@ Ref: ZONA_SEGURA.id_paciente > PACIENTE.id_paciente [delete: cascade]
 Ref: CONTACTO_PACIENTE.id_paciente > PACIENTE.id_paciente [delete: cascade]
 Ref: CONTACTO_PACIENTE.id_contacto > CONTACTO.id_contacto
 Ref: CONTACTO_PACIENTE.codigo_tipo_contacto > TIPO_CONTACTO.codigo
+Ref: ORDEN_CONTACTO.id_contacto_paciente > CONTACTO_PACIENTE.id_contacto_paciente [delete: cascade]
 
 // 3. Relojes y telemetría
 Ref: ASIGNACION_RELOJ.id_paciente > PACIENTE.id_paciente [delete: cascade]

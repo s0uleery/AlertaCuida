@@ -2,16 +2,21 @@ package cl.ucn.alertacuida.application.respuesta.puerto;
 
 import cl.ucn.alertacuida.application.respuesta.modelo.AvisoRespondible;
 import cl.ucn.alertacuida.application.respuesta.modelo.RespuestaContacto;
+import cl.ucn.alertacuida.application.respuesta.modelo.ResultadoLlamadaContacto;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
-/** Avisos por correo a contactos del paciente y sus respuestas (columnas respuesta de registro_intento). */
+/**
+ * Avisos que piden respuesta (a contactos del paciente y a coordinadores) y las respuestas de los contactos
+ * (columnas respuesta, llamada y llegada de registro_intento).
+ */
 public interface RespuestasContacto {
 
 	/**
-	 * @return el aviso, solo si es un correo a un contacto de la lista del paciente; vacío si no existe o si
-	 *         fue a una cuenta del equipo, que no confirma alertas
+	 * @return el aviso, si pide respuesta: a un contacto de la lista del paciente o, en las alertas de salud, a un
+	 *         coordinador (aviso a la oficina, agravamiento o recordatorio). Vacío si no existe o si es otro aviso
+	 *         al equipo, que no pide respuesta
 	 */
 	Optional<AvisoRespondible> buscar(UUID idIntento);
 
@@ -31,6 +36,13 @@ public interface RespuestasContacto {
 	 * @return si la guardó; false si ya estaba
 	 */
 	boolean registrarLlamada(UUID idIntento, Instant fecha);
+
+	/**
+	 * Guarda lo que dijo el contacto del paciente después de llamar, solo la primera vez (26-11-2026).
+	 *
+	 * @return si la guardó; false si ya estaba o el aviso no es a un contacto del paciente
+	 */
+	boolean registrarResultadoLlamada(UUID idIntento, ResultadoLlamadaContacto resultado, Instant fecha);
 
 	/**
 	 * Guarda que el contacto llegó donde el paciente, solo si respondió "Voy en camino" y aún no lo había

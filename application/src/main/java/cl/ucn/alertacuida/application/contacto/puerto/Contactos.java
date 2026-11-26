@@ -4,13 +4,14 @@ import cl.ucn.alertacuida.application.contacto.modelo.DatosPersona;
 import cl.ucn.alertacuida.application.contacto.modelo.Persona;
 import cl.ucn.alertacuida.application.contacto.modelo.TipoContacto;
 import cl.ucn.alertacuida.application.contacto.modelo.Vinculo;
+import cl.ucn.alertacuida.domain.alerta.Severidad;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Personas de contacto y la lista de cada paciente (tablas contacto, contacto_paciente y
+ * Personas de contacto y la lista de cada paciente (tablas contacto, contacto_paciente, orden_contacto y
  * tipo_contacto). Nombre, WhatsApp y correo se cifran en el adaptador. La lista de un paciente viene de
  * {@link ListaDelPaciente}.
  */
@@ -39,8 +40,8 @@ public interface Contactos extends ListaDelPaciente {
 	 */
 	void guardarOptIn(UUID idContacto, Instant fechaOptIn, Instant fechaRevocacion);
 
-	/** @return el identificador del vínculo creado (activo) */
-	UUID vincular(UUID idPaciente, UUID idContacto, Vinculo vinculo, int prioridad);
+	/** @return el identificador del vínculo creado (activo, todavía sin orden en ninguna gravedad) */
+	UUID vincular(UUID idPaciente, UUID idContacto, Vinculo vinculo);
 
 	/** Reemplaza tipo, parentesco, cuidador principal y horario del vínculo. */
 	void actualizarVinculo(UUID idContactoPaciente, Vinculo vinculo);
@@ -48,17 +49,18 @@ public interface Contactos extends ListaDelPaciente {
 	/** Deja al paciente sin cuidador principal, para asignar otro. */
 	void quitarCuidadorPrincipal(UUID idPaciente);
 
-	/** Desactiva el vínculo y le quita el rol de cuidador principal. */
+	/** Desactiva el vínculo, le quita el rol de cuidador principal y lo saca de todas las gravedades. */
 	void desactivar(UUID idContactoPaciente);
 
-	/** Reactiva el vínculo con esa prioridad. */
-	void reactivar(UUID idContactoPaciente, int prioridad);
+	/** Reactiva el vínculo, todavía sin orden en ninguna gravedad. */
+	void reactivar(UUID idContactoPaciente);
 
 	/**
-	 * Da prioridad 1, 2, 3… a los vínculos activos, en ese orden.
+	 * Deja en la lista de esa gravedad exactamente esos vínculos, con orden 1, 2, 3… Los demás vínculos del
+	 * paciente salen de esa gravedad.
 	 *
-	 * @param orden todos los vínculos activos del paciente
+	 * @param orden vínculos activos del paciente, sin repetir; vacía deja la gravedad sin contactos
 	 */
-	void reordenar(UUID idPaciente, List<UUID> orden);
+	void ordenar(UUID idPaciente, Severidad gravedad, List<UUID> orden);
 
 }

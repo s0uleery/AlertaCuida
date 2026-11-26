@@ -23,8 +23,13 @@ import java.util.UUID;
  * @param llegada        cuándo avisó que llegó donde el paciente; null si no lo ha hecho
  * @param telefonoReloj  número de la SIM del reloj de la alerta, para "Llamar al paciente"; null si no tiene
  * @param delReloj       si la envió el reloj: entonces, al resolverse, hay que avisarle para que deje de escalar
+ * @param idCoordinador  la cuenta del equipo si el aviso fue a un coordinador (aviso a la oficina, agravamiento o
+ *                       recordatorio): la página muestra entonces los pasos de la oficina. Null si fue a un
+ *                       contacto del paciente
+ * @param resultadoLlamada lo que dijo el contacto después de llamar; null si aún no lo dice o si es un coordinador
  */
 public record AvisoRespondible(UUID idIntento, UUID idAlerta, long numero, String alias, TipoEvento tipo,
 		Severidad severidad, Instant fechaHora, EstadoContacto estado, RespuestaContacto respuesta,
-		Instant fechaRespuesta, Instant llegada, String telefonoReloj, boolean delReloj) {
+		Instant fechaRespuesta, Instant llegada, String telefonoReloj, boolean delReloj, UUID idCoordinador,
+		ResultadoLlamadaContacto resultadoLlamada) {
 }

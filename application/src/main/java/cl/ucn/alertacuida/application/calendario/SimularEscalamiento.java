@@ -4,7 +4,6 @@ import cl.ucn.alertacuida.domain.contacto.Canal;
 import cl.ucn.alertacuida.application.contacto.modelo.ContactoDelPaciente;
 import cl.ucn.alertacuida.application.contacto.puerto.ListaDelPaciente;
 import cl.ucn.alertacuida.domain.alerta.Severidad;
-import cl.ucn.alertacuida.domain.alerta.TipoEvento;
 import cl.ucn.alertacuida.domain.calendario.CalendarioHabil;
 import cl.ucn.alertacuida.domain.comun.ZonaHoraria;
 import java.time.Instant;
@@ -52,7 +51,7 @@ public class SimularEscalamiento {
 		boolean espera = regla.esperaDiaHabil(gravedad, momento);
 		List<PasoSimulado> pasos = new ArrayList<>();
 		if (idPaciente != null) {
-			List<ContactoDelPaciente> aAvisar = regla.contactosAAvisar(TipoEvento.CAIDA, gravedad, momento,
+			List<ContactoDelPaciente> aAvisar = regla.contactosAAvisar(gravedad, momento,
 					contactos.delPaciente(idPaciente));
 			for (int i = 0; i < aAvisar.size(); i++) {
 				ContactoDelPaciente contacto = aAvisar.get(i);
@@ -81,8 +80,8 @@ public class SimularEscalamiento {
 	 *
 	 * @param orden             1, 2, 3…
 	 * @param nombre            el contacto
-	 * @param tipo              FAMILIA, VECINO, PRLAC, SEGURIDAD_CIUDADANA…
-	 * @param parentesco        si es familiar; puede faltar
+	 * @param tipo              TERCERO_SIGNIFICATIVO, CARABINEROS, SEGURIDAD_CIUDADANA…
+	 * @param parentesco        si es un tercero significativo; puede faltar
 	 * @param cuidadorPrincipal si es la persona cuidadora principal
 	 * @param canales           por dónde se le puede avisar (WhatsApp con opt-in vigente, correo)
 	 */

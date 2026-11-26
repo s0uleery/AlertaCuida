@@ -67,7 +67,7 @@ public class ConfiguracionDelReloj implements VersionVigente {
 		List<ContactoConfigurado> lista = contactos.listar(idPaciente).contactos().stream()
 				.filter(ContactoDelPaciente::disponible)
 				.map(contacto -> new ContactoConfigurado(contacto.id(), contacto.persona().nombre(),
-						contacto.vinculo().tipo(), contacto.prioridad(), contacto.vinculo().horario(),
+						contacto.vinculo().tipo(), contacto.ordenes(), contacto.vinculo().horario(),
 						contacto.canales()))
 				.toList();
 		return ConfiguracionReloj.de(new ContenidoConfiguracion(perfil.ajustes().modulos(),

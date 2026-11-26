@@ -60,7 +60,7 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
 
 ### 3. Contactos
 
-- **`TIPO_CONTACTO`**: catálogo (familia, vecino, PRLAC, seguridad ciudadana, institución, otro). Dice **quién es** la persona respecto del paciente. Ser cuidador es un **rol** (`es_cuidador_principal`), no un tipo.
+- **`TIPO_CONTACTO`**: catálogo (tercero significativo, PRLAC, seguridad ciudadana, Carabineros, CESFAM, institución, otro). Desde V20, familia y vecino son "tercero significativo". Dice **quién es** la persona respecto del paciente. Ser cuidador es un **rol** (`es_cuidador_principal`), no un tipo.
 - **`CONTACTO`**: la **persona** o institución, guardada una sola vez aunque sea contacto de varios pacientes (por ejemplo, Seguridad Ciudadana).
   - Solo nombre y medio de contacto (minimización): WhatsApp y correo, cifrados, al menos uno de los dos.
   - El opt-in de WhatsApp es de la persona, porque Meta lo registra por número.
@@ -68,11 +68,12 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
   - **Contacto interno (V11):** una cuenta del equipo PRLAC que recibe avisos del servidor (correo por `recibe_avisos`, WhatsApp a la oficina y su correo de respaldo). Es solo el enlace a `USUARIO` (`id_usuario`, único): nombre, correo, teléfono y opt-in se leen de la cuenta, sin copiarlos. El externo es la persona de la lista de un paciente, como antes.
   - Un contacto interno no entra en la lista de ningún paciente, así que el reloj nunca lo recorre, y un contacto no cambia de interno a externo ni al revés. Lo impiden dos disparadores que responden como un `CHECK`.
 - **`CONTACTO_PACIENTE`**: la lista de contactos de cada paciente. Guarda lo que depende del vínculo:
-  - tipo (alguien puede ser cuidadora de un paciente y vecina de otro) y parentesco (solo si es `FAMILIA`);
+  - tipo (alguien puede ser cuidadora de un paciente y contacto de seguridad de otro) y parentesco (solo si es `TERCERO_SIGNIFICATIVO`);
   - si es el cuidador principal (uno activo por paciente);
-  - prioridad (única entre los activos del paciente);
+  - su lugar en la lista de cada gravedad va aparte, en `ORDEN_CONTACTO`;
   - horario de disponibilidad (si `hora_inicio > hora_fin`, cruza la medianoche; vacío = todo el día);
   - si está activo (se desactiva, no se borra, porque sus intentos quedan en el historial).
+- **`ORDEN_CONTACTO` (V20)**: el lugar de cada contacto activo en la lista de cada gravedad (`LEVE`, `MEDIA`, `GRAVE`; 1 = primero). Un contacto puede estar en varias con un lugar distinto en cada una, y una alerta recorre solo la lista de su gravedad (al agravarse, la de grave desde el primero). No lleva `id_paciente` para no repetirlo (FNBC): que un lugar no se repita dentro de un paciente y gravedad, y que ninguna gravedad quede vacía mientras haya contactos activos, lo revisa la aplicación. Al desactivar un contacto se borran sus filas.
 - Al reloj le llega la lista **sin números ni correos**: el reloj pide el aviso por identificador y solo el servidor conoce los datos.
 - **El último cambio no se guarda** en estas tablas: sale de `REGISTRO_AUDITORIA`. La configuración pendiente del reloj se detecta por hash (ver abajo).
 
@@ -112,7 +113,7 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
 ### 6. Alertas
 
 - **Tipos de evento.**
-  - Clínicos, que escalan a los contactos: caída, FC, SpO2, FC+SpO2, tendencia, inactividad, salida de la zona segura (con la gravedad de su zona) y botón de ayuda (siempre leve; avisa primero a los `VECINO`, regla `alerta_boton_leve`).
+  - Clínicos, que escalan a los contactos: caída, FC, SpO2, FC+SpO2, tendencia, inactividad, salida de la zona segura (con la gravedad de su zona) y botón de ayuda (siempre leve, regla `alerta_boton_leve`; avisa a la lista de leve).
   - Técnicos, que avisan a todos los coordinadores (por WhatsApp, en horario laboral) y por correo a las demás cuentas con `recibe_avisos` (apagado por defecto desde V10): silencio de datos (sin señal, reloj apagado o plan vencido), batería baja, reloj no puesto y exceso de alertas (`EXCESO_ALERTAS`: desde la 10.ª alerta del mismo reloj en 60 minutos, posible falla; leve).
   - El servidor solo crea alertas técnicas y simulacros, y el silencio de datos solo lo crea el servidor (`CHECK`).
 - **Gravedad y enrutamiento.** Hay tres niveles. La regla está fija en el código (`ReglaEnrutamiento`); el horario de cada contacto se respeta siempre, también en horario hábil:
@@ -136,6 +137,7 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
   - Si es `POSITIVA`, se abre el seguimiento, que exige responsable y se cierra con `fecha_cierre_seguimiento`.
   - **Asumir sin carreras:** `INSERT ... ON CONFLICT (id_alerta) DO UPDATE ... WHERE fecha_hora_toma IS NULL AND fecha_hora_cierre IS NULL`. Si no afecta filas, otra persona ya la tomó o ya está cerrada. Las reasignaciones quedan en la auditoría.
   - Separar la atención de la alerta evita mezclar dos autores en una fila: la evidencia del reloj no se toca cuando el equipo trabaja.
+  - **Pasos de la oficina desde el enlace del correo** (V19, 26-11-2026): resultado de la llamada, personal asignado o sin disponibilidad (una de las dos, solo si la persona necesita atención o no contestó), llegada del personal (exige personal asignado) y resultado de la visita (exige llegada), cada uno con su hora. Son de la alerta y no de cada aviso, porque el coordinador puede tener varios enlaces de la misma alerta. La etapa no se guarda: se calcula con estas fechas. `ALERTA_ESTADO` cuenta como confirmada la llamada con la persona bien y el personal asignado.
 - **El estado no se guarda; se calcula** con la vista `ALERTA_ESTADO`, que da dos estados:
 
   | Estado de contacto (lo que hace el reloj) | Cuándo |
@@ -211,7 +213,7 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
 
 ## Relaciones
 
-35 relaciones, todas 1 a muchos (tres de ellas uno a uno):
+36 relaciones, todas 1 a muchos (tres de ellas uno a uno):
 
 | Tabla padre | Tablas hijas |
 |---|---|
@@ -222,7 +224,7 @@ Tarea 0.4 del [cronograma](cronograma.md). El diagrama está en [`modelo-datos.d
 | `ASIGNACION_RELOJ` | `SINCRONIZACION`, `ALERTA` |
 | `SINCRONIZACION` | `EVENTO_DESCARTADO`, `REGISTRO_VITAL`, `UBICACION` |
 | `ALERTA` | `ATENCION_ALERTA` (1 a 1), `DISCREPANCIA_ALERTA`, `REGISTRO_INTENTO`, `AVISO_FCM`, `SEGUIMIENTO` |
-| `CONTACTO_PACIENTE` | `REGISTRO_INTENTO` |
+| `CONTACTO_PACIENTE` | `REGISTRO_INTENTO`, `ORDEN_CONTACTO` |
 | `DESTINO_DERIVACION` | `SEGUIMIENTO` |
 | `ROL` | `USUARIO`, `PERMISO_ROL` |
 | `USUARIO` | `CONTACTO` (interno, 1 a 1), `DOCUMENTO`, `ATENCION_ALERTA` (responsable), `ATENCION_ALERTA` (resolutor), `SEGUIMIENTO`, `CODIGO_RESPALDO`, `TOKEN_SESION`, `TOKEN_ACCION`, `REGISTRO_AUDITORIA` |
@@ -277,12 +279,14 @@ Las tablas las crea Flyway con las migraciones de [`adapters/src/main/resources/
 | `V16__conexion_bluetooth` | Tipo de conexión `BLUETOOTH` en las sincronizaciones |
 | `V17__llamada_y_llegada_contacto` | "Llamar al paciente" y "Llegué donde el paciente" en `registro_intento` (la llegada exige "Voy en camino") |
 | `V18__horario_habil` | `horario_habil` (jornada hábil editable) y la entidad `CALENDARIO` en `registro_auditoria` |
+| `V19__pasos_de_la_oficina` | Pasos de la oficina en `atencion_alerta`, resultado de la llamada del contacto y propósito `RECORDATORIO` en `registro_intento`, y la vista `alerta_estado` que confirma con los pasos de la oficina |
+| `V20__orden_por_gravedad` | `orden_contacto` (lugar de cada contacto en la lista de leve, media y grave; los activos quedan en las tres con su orden de antes), sin `orden_prioridad`; tipos `TERCERO_SIGNIFICATIVO` (reemplaza a familia y vecino), `CARABINEROS` y `CESFAM` |
 
 Una migración ya aplicada no se edita: los cambios van en una migración nueva (`V7__...`).
 
 Resumen de lo que DBML no dibuja (está dentro de cada tabla en las migraciones y, para las pruebas del diseño, en [`pruebas-modelo-datos/reglas-extra.sql`](pruebas-modelo-datos/reglas-extra.sql)):
 
-- **Índices únicos parciales:** `CONTACTO_PACIENTE (id_paciente, orden_prioridad) WHERE activo` y `CONTACTO_PACIENTE (id_paciente) WHERE es_cuidador_principal AND activo`.
+- **Índices únicos parciales:** `CONTACTO_PACIENTE (id_paciente) WHERE es_cuidador_principal AND activo`.
 - **Índices en claves foráneas.** PostgreSQL no los crea solo. Se indexa una clave foránea si su padre se borra en cascada sobre una tabla grande, o si se consulta por ella; si ya hay un índice o `unique` que empieza por esa columna, no hace falta otro. Se agregaron seis: `registro_vital (id_sincronizacion)`, `ubicacion (id_sincronizacion)`, `seguimiento (id_alerta, fecha_hora)`, `atencion_alerta (id_usuario_responsable)`, `contacto_paciente (id_contacto)` y `registro_intento (id_contacto_paciente)`. Las demás no se indexan: son catálogos o usuarios que no se borran, tokens que se buscan por su hash, o tablas con pocas filas por paciente.
 - **`EXCLUDE`** (extensión `btree_gist`): `ASIGNACION_RELOJ` sin superposición de `tstzrange(fecha_inicio, fecha_fin)` por `id_dispositivo` y por `id_paciente`.
 - **Clave diferida:** `REGISTRO_INTENTO.id_contacto_paciente` va `DEFERRABLE INITIALLY DEFERRED`. Sin esto, al borrar un paciente la cascada borra sus vínculos antes que los intentos de sus alertas, y PostgreSQL lo rechaza. Diferida, permite borrar al paciente completo, pero no un vínculo suelto que tiene intentos.
@@ -292,7 +296,7 @@ Resumen de lo que DBML no dibuja (está dentro de cada tabla en las migraciones 
   - `UMBRAL` completo o vacío, en orden, y SpO2 sin límite alto y hasta 100 %;
   - `ALERTA`: el origen coherente con el tipo y con el hash, agravamiento solo de caídas no graves, espera del día hábil solo en leves, cancelada sin "sin respuesta";
   - `ATENCION_ALERTA`: sin filas vacías, clasificación solo al cerrar, `POSITIVA` con responsable;
-  - rangos: batería 0–100, prioridad ≥ 1, cantidades e intentos ≥ 0, ronda 1 o 2;
+  - rangos: batería 0–100, orden en una gravedad ≥ 1, cantidades e intentos ≥ 0, ronda 1 o 2;
   - `USUARIO`: activo solo con contraseña, correo en minúsculas;
   - `CONTACTO`: el externo con nombre y algún canal, el interno sin datos propios;
   - `REGISTRO_INTENTO`: un solo destino (vínculo o contacto interno), ronda solo con vínculo, respuesta solo de un vínculo o del aviso a la oficina o de agravamiento a un coordinador (V14), reintentos ≥ 0, y pendiente de envío solo si no salió ni falló.

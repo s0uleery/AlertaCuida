@@ -272,9 +272,9 @@ Todo lo que el reloj necesita para evaluar y escalar sin conexión. Con `If-None
   "reglas": { "versionMatriz": "PROVISIONAL", "tendencia": { "minutos": 120, "severidad": "MEDIA" } },
   "escalamiento": { "minutosEspera": 5, "rondas": 2 },
   "contactos": [
-    { "idContacto": "…", "nombre": "Ana Rojas", "tipo": "FAMILIA", "prioridad": 1, "horario": null, "canales": ["WHATSAPP", "CORREO"] },
-    { "idContacto": "…", "nombre": "Juan Pérez", "tipo": "VECINO", "prioridad": 2, "horario": null, "canales": ["WHATSAPP"] },
-    { "idContacto": "…", "nombre": "Seguridad Ciudadana", "tipo": "SEGURIDAD_CIUDADANA", "prioridad": 3, "horario": { "inicio": "20:00", "fin": "08:00" }, "canales": ["CORREO"] }
+    { "idContacto": "…", "nombre": "Ana Rojas", "tipo": "TERCERO_SIGNIFICATIVO", "prioridades": { "LEVE": 1, "MEDIA": 1, "GRAVE": 3 }, "horario": null, "canales": ["WHATSAPP", "CORREO"] },
+    { "idContacto": "…", "nombre": "Carabineros 1.ª Comisaría", "tipo": "CARABINEROS", "prioridades": { "GRAVE": 1 }, "horario": null, "canales": ["WHATSAPP"] },
+    { "idContacto": "…", "nombre": "Seguridad Ciudadana", "tipo": "SEGURIDAD_CIUDADANA", "prioridades": { "MEDIA": 2, "GRAVE": 2 }, "horario": { "inicio": "20:00", "fin": "08:00" }, "canales": ["CORREO"] }
   ],
   "calendario": {
     "zonaHoraria": "America/Santiago",
@@ -284,7 +284,7 @@ Todo lo que el reloj necesita para evaluar y escalar sin conexión. Con `If-None
 }
 ```
 - **Umbrales y espera**: los del paciente, o los valores base si no tiene ajustes.
-- **Contactos**: solo los activos con algún canal que el servidor pueda usar hoy (WhatsApp con opt-in vigente, o correo), por prioridad, con su `tipo`. Sin número ni correo: el reloj pide los avisos por `idContacto`. Con el botón de ayuda, el reloj avisa primero a los `VECINO` (por prioridad) y después al resto (por prioridad).
+- **Contactos**: solo los activos con algún canal que el servidor pueda usar hoy (WhatsApp con opt-in vigente, o correo), con su `tipo` y sus `prioridades`: el lugar en la lista de cada gravedad donde está (26-11-2026). Sin número ni correo: el reloj pide los avisos por `idContacto`. Una alerta recorre **solo** los contactos que tienen su gravedad en `prioridades`, de menor a mayor; si se agrava, el reloj cambia a la lista de `GRAVE` desde el primero. El botón de ayuda es leve: usa la lista de `LEVE`.
 - **`zonaSegura`**: viene solo si `modulos.zonaSegura` es `true` (si no, `null`). El reloj revisa con su GPS si la persona sigue dentro del círculo; al salir envía una alerta `ZONA_SEGURA` con esa `severidad`.
 - **`botonAyuda`**: el botón envía una alerta `BOTON_AYUDA`, siempre `LEVE` (fuera del horario hábil espera, como toda leve). `horario: null` = todo el día; si `inicio` > `fin`, cruza la medianoche.
 - **Feriados**: del año en curso y el siguiente. Las horas van en hora de Chile.

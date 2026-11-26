@@ -12,6 +12,7 @@ import cl.ucn.alertacuida.application.escalamiento.VigilarEscalamiento;
 import cl.ucn.alertacuida.application.escalamiento.puerto.EscalamientosTrabados;
 import cl.ucn.alertacuida.domain.calendario.CalendarioHabil;
 import cl.ucn.alertacuida.domain.comun.ZonaHoraria;
+import cl.ucn.alertacuida.soporte.BaseDePrueba;
 import cl.ucn.alertacuida.soporte.PostgresDePrueba;
 import java.sql.Timestamp;
 import java.time.Clock;
@@ -92,10 +93,7 @@ class RequisitosVigilanteEscalamientoTest {
 				.param("n", cifrado.cifrar("Hija", ColumnaCifrada.CONTACTO_NOMBRE))
 				.param("c", cifrado.cifrar("hija@correo.cl", ColumnaCifrada.CONTACTO_CORREO))
 				.query(UUID.class).single();
-		hija = jdbc.sql("""
-				INSERT INTO contacto_paciente (id_paciente, id_contacto, codigo_tipo_contacto, orden_prioridad)
-				VALUES (:p, :c, 'OTRO', 1) RETURNING id_contacto_paciente""")
-				.param("p", paciente).param("c", persona).query(UUID.class).single();
+		hija = BaseDePrueba.vincular(jdbc, paciente, persona, "OTRO", 1);
 		cuenta("COORDINADOR", "coord1", true);
 		cuenta("COORDINADOR", "coord2", true);
 		cuenta("COORDINADOR", "coord-inactivo", false);

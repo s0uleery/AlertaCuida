@@ -2,6 +2,7 @@ package cl.ucn.alertacuida.adapters.persistencia.respuesta;
 
 import cl.ucn.alertacuida.application.respuesta.modelo.AvisoRespondible;
 import cl.ucn.alertacuida.application.respuesta.modelo.RespuestaContacto;
+import cl.ucn.alertacuida.application.respuesta.modelo.ResultadoLlamadaContacto;
 import cl.ucn.alertacuida.application.respuesta.puerto.RespuestasContacto;
 import cl.ucn.alertacuida.domain.alerta.EstadoContacto;
 import cl.ucn.alertacuida.domain.alerta.Severidad;
@@ -28,9 +29,9 @@ public class RespuestasContactoJdbc implements RespuestasContacto {
 	}
 
 	/**
-	 * Solo los correos y WhatsApp que piden confirmar: los avisos a un vínculo de la lista del paciente y, en las
-	 * alertas de salud, el aviso a la oficina y el de agravamiento a un coordinador (contacto interno). Los del
-	 * vigilante y los de las técnicas no confirman.
+	 * Solo los correos y WhatsApp que piden respuesta: los avisos a un vínculo de la lista del paciente y, en las
+	 * alertas de salud, el aviso a la oficina, el de agravamiento y el recordatorio de llegada a un coordinador
+	 * (contacto interno). Los del vigilante y los de las técnicas no piden respuesta.
 	 */
 	@Override
 	public Optional<AvisoRespondible> buscar(UUID idIntento) {
@@ -38,20 +39,22 @@ public class RespuestasContactoJdbc implements RespuestasContacto {
 				SELECT i.id_intento, i.id_alerta, a.numero, p.alias, a.tipo_evento, e.severidad_actual,
 					coalesce(a.fecha_hora_deteccion, a.fecha_hora_recepcion) AS fecha_hora, e.estado_contacto,
 					i.respuesta, i.fecha_hora_respuesta, i.fecha_hora_llegada, s.numero_sim,
-					a.origen = 'RELOJ' AS del_reloj
+					a.origen = 'RELOJ' AS del_reloj, ci.id_usuario AS coordinador, i.resultado_llamada
 				FROM registro_intento i
 				JOIN alerta a ON a.id_alerta = i.id_alerta
 				JOIN alerta_estado e ON e.id_alerta = i.id_alerta
 				JOIN asignacion_reloj r ON r.id_asignacion = a.id_asignacion
 				JOIN smartwatch s ON s.id_dispositivo = r.id_dispositivo
 				JOIN paciente p ON p.id_paciente = r.id_paciente
+				LEFT JOIN contacto ci ON ci.id_contacto = i.id_contacto_interno
 				WHERE i.id_intento = :id AND i.canal IN ('CORREO', 'WHATSAPP') AND (i.id_contacto_paciente IS NOT NULL
-					OR (i.id_contacto_interno IS NOT NULL AND i.proposito IN ('AVISO', 'AGRAVAMIENTO')
+					OR (i.id_contacto_interno IS NOT NULL AND i.proposito IN ('AVISO', 'AGRAVAMIENTO', 'RECORDATORIO')
 						AND a.tipo_evento NOT IN (:tecnicas)))""")
 				.param("id", idIntento)
 				.param("tecnicas", TipoEvento.tecnicas().stream().map(Enum::name).toList())
 				.query((fila, n) -> {
 					String respuesta = fila.getString("respuesta");
+					String resultadoLlamada = fila.getString("resultado_llamada");
 					Timestamp fechaRespuesta = fila.getTimestamp("fecha_hora_respuesta");
 					Timestamp llegada = fila.getTimestamp("fecha_hora_llegada");
 					return new AvisoRespondible(fila.getObject("id_intento", UUID.class),
@@ -63,7 +66,8 @@ public class RespuestasContactoJdbc implements RespuestasContacto {
 							respuesta == null ? null : RespuestaContacto.valueOf(respuesta),
 							fechaRespuesta == null ? null : fechaRespuesta.toInstant(),
 							llegada == null ? null : llegada.toInstant(), fila.getString("numero_sim"),
-							fila.getBoolean("del_reloj"));
+							fila.getBoolean("del_reloj"), fila.getObject("coordinador", UUID.class),
+							resultadoLlamada == null ? null : ResultadoLlamadaContacto.valueOf(resultadoLlamada));
 				})
 				.optional();
 	}
@@ -97,6 +101,18 @@ public class RespuestasContactoJdbc implements RespuestasContacto {
 		return jdbc.sql("""
 				UPDATE registro_intento SET fecha_hora_llamada = :fecha
 				WHERE id_intento = :id AND fecha_hora_llamada IS NULL""")
+				.param("fecha", Timestamp.from(fecha))
+				.param("id", idIntento)
+				.update() == 1;
+	}
+
+	/** Solo la primera vez y solo en un aviso a un contacto del paciente (regla intento_resultado_llamada de V19). */
+	@Override
+	public boolean registrarResultadoLlamada(UUID idIntento, ResultadoLlamadaContacto resultado, Instant fecha) {
+		return jdbc.sql("""
+				UPDATE registro_intento SET resultado_llamada = :resultado, fecha_hora_resultado_llamada = :fecha
+				WHERE id_intento = :id AND resultado_llamada IS NULL AND id_contacto_paciente IS NOT NULL""")
+				.param("resultado", resultado.name())
 				.param("fecha", Timestamp.from(fecha))
 				.param("id", idIntento)
 				.update() == 1;

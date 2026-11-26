@@ -14,8 +14,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
- * Migraciones V8 (tendencia) y V9 (botón de ayuda) sobre una base con datos, que {@link ModeloDatosTest} no
- * cubre porque parte vacía. Usa un PostgreSQL real (Docker). Sin Docker se omite.
+ * Migraciones V8 (tendencia), V9 (botón de ayuda) y V20 (orden por gravedad) sobre una base con datos, que
+ * {@link ModeloDatosTest} no cubre porque parte vacía. Usa un PostgreSQL real (Docker). Sin Docker se omite.
  */
 @Testcontainers(disabledWithoutDocker = true)
 class MigracionTendenciaTest {
@@ -114,6 +114,56 @@ class MigracionTendenciaTest {
 			sql.execute("INSERT INTO configuracion (id_paciente, vigente_desde) VALUES ('" + NUEVA + "', now())");
 			assertThat(texto(sql, "SELECT boton_ayuda_activo FROM configuracion WHERE id_paciente = '" + NUEVA + "'"))
 					.isEqualTo("t");
+		}
+	}
+
+	/**
+	 * V20 deja cada contacto activo en las tres gravedades con el orden que tenía (los desactivados, en
+	 * ninguna), y pasa Familia y Vecino a Tercero significativo conservando el parentesco.
+	 */
+	@Test
+	void copiaElOrdenALasTresGravedadesYCambiaLosTipos() throws Exception {
+		try (Connection conexion = conectar(); Statement sql = conexion.createStatement()) {
+			sql.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public");
+		}
+		migrarHasta("19");
+		try (Connection conexion = conectar(); Statement sql = conexion.createStatement()) {
+			sql.execute("INSERT INTO paciente (id_paciente, rut, rut_hash, fecha_ingreso) "
+					+ "VALUES ('" + APAGADA + "', 'cifrado', 'rut-v20', '2026-01-10')");
+			sql.execute("""
+					INSERT INTO contacto (id_contacto, nombre, correo, correo_hash) VALUES
+					('00000000-0000-0000-0000-0000000000c1', 'Hija', 'h@x.cl', 'c1'),
+					('00000000-0000-0000-0000-0000000000c2', 'Vecino', 'v@x.cl', 'c2'),
+					('00000000-0000-0000-0000-0000000000c3', 'Otra', 'o@x.cl', 'c3')""");
+			sql.execute("""
+					INSERT INTO contacto_paciente (id_contacto_paciente, id_paciente, id_contacto, codigo_tipo_contacto,
+						parentesco, orden_prioridad, activo) VALUES
+					('00000000-0000-0000-0000-0000000000a1', '%1$s', '00000000-0000-0000-0000-0000000000c1', 'FAMILIA',
+						'hija', 1, true),
+					('00000000-0000-0000-0000-0000000000a2', '%1$s', '00000000-0000-0000-0000-0000000000c2', 'VECINO',
+						null, 2, true),
+					('00000000-0000-0000-0000-0000000000a3', '%1$s', '00000000-0000-0000-0000-0000000000c3', 'OTRO',
+						null, 3, false)""".formatted(APAGADA));
+
+			migrarHasta("20");
+
+			assertThat(texto(sql, "SELECT count(*) FROM orden_contacto")).isEqualTo("6");
+			assertThat(texto(sql, """
+					SELECT string_agg(severidad || '=' || orden, ',' ORDER BY severidad) FROM orden_contacto
+					WHERE id_contacto_paciente = '00000000-0000-0000-0000-0000000000a2'"""))
+					.isEqualTo("GRAVE=2,LEVE=2,MEDIA=2");
+			assertThat(texto(sql, """
+					SELECT count(*) FROM orden_contacto
+					WHERE id_contacto_paciente = '00000000-0000-0000-0000-0000000000a3'""")).isEqualTo("0");
+			assertThat(texto(sql, """
+					SELECT string_agg(codigo_tipo_contacto || '/' || coalesce(parentesco, '-'), ','
+						ORDER BY id_contacto_paciente) FROM contacto_paciente"""))
+					.isEqualTo("TERCERO_SIGNIFICATIVO/hija,TERCERO_SIGNIFICATIVO/-,OTRO/-");
+			assertThat(texto(sql, "SELECT count(*) FROM tipo_contacto WHERE codigo IN ('FAMILIA', 'VECINO')"))
+					.isEqualTo("0");
+			assertThat(texto(sql, """
+					SELECT count(*) FROM information_schema.columns
+					WHERE table_name = 'contacto_paciente' AND column_name = 'orden_prioridad'""")).isEqualTo("0");
 		}
 	}
 

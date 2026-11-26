@@ -6,10 +6,13 @@ import cl.ucn.alertacuida.adapters.web.RespuestaId;
 import cl.ucn.alertacuida.adapters.web.auditoria.LecturaAuditada;
 import cl.ucn.alertacuida.application.contacto.ContactosPaciente;
 import cl.ucn.alertacuida.application.contacto.modelo.TipoContacto;
+import cl.ucn.alertacuida.domain.alerta.Severidad;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -50,9 +53,18 @@ public class ContactosController {
 	/**
 	 * Cuerpo de {@code PUT …/contactos/orden}.
 	 *
-	 * @param orden todos los contactos activos, del primero al último
+	 * @param gravedad la lista que se ordena: LEVE, MEDIA o GRAVE
+	 * @param orden    todos los contactos de esa gravedad, del primero al último
 	 */
-	public record SolicitudOrden(@NotNull List<@NotNull UUID> orden) {
+	public record SolicitudOrden(@NotNull Severidad gravedad, @NotNull List<@NotNull UUID> orden) {
+	}
+
+	/**
+	 * Cuerpo de {@code POST …/contactos/{id}/reactivar}.
+	 *
+	 * @param gravedades de qué alertas vuelve a recibir avisos (al menos una)
+	 */
+	public record SolicitudReactivar(@NotEmpty Set<@NotNull Severidad> gravedades) {
 	}
 
 	/** @return los tipos de contacto que se pueden elegir */
@@ -80,13 +92,17 @@ public class ContactosController {
 				peticion.getRemoteAddr()));
 	}
 
-	/** Cambia el orden en que avisa el reloj. 204 sin cuerpo; 400 si no están todos los activos. */
+	/**
+	 * Cambia el orden en que avisa el reloj en las alertas de una gravedad. 204 sin cuerpo; 400 si no están
+	 * todos los contactos de esa gravedad.
+	 */
 	@PutMapping("/pacientes/{idPaciente}/contactos/orden")
 	@PreAuthorize(Permisos.USUARIOS_EDITAR)
 	@ResponseStatus(HttpStatus.NO_CONTENT)
 	public void reordenar(@PathVariable UUID idPaciente, @Valid @RequestBody SolicitudOrden solicitud,
 			@AuthenticationPrincipal Jwt jwt, HttpServletRequest peticion) {
-		contactos.reordenar(idPaciente, solicitud.orden(), TokenJwt.leer(jwt).id(), peticion.getRemoteAddr());
+		contactos.reordenar(idPaciente, solicitud.gravedad(), solicitud.orden(), TokenJwt.leer(jwt).id(),
+				peticion.getRemoteAddr());
 	}
 
 	/** Reemplaza los datos del contacto. 204 sin cuerpo; 404 si es de otro paciente, 409 si choca. */
@@ -111,7 +127,7 @@ public class ContactosController {
 				peticion.getRemoteAddr());
 	}
 
-	/** Saca al contacto de la lista sin borrarlo. 204 sin cuerpo. */
+	/** Saca al contacto de la lista sin borrarlo. 204 sin cuerpo; 409 si era el único de alguna gravedad. */
 	@PostMapping("/pacientes/{idPaciente}/contactos/{idContacto}/desactivar")
 	@PreAuthorize(Permisos.USUARIOS_EDITAR)
 	@ResponseStatus(HttpStatus.NO_CONTENT)
@@ -120,13 +136,15 @@ public class ContactosController {
 		contactos.desactivar(idPaciente, idContacto, TokenJwt.leer(jwt).id(), peticion.getRemoteAddr());
 	}
 
-	/** Vuelve a poner al contacto en la lista, al final. 204 sin cuerpo. */
+	/** Vuelve a poner al contacto al final de cada gravedad elegida. 204 sin cuerpo; 400 sin gravedades. */
 	@PostMapping("/pacientes/{idPaciente}/contactos/{idContacto}/reactivar")
 	@PreAuthorize(Permisos.USUARIOS_EDITAR)
 	@ResponseStatus(HttpStatus.NO_CONTENT)
 	public void reactivar(@PathVariable UUID idPaciente, @PathVariable UUID idContacto,
-			@AuthenticationPrincipal Jwt jwt, HttpServletRequest peticion) {
-		contactos.reactivar(idPaciente, idContacto, TokenJwt.leer(jwt).id(), peticion.getRemoteAddr());
+			@Valid @RequestBody SolicitudReactivar solicitud, @AuthenticationPrincipal Jwt jwt,
+			HttpServletRequest peticion) {
+		contactos.reactivar(idPaciente, idContacto, solicitud.gravedades(), TokenJwt.leer(jwt).id(),
+				peticion.getRemoteAddr());
 	}
 
 }

@@ -9,21 +9,32 @@ import {
   CLASE_ETIQUETA,
 } from '../../comun/estilos';
 import { formatearFechaHora } from '../../comun/fechas';
+import { Pestanas } from '../../comun/ui/Pestanas';
 import { useDatos } from '../../comun/useDatos';
 import { useSesion } from '../sesion/SesionContext';
 import { pacientesApi } from './pacientesApi';
-import type { Contacto, DatosContacto, TipoContacto, Tramo } from './tipos';
+import type { Contacto, DatosContacto, GravedadContacto, TipoContacto, Tramo } from './tipos';
 
-/** Formulario vacío para un contacto nuevo. */
+/** Las tres gravedades, en el orden de las pestañas. */
+const GRAVEDADES: GravedadContacto[] = ['LEVE', 'MEDIA', 'GRAVE'];
+
+/** Cómo se muestra cada gravedad. */
+const NOMBRE_GRAVEDAD: Record<GravedadContacto, string> = { LEVE: 'Leve', MEDIA: 'Media', GRAVE: 'Grave' };
+
+/** Único tipo de contacto que admite parentesco (familiares, vecinos y personas cercanas). */
+const TERCERO_SIGNIFICATIVO = 'TERCERO_SIGNIFICATIVO';
+
+/** Formulario vacío para un contacto nuevo: recibe avisos de las tres gravedades. */
 const VACIO: DatosContacto = {
   nombre: '',
   whatsapp: null,
   correo: null,
-  tipo: 'FAMILIA',
+  tipo: TERCERO_SIGNIFICATIVO,
   parentesco: null,
   cuidadorPrincipal: false,
   horaInicio: null,
   horaFin: null,
+  gravedades: GRAVEDADES,
 };
 
 /** Propiedades de ContactosDelUsuario. */
@@ -32,9 +43,10 @@ interface Props {
 }
 
 /**
- * Lista de contactos del usuario, en el orden en que el reloj les avisa. Con USUARIOS:EDITAR se
- * pueden agregar, editar, ordenar, desactivar y registrar su opt-in de WhatsApp. Avisa si hay horas
- * del día sin nadie disponible (las alertas medias y graves avisan a toda hora).
+ * Lista de contactos del usuario, con una pestaña por gravedad (leve, media, grave): cada una muestra a quién
+ * avisa el reloj en las alertas de esa gravedad y en qué orden, y un contacto puede estar en varias. Con
+ * USUARIOS:EDITAR se pueden agregar, editar, ordenar cada gravedad, desactivar y registrar su opt-in de
+ * WhatsApp. Avisa si hay horas del día sin nadie disponible (las alertas medias y graves avisan a toda hora).
  */
 export function ContactosDelUsuario({ idPaciente }: Props) {
   const { puede } = useSesion();
@@ -44,6 +56,7 @@ export function ContactosDelUsuario({ idPaciente }: Props) {
   const [errorCambio, setErrorCambio] = useState<string | null>(null);
   // null = sin formulario abierto; 'nuevo' = agregando; si no, el id del contacto que se edita
   const [editando, setEditando] = useState<string | null>(null);
+  const [gravedad, setGravedad] = useState<GravedadContacto>('GRAVE');
   const editable = puede('USUARIOS:EDITAR');
 
   /** Ejecuta un cambio en el backend y recarga la lista; devuelve si salió bien. */
@@ -65,12 +78,18 @@ export function ContactosDelUsuario({ idPaciente }: Props) {
   const activos = datos.contactos.filter((contacto) => contacto.activo);
   const inactivos = datos.contactos.filter((contacto) => !contacto.activo);
   const nombreTipo = (codigo: string) => tipos.find((tipo) => tipo.codigo === codigo)?.nombre ?? codigo;
+  /** Los contactos de esa gravedad, del primero al último. */
+  const deGravedad = (g: GravedadContacto) =>
+    activos
+      .filter((contacto) => contacto.prioridades[g] !== undefined)
+      .sort((a, b) => (a.prioridades[g] ?? 0) - (b.prioridades[g] ?? 0));
+  const lista = deGravedad(gravedad);
 
-  /** Sube o baja un contacto un lugar en la lista. */
+  /** Sube o baja un contacto un lugar en la lista de la gravedad elegida. */
   function mover(indice: number, salto: -1 | 1) {
-    const orden = activos.map((contacto) => contacto.id);
+    const orden = lista.map((contacto) => contacto.id);
     [orden[indice], orden[indice + salto]] = [orden[indice + salto], orden[indice]];
-    cambiar(() => pacientesApi.reordenarContactos(idPaciente, orden));
+    cambiar(() => pacientesApi.reordenarContactos(idPaciente, gravedad, orden));
   }
 
   return (
@@ -82,11 +101,29 @@ export function ContactosDelUsuario({ idPaciente }: Props) {
         </p>
       )}
 
-      {activos.length === 0 ? (
-        <p className="text-sm text-apagado">Sin contactos. El reloj no tendrá a quién avisar.</p>
+      <Pestanas
+        etiqueta="Gravedad de la alerta"
+        activa={gravedad}
+        alCambiar={setGravedad}
+        pestanas={GRAVEDADES.map((g) => ({
+          clave: g,
+          texto: `${NOMBRE_GRAVEDAD[g]} (${deGravedad(g).length})`,
+        }))}
+      />
+      <p className="text-sm text-apagado">
+        En una alerta {NOMBRE_GRAVEDAD[gravedad].toLowerCase()} el reloj avisa a estos contactos, en este orden.
+        {gravedad !== 'GRAVE' && ' Si la alerta se agrava, sigue con la lista de grave desde el primero.'}
+      </p>
+
+      {lista.length === 0 ? (
+        <p className="text-sm text-apagado">
+          {activos.length === 0
+            ? 'Sin contactos. El reloj no tendrá a quién avisar. El primero recibe avisos de las tres gravedades.'
+            : 'Ningún contacto recibe avisos de esta gravedad.'}
+        </p>
       ) : (
         <ol className="divide-y divide-linea">
-          {activos.map((contacto, indice) =>
+          {lista.map((contacto, indice) =>
             editando === contacto.id ? (
               <li key={contacto.id} className="py-3">
                 <FormularioContacto
@@ -104,7 +141,7 @@ export function ContactosDelUsuario({ idPaciente }: Props) {
               </li>
             ) : (
               <li key={contacto.id} className="flex flex-wrap items-start justify-between gap-3 py-3">
-                <FilaContacto contacto={contacto} nombreTipo={nombreTipo(contacto.tipo)} />
+                <FilaContacto contacto={contacto} nombreTipo={nombreTipo(contacto.tipo)} gravedad={gravedad} />
                 {editable && (
                   <div className="flex flex-wrap items-center gap-2 text-sm">
                     <button
@@ -117,7 +154,7 @@ export function ContactosDelUsuario({ idPaciente }: Props) {
                     </button>
                     <button
                       onClick={() => mover(indice, 1)}
-                      disabled={indice === activos.length - 1}
+                      disabled={indice === lista.length - 1}
                       className="px-1 text-apagado disabled:opacity-30"
                       aria-label={`Bajar a ${contacto.nombre}`}
                     >
@@ -192,12 +229,12 @@ export function ContactosDelUsuario({ idPaciente }: Props) {
                   {contacto.nombre} · {nombreTipo(contacto.tipo)}
                 </span>
                 {editable && (
-                  <button
-                    onClick={() => cambiar(() => pacientesApi.reactivarContacto(idPaciente, contacto.id))}
-                    className="text-teal-oscuro hover:underline"
-                  >
-                    Reactivar
-                  </button>
+                  <Reactivar
+                    nombre={contacto.nombre}
+                    alReactivar={(gravedades) =>
+                      cambiar(() => pacientesApi.reactivarContacto(idPaciente, contacto.id, gravedades))
+                    }
+                  />
                 )}
               </li>
             ))}
@@ -228,15 +265,20 @@ function AvisoCobertura({ sinCobertura }: { sinCobertura: Tramo[] }) {
 interface PropsFila {
   contacto: Contacto;
   nombreTipo: string;
+  /** La pestaña en que se muestra: su número es el lugar en esa lista */
+  gravedad: GravedadContacto;
 }
 
-/** Datos de un contacto activo: prioridad, nombre, tipo, medios, horario y opt-in. */
-function FilaContacto({ contacto, nombreTipo }: PropsFila) {
+/** Datos de un contacto activo: lugar en la gravedad, nombre, tipo, otras gravedades, medios, horario y opt-in. */
+function FilaContacto({ contacto, nombreTipo, gravedad }: PropsFila) {
   const horario = contacto.horaInicio ? `${contacto.horaInicio} a ${contacto.horaFin}` : 'Todo el día';
+  const otras = GRAVEDADES.filter((g) => g !== gravedad && contacto.prioridades[g] !== undefined).map(
+    (g) => `${NOMBRE_GRAVEDAD[g].toLowerCase()} (${contacto.prioridades[g]}.º)`,
+  );
   return (
     <div className="flex gap-3">
       <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-tinte text-sm font-semibold text-teal-oscuro">
-        {contacto.prioridad}
+        {contacto.prioridades[gravedad]}
       </span>
       <div className="space-y-0.5">
         <p className="font-medium text-navy">
@@ -250,6 +292,9 @@ function FilaContacto({ contacto, nombreTipo }: PropsFila) {
         <p className="text-sm text-apagado">
           {nombreTipo}
           {contacto.parentesco && ` (${contacto.parentesco})`} · {horario}
+        </p>
+        <p className="text-xs text-apagado">
+          {otras.length > 0 ? `También en alertas ${otras.join(' y ')}.` : 'Solo en esta gravedad.'}
         </p>
         <p className="text-sm text-apagado">
           {contacto.whatsapp && (
@@ -289,7 +334,71 @@ function datosDe(contacto: Contacto): DatosContacto {
     cuidadorPrincipal: contacto.cuidadorPrincipal,
     horaInicio: contacto.horaInicio,
     horaFin: contacto.horaFin,
+    gravedades: GRAVEDADES.filter((g) => contacto.prioridades[g] !== undefined),
   };
+}
+
+/** Casillas Leve / Media / Grave para elegir de qué alertas recibe avisos un contacto. */
+function CasillasGravedad({
+  elegidas,
+  alCambiar,
+}: {
+  elegidas: GravedadContacto[];
+  alCambiar: (gravedades: GravedadContacto[]) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-4 text-sm">
+      {GRAVEDADES.map((g) => (
+        <label key={g} className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={elegidas.includes(g)}
+            onChange={(e) =>
+              alCambiar(GRAVEDADES.filter((otra) => (otra === g ? e.target.checked : elegidas.includes(otra))))
+            }
+          />
+          {NOMBRE_GRAVEDAD[g]}
+        </label>
+      ))}
+    </div>
+  );
+}
+
+/** Botón para reactivar un contacto: primero se eligen las gravedades en que vuelve, al final de cada una. */
+function Reactivar({
+  nombre,
+  alReactivar,
+}: {
+  nombre: string;
+  alReactivar: (gravedades: GravedadContacto[]) => Promise<boolean>;
+}) {
+  const [abierto, setAbierto] = useState(false);
+  const [gravedades, setGravedades] = useState<GravedadContacto[]>(GRAVEDADES);
+
+  if (!abierto) {
+    return (
+      <button onClick={() => setAbierto(true)} className="text-teal-oscuro hover:underline">
+        Reactivar
+      </button>
+    );
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-3" role="group" aria-label={`Reactivar a ${nombre}`}>
+      <CasillasGravedad elegidas={gravedades} alCambiar={setGravedades} />
+      <button
+        disabled={gravedades.length === 0}
+        onClick={async () => {
+          if (await alReactivar(gravedades)) setAbierto(false);
+        }}
+        className="text-teal-oscuro hover:underline disabled:opacity-40"
+      >
+        Reactivar
+      </button>
+      <button onClick={() => setAbierto(false)} className="text-apagado hover:underline">
+        Cancelar
+      </button>
+    </div>
+  );
 }
 
 /** Propiedades de FormularioContacto. */
@@ -313,13 +422,13 @@ function FormularioContacto({ inicial, tipos, compartido, alCancelar, alGuardar 
     setDatos((anteriores) => ({ ...anteriores, [nombre]: valor === '' ? null : valor }));
   }
 
-  /** Envía los datos, con el horario vacío si es todo el día y sin parentesco si no es familia. */
+  /** Envía los datos, con el horario vacío si es todo el día y sin parentesco si no es tercero significativo. */
   async function enviar(evento: FormEvent) {
     evento.preventDefault();
     setGuardando(true);
     await alGuardar({
       ...datos,
-      parentesco: datos.tipo === 'FAMILIA' ? datos.parentesco : null,
+      parentesco: datos.tipo === TERCERO_SIGNIFICATIVO ? datos.parentesco : null,
       horaInicio: todoElDia ? null : datos.horaInicio,
       horaFin: todoElDia ? null : datos.horaFin,
     });
@@ -370,7 +479,7 @@ function FormularioContacto({ inicial, tipos, compartido, alCancelar, alGuardar 
             className={CLASE_CAMPO}
           />
         </label>
-        {datos.tipo === 'FAMILIA' && (
+        {datos.tipo === TERCERO_SIGNIFICATIVO && (
           <label className="block">
             <span className={CLASE_ETIQUETA}>Parentesco (opcional)</span>
             <input
@@ -387,6 +496,15 @@ function FormularioContacto({ inicial, tipos, compartido, alCancelar, alGuardar 
         Ingresa al menos un WhatsApp o un correo. El SAMU no se agrega: el mensaje de una alerta grave ya pide llamar
         al 131.
       </p>
+
+      <fieldset className="space-y-2">
+        <legend className={CLASE_ETIQUETA}>Recibe avisos de las alertas</legend>
+        <CasillasGravedad elegidas={datos.gravedades} alCambiar={(gravedades) => setDatos({ ...datos, gravedades })} />
+        <p className="text-xs text-apagado">
+          Una gravedad nueva lo deja al final de esa lista; el orden se cambia en cada pestaña. Ninguna gravedad
+          puede quedar sin contactos.
+        </p>
+      </fieldset>
 
       <fieldset className="space-y-2">
         <legend className={CLASE_ETIQUETA}>Horario en que puede recibir avisos</legend>

@@ -1046,10 +1046,7 @@ class RequisitosAtencionAlertasTest {
 				.param("n", cifrado.cifrar(nombre, ColumnaCifrada.CONTACTO_NOMBRE))
 				.param("c", cifrado.cifrar(correo, ColumnaCifrada.CONTACTO_CORREO))
 				.param("h", "hash-" + correo).query(UUID.class).single();
-		return jdbc.sql("""
-				INSERT INTO contacto_paciente (id_paciente, id_contacto, codigo_tipo_contacto, orden_prioridad)
-				VALUES (:p, :c, 'VECINO', :o) RETURNING id_contacto_paciente""")
-				.param("p", paciente).param("c", persona).param("o", prioridad).query(UUID.class).single();
+		return BaseDePrueba.vincular(jdbc, paciente, persona, "TERCERO_SIGNIFICATIVO", prioridad);
 	}
 
 	/** @return un aviso enviado a ese contacto, tantos minutos después de t0 */

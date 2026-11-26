@@ -8,6 +8,7 @@ import cl.ucn.alertacuida.application.alerta.modelo.Discrepancia;
 import cl.ucn.alertacuida.application.alerta.modelo.FilaAlerta;
 import cl.ucn.alertacuida.application.alerta.modelo.HistorialAlerta;
 import cl.ucn.alertacuida.application.alerta.modelo.IntentoRegistrado;
+import cl.ucn.alertacuida.application.alerta.modelo.PasosOficinaRegistrados;
 import cl.ucn.alertacuida.application.alerta.puerto.ConsultaAlertas;
 import cl.ucn.alertacuida.domain.alerta.ClasificacionAlerta;
 import cl.ucn.alertacuida.domain.alerta.CodigoDiscrepancia;
@@ -96,7 +97,9 @@ public class ConsultaAlertasJdbc implements ConsultaAlertas {
 				,
 					a.fecha_hora_agravamiento, a.fecha_hora_cancelacion, a.fecha_hora_sin_respuesta, t.fecha_hora_toma,
 					t.fecha_hora_cierre, s.nombre_profesional AS resolutor, t.clasificacion, t.observaciones_cierre,
-					t.fecha_cierre_seguimiento, a.evidencia::text AS evidencia
+					t.fecha_cierre_seguimiento, a.evidencia::text AS evidencia, t.resultado_llamada,
+					t.fecha_hora_resultado_llamada, t.fecha_hora_personal_asignado, t.fecha_hora_sin_disponibilidad,
+					t.fecha_hora_llegada_personal, t.resultado_visita, t.fecha_hora_resultado_visita
 				""" + ORIGEN + """
 				LEFT JOIN usuario s ON s.id_usuario = t.id_usuario_resolutor
 				WHERE a.id_alerta = :id""")
@@ -114,7 +117,11 @@ public class ConsultaAlertasJdbc implements ConsultaAlertas {
 				fila.getString("resolutor"), clasificacion == null ? null : ClasificacionAlerta.valueOf(clasificacion),
 				cifrado.descifrar(fila.getString("observaciones_cierre"), ColumnaCifrada.ATENCION_OBSERVACIONES),
 				instante(fila, "fecha_cierre_seguimiento"), intentos(idAlerta), avisosReloj(idAlerta),
-				seguimientos(idAlerta), lectorEvidencia.leer(fila.getString("evidencia")), discrepancias(idAlerta));
+				seguimientos(idAlerta), lectorEvidencia.leer(fila.getString("evidencia")), discrepancias(idAlerta),
+				new PasosOficinaRegistrados(fila.getString("resultado_llamada"),
+						instante(fila, "fecha_hora_resultado_llamada"), instante(fila, "fecha_hora_personal_asignado"),
+						instante(fila, "fecha_hora_sin_disponibilidad"), instante(fila, "fecha_hora_llegada_personal"),
+						fila.getString("resultado_visita"), instante(fila, "fecha_hora_resultado_visita")));
 	}
 
 	/** @return lo que no calzó con la configuración vigente, ordenado por código para que salga siempre igual */
@@ -131,7 +138,8 @@ public class ConsultaAlertasJdbc implements ConsultaAlertas {
 		return jdbc.sql("""
 				SELECT i.id_contacto_paciente, c.nombre, u.nombre_profesional, i.canal, i.ronda, i.fecha_hora_envio,
 					i.fecha_hora_entrega, i.fecha_hora_lectura, i.fecha_hora_fallo, i.motivo_fallo, i.respuesta,
-					i.fecha_hora_respuesta, i.fecha_hora_llamada, i.fecha_hora_llegada
+					i.fecha_hora_respuesta, i.fecha_hora_llamada, i.fecha_hora_llegada, i.resultado_llamada,
+					i.fecha_hora_resultado_llamada
 				FROM registro_intento i
 				LEFT JOIN contacto_paciente cp USING (id_contacto_paciente)
 				LEFT JOIN contacto c ON c.id_contacto = cp.id_contacto
@@ -146,7 +154,8 @@ public class ConsultaAlertasJdbc implements ConsultaAlertas {
 						instante(fila, "fecha_hora_entrega"), instante(fila, "fecha_hora_lectura"),
 						instante(fila, "fecha_hora_fallo"), fila.getString("motivo_fallo"), fila.getString("respuesta"),
 						instante(fila, "fecha_hora_respuesta"), instante(fila, "fecha_hora_llamada"),
-						instante(fila, "fecha_hora_llegada")))
+						instante(fila, "fecha_hora_llegada"), fila.getString("resultado_llamada"),
+						instante(fila, "fecha_hora_resultado_llamada")))
 				.list();
 	}
 

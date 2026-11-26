@@ -23,6 +23,9 @@ function mensajeDe(e: unknown): string {
   return e instanceof ErrorApi ? e.message : 'No se pudo conectar con el servidor.';
 }
 
+/** Cada cuánto se vuelve a pedir la ficha, para ver los avisos y el seguimiento nuevos sin refrescar. */
+const ACTUALIZAR_CADA_MS = 15_000;
+
 /** Los pasos del flujo de atención, en orden. */
 const FLUJO: EstadoAtencion[] = ['SIN_ASIGNAR', 'EN_ATENCION', 'EN_SEGUIMIENTO', 'RESUELTA'];
 
@@ -62,7 +65,9 @@ export function FichaAlerta() {
   const { puede } = useSesion();
   const confirmar = useConfirmar();
   const avisar = useToast();
-  const { datos: alerta, error, cargando, recargar } = useDatos(() => alertasApi.detalle(id), id);
+  const { datos: alerta, error, cargando, recargar } = useDatos(() => alertasApi.detalle(id), id, {
+    cadaMs: ACTUALIZAR_CADA_MS,
+  });
   const [errorAccion, setErrorAccion] = useState<string | null>(null);
   const [resolviendo, setResolviendo] = useState(false);
   const [completando, setCompletando] = useState(false);

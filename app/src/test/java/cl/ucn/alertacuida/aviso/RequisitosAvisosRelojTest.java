@@ -88,6 +88,8 @@ class RequisitosAvisosRelojTest {
 	private static final String TOKEN_OTRO = "token-otro-reloj-avisos";
 	private static final String FIREBASE = "token-firebase-1";
 	private static final String RUN = "11.111.111-1";
+	/** Cuerpo para reactivar un contacto en las tres gravedades. */
+	private static final String TODAS = "{\"gravedades\": [\"LEVE\", \"MEDIA\", \"GRAVE\"]}";
 
 	/** Hace de Firebase: recuerda los avisos y puede fallar a pedido. */
 	@TestConfiguration
@@ -446,11 +448,11 @@ class RequisitosAvisosRelojTest {
 
 		conJson(put(ruta + uno), contacto("Hija Ana", "\"+56912345678\"", "hija@correo.cl"))
 				.andExpect(status().isNoContent());
-		conJson(put(ruta + "orden"), "{\"orden\": [\"" + dos + "\", \"" + uno + "\"]}")
+		conJson(put(ruta + "orden"), "{\"gravedad\": \"MEDIA\", \"orden\": [\"" + dos + "\", \"" + uno + "\"]}")
 				.andExpect(status().isNoContent());
 		conJson(put(ruta + uno + "/opt-in"), "{\"aceptado\": true}").andExpect(status().isNoContent());
 		mvc.perform(conToken(post(ruta + uno + "/desactivar"))).andExpect(status().isNoContent());
-		mvc.perform(conToken(post(ruta + uno + "/reactivar"))).andExpect(status().isNoContent());
+		conJson(post(ruta + uno + "/reactivar"), TODAS).andExpect(status().isNoContent());
 
 		assertThat(canal.enviados).hasSize(5).extracting(AvisoReloj::tipo)
 				.containsOnly(TipoAvisoReloj.CONFIGURACION_NUEVA);
@@ -462,7 +464,7 @@ class RequisitosAvisosRelojTest {
 		String uno = id(agregarContacto("Hija", "hija@correo.cl"));
 		canal.limpiar();
 
-		mvc.perform(conToken(post("/api/pacientes/" + paciente + "/contactos/" + uno + "/reactivar")))
+		conJson(post("/api/pacientes/" + paciente + "/contactos/" + uno + "/reactivar"), TODAS)
 				.andExpect(status().isNoContent());
 
 		assertThat(canal.enviados).isEmpty();
@@ -557,10 +559,7 @@ class RequisitosAvisosRelojTest {
 				.param("n", cifrado.cifrar(nombre, ColumnaCifrada.CONTACTO_NOMBRE))
 				.param("c", cifrado.cifrar(correo, ColumnaCifrada.CONTACTO_CORREO))
 				.param("h", "hash-" + correo).query(UUID.class).single();
-		UUID vinculo = jdbc.sql("""
-				INSERT INTO contacto_paciente (id_paciente, id_contacto, codigo_tipo_contacto, orden_prioridad)
-				VALUES (:p, :c, 'VECINO', :o) RETURNING id_contacto_paciente""")
-				.param("p", paciente).param("c", persona).param("o", prioridad).query(UUID.class).single();
+		UUID vinculo = BaseDePrueba.vincular(jdbc, paciente, persona, "TERCERO_SIGNIFICATIVO", prioridad);
 		jdbc.sql("""
 				INSERT INTO registro_intento (event_id, id_alerta, id_contacto_paciente, canal, ronda, fecha_hora_envio,
 					respuesta, fecha_hora_respuesta)
@@ -623,8 +622,9 @@ class RequisitosAvisosRelojTest {
 	 */
 	private static String contacto(String nombre, String whatsapp, String correo) {
 		return """
-				{"nombre": "%s", "whatsapp": %s, "correo": "%s", "tipo": "VECINO", "cuidadorPrincipal": false,
-				"horaInicio": null, "horaFin": null}""".formatted(nombre, whatsapp, correo);
+				{"nombre": "%s", "whatsapp": %s, "correo": "%s", "tipo": "TERCERO_SIGNIFICATIVO",
+				"cuidadorPrincipal": false, "horaInicio": null, "horaFin": null,
+				"gravedades": ["LEVE", "MEDIA", "GRAVE"]}""".formatted(nombre, whatsapp, correo);
 	}
 
 	/** @return el "id" de la respuesta de un alta */

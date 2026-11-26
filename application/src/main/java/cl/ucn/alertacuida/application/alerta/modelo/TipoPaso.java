@@ -16,6 +16,18 @@ public enum TipoPaso {
 	LLAMADA_PACIENTE,
 	/** El contacto avisó que llegó donde el paciente; resuelve la alerta si seguía abierta. */
 	LLEGADA_CONTACTO,
+	/** El contacto dijo, después de llamar, si le contestaron (detalle: CONTESTA o NO_CONTESTA). */
+	RESULTADO_LLAMADA,
+	/** La oficina llamó al reloj desde el enlace (detalle: BIEN, NECESITA_ATENCION o NO_CONTESTA). */
+	LLAMADA_OFICINA,
+	/** La oficina asignó personal para ir al domicilio: la alerta queda confirmada. */
+	PERSONAL_ASIGNADO,
+	/** La oficina no tenía personal: el reloj sigue avisando a los contactos. */
+	SIN_DISPONIBILIDAD,
+	/** El personal asignado llegó al domicilio. */
+	LLEGADA_PERSONAL,
+	/** Cómo encontró el personal a la persona (detalle: BIEN, APOYO_NO_URGENTE o EMERGENCIA). */
+	RESULTADO_VISITA,
 	/** El reloj recorrió la lista dos veces sin que nadie confirmara. */
 	SIN_RESPUESTA,
 	CASO_ASUMIDO,

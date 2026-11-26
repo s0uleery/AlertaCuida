@@ -19,8 +19,11 @@ import java.time.Instant;
  * @param telefonoPaciente número de la SIM del reloj, para "Llamar al paciente"; null si la alerta está cerrada o
  *                       el reloj no tiene número registrado
  * @param llegada        cuándo avisó que llegó donde el paciente; null si no lo ha hecho
+ * @param resultadoLlamada lo que dijo el contacto después de llamar (26-11-2026); null si aún no lo dice
+ * @param oficina        los pasos de la oficina, si el enlace es de un coordinador; null si es de un contacto del
+ *                       paciente
  */
 public record VistaRespuesta(long numero, String alias, TipoEvento tipo, Severidad severidad, Instant fechaHora,
 		RespuestaContacto respuesta, Instant fechaRespuesta, boolean cerrada, String telefonoPaciente,
-		Instant llegada) {
+		Instant llegada, ResultadoLlamadaContacto resultadoLlamada, VistaOficina oficina) {
 }

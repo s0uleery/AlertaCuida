@@ -97,10 +97,12 @@ public class ConfiguracionSeguridad {
 						.requestMatchers(HttpMethod.POST, "/api/auth/activar").permitAll()
 						// Quien olvidó su contraseña no puede entrar: lo autoriza el token del enlace de su correo
 						.requestMatchers(HttpMethod.POST, "/api/auth/recuperar", "/api/auth/restablecer").permitAll()
-						// El contacto del paciente no tiene cuenta: lo autoriza el token firmado de su correo
+						// El contacto del paciente no tiene cuenta, y el coordinador abre el enlace sin sesión: lo
+						// autoriza el token firmado de su correo
 						.requestMatchers(HttpMethod.POST, "/api/respuestas-contacto",
 								"/api/respuestas-contacto/consulta", "/api/respuestas-contacto/llamada",
-								"/api/respuestas-contacto/llegada").permitAll()
+								"/api/respuestas-contacto/llegada", "/api/respuestas-contacto/resultado-llamada",
+								"/api/respuestas-contacto/paso").permitAll()
 						// Meta no tiene sesión: lo autorizan el Verify token (GET) y la firma de cada aviso (POST)
 						.requestMatchers(HttpMethod.GET, "/api/webhooks/whatsapp").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/webhooks/whatsapp").permitAll()

@@ -1,5 +1,6 @@
 package cl.ucn.alertacuida.soporte;
 
+import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /**
@@ -30,6 +31,41 @@ public final class BaseDePrueba {
 		for (String tabla : TABLAS) {
 			jdbc.sql("DELETE FROM " + tabla).update();
 		}
+	}
+
+	/**
+	 * Agrega una persona ya guardada a la lista de un paciente, activa y con el mismo lugar en las tres
+	 * gravedades (tabla orden_contacto).
+	 *
+	 * @param tipo  código de tipo_contacto, por ejemplo TERCERO_SIGNIFICATIVO u OTRO
+	 * @param orden su lugar en leve, media y grave (1 = primero)
+	 * @return el identificador del vínculo (contacto_paciente)
+	 */
+	public static UUID vincular(JdbcClient jdbc, UUID paciente, UUID persona, String tipo, int orden) {
+		return vincular(jdbc, paciente, persona, tipo, orden, true);
+	}
+
+	/**
+	 * Como {@link #vincular(JdbcClient, UUID, UUID, String, int)}; un vínculo desactivado queda sin orden en
+	 * ninguna gravedad.
+	 *
+	 * @param activo false para dejarlo desactivado
+	 */
+	public static UUID vincular(JdbcClient jdbc, UUID paciente, UUID persona, String tipo, int orden,
+			boolean activo) {
+		UUID vinculo = jdbc.sql("""
+				INSERT INTO contacto_paciente (id_paciente, id_contacto, codigo_tipo_contacto, activo)
+				VALUES (:paciente, :persona, :tipo, :activo) RETURNING id_contacto_paciente""")
+				.param("paciente", paciente).param("persona", persona).param("tipo", tipo).param("activo", activo)
+				.query(UUID.class).single();
+		if (activo) {
+			jdbc.sql("""
+					INSERT INTO orden_contacto (id_contacto_paciente, severidad, orden)
+					SELECT :vinculo, g, :orden FROM unnest(ARRAY['LEVE', 'MEDIA', 'GRAVE']) AS g""")
+					.param("vinculo", vinculo).param("orden", orden)
+					.update();
+		}
+		return vinculo;
 	}
 
 }

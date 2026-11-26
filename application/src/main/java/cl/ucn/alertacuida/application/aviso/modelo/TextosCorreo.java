@@ -22,12 +22,24 @@ import java.util.Map;
  * @param activacion    a la persona del equipo a la que se le crea una cuenta, con su enlace de activación
  * @param recuperacion  a la persona del equipo que olvidó su contraseña, con su enlace para elegir otra. Tiene
  *                      la misma forma y los mismos marcadores que {@code activacion}
+ * @param recordatorioLlegada a quien tiene la alerta a cargo, cuando el personal asignado no ha llegado (N1-08)
  */
 public record TextosCorreo(String pieEquipo, String pieContacto, SilencioDatos silencioDatos,
 		AlertaEquipo alertaEquipo, Contacto contacto, Vigilante vigilante, Agravamiento agravamiento,
 		AvisoOficina avisoOficina,
 		Map<Severidad, String> gravedades, Map<TipoEvento, String> tecnicas, Activacion activacion,
-		Activacion recuperacion) {
+		Activacion recuperacion, RecordatorioLlegada recordatorioLlegada) {
+
+	/**
+	 * A quien tiene la alerta a cargo en la oficina, cuando el personal que asignó lleva el plazo sin llegar
+	 * (decisión del 26-11-2026). {deQuien} se arma igual que en {@link AlertaEquipo}.
+	 *
+	 * @param asunto admite {deQuien}, {folio} y {dashboard}
+	 * @param cuerpo admite {deQuien}, {folio}, {dashboard} y {pie}; exige {responder}, el enlace a la misma página
+	 *               de los pasos de la oficina, con "Ya llegó" y "Sigue en camino"
+	 */
+	public record RecordatorioLlegada(String asunto, String cuerpo) {
+	}
 
 	/**
 	 * A la persona a la que se le crea una cuenta del equipo (o se le emite un enlace nuevo), para que elija
