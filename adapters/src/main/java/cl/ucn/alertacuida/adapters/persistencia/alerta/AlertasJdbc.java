@@ -89,7 +89,10 @@ public class AlertasJdbc implements Alertas {
 					SELECT COALESCE(i.id_contacto_paciente, i.id_contacto_interno) AS id_contacto,
 						i.fecha_hora_respuesta
 					FROM registro_intento i
+					LEFT JOIN conversacion_whatsapp cw ON cw.id_intento = i.id_intento
 					WHERE i.id_alerta = a.id_alerta AND i.respuesta = 'VOY_EN_CAMINO'
+						AND (cw.id_conversacion IS NULL
+							OR cw.etapa NOT IN ('RECHAZADA', 'EXPIRADA', 'DESCARTADA'))
 					ORDER BY i.fecha_hora_respuesta LIMIT 1) c ON true
 				WHERE a.id_alerta = :id""")
 				.param("id", idAlerta)

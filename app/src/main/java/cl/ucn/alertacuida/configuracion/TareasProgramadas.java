@@ -2,8 +2,10 @@ package cl.ucn.alertacuida.configuracion;
 
 import cl.ucn.alertacuida.application.aviso.EncolarCorreos;
 import cl.ucn.alertacuida.application.aviso.EnviarCorreosPendientes;
+import cl.ucn.alertacuida.application.aviso.EnviarMensajesWhatsapp;
 import cl.ucn.alertacuida.application.aviso.EnviarWhatsappPendientes;
 import cl.ucn.alertacuida.application.aviso.RecordarLlegada;
+import cl.ucn.alertacuida.application.aviso.VigilarConversacionesWhatsapp;
 import cl.ucn.alertacuida.application.avisoreloj.EnviarAvisosReloj;
 import cl.ucn.alertacuida.application.escalamiento.AvisarOficina;
 import cl.ucn.alertacuida.application.escalamiento.VigilarEscalamiento;
@@ -24,24 +26,30 @@ public class TareasProgramadas {
 	private final EnviarCorreosPendientes enviarCorreos;
 	private final EnviarAvisosReloj enviarAvisosReloj;
 	private final EnviarWhatsappPendientes enviarWhatsapp;
+	private final EnviarMensajesWhatsapp enviarMensajesWhatsapp;
+	private final VigilarConversacionesWhatsapp vigilarConversacionesWhatsapp;
 	private final VigilarEscalamiento vigilarEscalamiento;
 	private final AvisarOficina avisarOficina;
 	private final RecordarLlegada recordarLlegada;
 
 	/**
-	 * @param limpiarTokens       borra los tokens de renovación vencidos
-	 * @param vigilarRelojes      aplica las reglas de ausencia a los relojes
-	 * @param encolarCorreos      deja en la bandeja de salida los correos que corresponden
-	 * @param enviarCorreos       envía los correos pendientes, con reintentos
-	 * @param enviarAvisosReloj   envía los avisos pendientes al reloj, con reintentos
-	 * @param enviarWhatsapp      envía los WhatsApp pendientes (del reloj y de la oficina), con reintentos
-	 * @param vigilarEscalamiento avisa a los coordinadores de las alertas cuyo reloj dejó de pedir avisos
-	 * @param avisarOficina       deja en la bandeja de salida los avisos de cada alerta a los coordinadores
-	 * @param recordarLlegada     recuerda a la oficina el personal asignado que no ha llegado
+	 * @param limpiarTokens                 borra los tokens de renovación vencidos
+	 * @param vigilarRelojes                aplica las reglas de ausencia a los relojes
+	 * @param encolarCorreos                deja en la bandeja de salida los correos que corresponden
+	 * @param enviarCorreos                 envía los correos pendientes, con reintentos
+	 * @param enviarAvisosReloj             envía los avisos pendientes al reloj, con reintentos
+	 * @param enviarWhatsapp                envía las plantillas iniciales de WhatsApp pendientes, con reintentos
+	 * @param enviarMensajesWhatsapp        envía mensajes de sesión de WhatsApp pendientes y sus reintentos
+	 * @param vigilarConversacionesWhatsapp revisa plazos de llamada y recordatorios de llegada en WhatsApp
+	 * @param vigilarEscalamiento           avisa a los coordinadores de las alertas cuyo reloj dejó de pedir avisos
+	 * @param avisarOficina                 deja en la bandeja de salida los avisos de cada alerta a los coordinadores
+	 * @param recordarLlegada               recuerda a la oficina el personal asignado que no ha llegado
 	 */
 	public TareasProgramadas(LimpiarTokensVencidos limpiarTokens, VigilarRelojes vigilarRelojes,
 			EncolarCorreos encolarCorreos, EnviarCorreosPendientes enviarCorreos,
 			EnviarAvisosReloj enviarAvisosReloj, EnviarWhatsappPendientes enviarWhatsapp,
+			EnviarMensajesWhatsapp enviarMensajesWhatsapp,
+			VigilarConversacionesWhatsapp vigilarConversacionesWhatsapp,
 			VigilarEscalamiento vigilarEscalamiento, AvisarOficina avisarOficina, RecordarLlegada recordarLlegada) {
 		this.limpiarTokens = limpiarTokens;
 		this.vigilarRelojes = vigilarRelojes;
@@ -49,6 +57,8 @@ public class TareasProgramadas {
 		this.enviarCorreos = enviarCorreos;
 		this.enviarAvisosReloj = enviarAvisosReloj;
 		this.enviarWhatsapp = enviarWhatsapp;
+		this.enviarMensajesWhatsapp = enviarMensajesWhatsapp;
+		this.vigilarConversacionesWhatsapp = vigilarConversacionesWhatsapp;
 		this.vigilarEscalamiento = vigilarEscalamiento;
 		this.avisarOficina = avisarOficina;
 		this.recordarLlegada = recordarLlegada;
@@ -83,6 +93,20 @@ public class TareasProgramadas {
 			initialDelayString = "${alertacuida.whatsapp.intervalo}")
 	void avisarPorWhatsapp() {
 		enviarWhatsapp.enviar();
+	}
+
+	/** Revisa los plazos de llamada y recordatorios de llegada de conversaciones de WhatsApp activas. */
+	@Scheduled(fixedDelayString = "${alertacuida.whatsapp.conversacion.intervalo-vigilancia}",
+			initialDelayString = "${alertacuida.whatsapp.conversacion.intervalo-vigilancia}")
+	void vigilarConversacionesWhatsapp() {
+		vigilarConversacionesWhatsapp.vigilar();
+	}
+
+	/** Envía los mensajes de sesión de WhatsApp pendientes (respaldo y reintentos). */
+	@Scheduled(fixedDelayString = "${alertacuida.whatsapp.conversacion.intervalo-envio-saliente}",
+			initialDelayString = "${alertacuida.whatsapp.conversacion.intervalo-envio-saliente}")
+	void enviarMensajesWhatsapp() {
+		enviarMensajesWhatsapp.enviar();
 	}
 
 	/** Envía los avisos al reloj cada cierto tiempo; la primera vez, un intervalo después de arrancar. */

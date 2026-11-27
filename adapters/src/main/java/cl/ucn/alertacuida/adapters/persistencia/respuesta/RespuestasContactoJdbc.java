@@ -84,12 +84,10 @@ public class RespuestasContactoJdbc implements RespuestasContacto {
 				.update() == 1;
 	}
 
-	/** Una fila sin fecha de envío; el envío a Firebase toma las pendientes. */
+	/** Avisa al reloj que cambió el estado de la alerta para que consulte GET /api/reloj/v1/alertas/{eventId}. */
 	@Override
 	public void dejarAvisoConfirmadaPendiente(UUID idAlerta) {
-		jdbc.sql("""
-				INSERT INTO aviso_fcm (id_alerta, tipo) VALUES (:id, 'ALERTA_CONFIRMADA')
-				ON CONFLICT (id_alerta, tipo) DO NOTHING""")
+		jdbc.sql("INSERT INTO aviso_fcm (id_alerta, tipo) VALUES (:id, 'CAMBIO_ESTADO_ALERTA')")
 				.param("id", idAlerta)
 				.update();
 	}
@@ -144,12 +142,10 @@ public class RespuestasContactoJdbc implements RespuestasContacto {
 				.update() == 1;
 	}
 
-	/** Una fila sin fecha de envío; el envío a Firebase toma las pendientes. */
+	/** Avisa al reloj que cambió el estado de la alerta para que consulte GET /api/reloj/v1/alertas/{eventId}. */
 	@Override
 	public void dejarAvisoResueltaPendiente(UUID idAlerta) {
-		jdbc.sql("""
-				INSERT INTO aviso_fcm (id_alerta, tipo) VALUES (:id, 'ALERTA_RESUELTA')
-				ON CONFLICT (id_alerta, tipo) DO NOTHING""")
+		jdbc.sql("INSERT INTO aviso_fcm (id_alerta, tipo) VALUES (:id, 'CAMBIO_ESTADO_ALERTA')")
 				.param("id", idAlerta)
 				.update();
 	}

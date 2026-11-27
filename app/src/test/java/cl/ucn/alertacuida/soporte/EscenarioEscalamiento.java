@@ -157,11 +157,11 @@ public final class EscenarioEscalamiento {
 				.param("e", eventAlerta).query(Integer.class).single();
 	}
 
-	/** @return cuántos avisos ALERTA_CONFIRMADA quedaron para el reloj */
+	/** @return cuántos avisos CAMBIO_ESTADO_ALERTA quedaron para el reloj */
 	public long avisosConfirmadaAlReloj(UUID eventAlerta) {
 		return jdbc.sql("""
 				SELECT count(*) FROM aviso_fcm f JOIN alerta a ON a.id_alerta = f.id_alerta
-				WHERE a.event_id = :e AND f.tipo = 'ALERTA_CONFIRMADA'""")
+				WHERE a.event_id = :e AND f.tipo = 'CAMBIO_ESTADO_ALERTA'""")
 				.param("e", eventAlerta).query(Long.class).single();
 	}
 

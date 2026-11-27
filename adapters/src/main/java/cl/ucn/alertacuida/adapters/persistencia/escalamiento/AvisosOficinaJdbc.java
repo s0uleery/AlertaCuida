@@ -9,15 +9,17 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
  * Avisos a la oficina PRLAC sobre registro_intento, solo por alertas de salud (las técnicas van por correo a
- * recibe_avisos). Cada coordinador recibe un correo y, si tiene opt-in vigente, también un WhatsApp. Cada uno es
- * un contacto interno (contacto.id_usuario), que se crea la primera vez. La clave única de los avisos al equipo
- * (alerta, contacto interno, canal y propósito) impide repetirlos; por eso, si el WhatsApp falla, el correo de
- * respaldo no se suma al que ya tiene.
+ * recibe_avisos). Cada coordinador activo recibe un correo; para ahorrar mensajes de la cuota de WhatsApp
+ * (decisión del 26-11-2026), el aviso por WhatsApp sale únicamente al encargado principal configurado (o, si no se
+ * configuró, al primer coordinador activo con teléfono y opt-in vigente). Cada cuenta es un contacto interno
+ * (contacto.id_usuario), que se crea la primera vez.
  *
  * <p>El agravamiento es candidato salvo que el aviso a esa cuenta haya salido después de agravarse (ese aviso ya
  * dijo grave). Así también se avisa si la alerta llegó fuera de horario y se agravó en horario; el caso en que
@@ -28,21 +30,38 @@ import org.springframework.stereotype.Repository;
 public class AvisosOficinaJdbc implements AvisosOficina {
 
 	private final JdbcClient jdbc;
+	private final String encargadoPrincipalCorreo;
 
 	/** @param jdbc cliente de Spring sobre la conexión a PostgreSQL */
 	public AvisosOficinaJdbc(JdbcClient jdbc) {
+		this(jdbc, "");
+	}
+
+	/**
+	 * @param jdbc                     cliente de Spring sobre la conexión a PostgreSQL
+	 * @param encargadoPrincipalCorreo correo del coordinador principal que recibe WhatsApp (opcional)
+	 */
+	@Autowired
+	public AvisosOficinaJdbc(JdbcClient jdbc,
+			@Value("${alertacuida.oficina.encargado-principal-correo:}") String encargadoPrincipalCorreo) {
 		this.jdbc = jdbc;
+		this.encargadoPrincipalCorreo = encargadoPrincipalCorreo == null ? "" : encargadoPrincipalCorreo.strip();
 	}
 
 	@Override
 	public List<AvisoOficina> porEncolar(Instant desde) {
 		return jdbc.sql("""
-				WITH coordinador AS (
+				WITH encargado_whatsapp AS (
+					SELECT id_usuario FROM usuario
+					WHERE activo AND codigo_rol = :rol AND telefono IS NOT NULL AND fecha_opt_in IS NOT NULL
+						AND fecha_revocacion_opt_in IS NULL
+						AND (:encargado = '' OR lower(correo) = lower(:encargado))
+					ORDER BY fecha_opt_in ASC, id_usuario ASC
+					LIMIT 1
+				), coordinador AS (
 					SELECT id_usuario, 'CORREO' AS canal FROM usuario WHERE activo AND codigo_rol = :rol
 					UNION ALL
-					SELECT id_usuario, 'WHATSAPP' FROM usuario
-					WHERE activo AND codigo_rol = :rol AND telefono IS NOT NULL AND fecha_opt_in IS NOT NULL
-					AND fecha_revocacion_opt_in IS NULL
+					SELECT id_usuario, 'WHATSAPP' FROM encargado_whatsapp
 				), abierta AS (
 					SELECT a.id_alerta, a.fecha_hora_recepcion, a.fecha_hora_agravamiento
 					FROM alerta a LEFT JOIN atencion_alerta t ON t.id_alerta = a.id_alerta
@@ -68,6 +87,7 @@ public class AvisosOficinaJdbc implements AvisosOficina {
 					AND i.proposito = v.proposito)
 				ORDER BY momento""")
 				.param("rol", EscalamientosTrabadosJdbc.ROL_OFICINA)
+				.param("encargado", encargadoPrincipalCorreo)
 				.param("tecnicas", TipoEvento.tecnicas().stream().map(Enum::name).toList())
 				.param("desde", Timestamp.from(desde))
 				.query((fila, n) -> new AvisoOficina(fila.getObject("id_alerta", UUID.class),

@@ -1,6 +1,7 @@
 package cl.ucn.alertacuida.adapters.whatsapp;
 
 import cl.ucn.alertacuida.application.aviso.error.CanalNoConfigurado;
+import cl.ucn.alertacuida.application.aviso.modelo.MensajeSesionWhatsapp;
 import cl.ucn.alertacuida.application.aviso.modelo.WhatsappPendiente;
 import cl.ucn.alertacuida.application.aviso.puerto.CanalWhatsapp;
 
@@ -16,6 +17,12 @@ public class CanalWhatsappNoConfigurado implements CanalWhatsapp {
 	/** @throws CanalNoConfigurado siempre */
 	@Override
 	public String enviar(WhatsappPendiente aviso) {
+		throw new CanalNoConfigurado(MOTIVO);
+	}
+
+	/** @throws CanalNoConfigurado siempre */
+	@Override
+	public String enviarSesion(MensajeSesionWhatsapp mensaje) {
 		throw new CanalNoConfigurado(MOTIVO);
 	}
 

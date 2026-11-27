@@ -194,7 +194,7 @@ class RequisitosAtencionAlertasTest {
 				.andExpect(jsonPath("$.lineaTiempo[14].usuario").value("Diego"))
 				.andExpect(jsonPath("$.lineaTiempo[15].detalle").value("LLAMADA: Llamada a la hija"))
 				.andExpect(jsonPath("$.lineaTiempo[16].usuario").value("Camila"))
-				.andExpect(jsonPath("$.lineaTiempo[17].detalle").value("ALERTA_RESUELTA"));
+				.andExpect(jsonPath("$.lineaTiempo[17].detalle").value("CAMBIO_ESTADO_ALERTA"));
 	}
 
 	/** R1: el respaldo por correo al mismo contacto y los avisos al equipo no son un salto de contacto. */
@@ -398,7 +398,7 @@ class RequisitosAtencionAlertasTest {
 		resolver(tokenCoordinadora, alerta, "\"FALSA_ALARMA\"", OBSERVACION).andExpect(status().isNoContent());
 
 		assertThat(jdbc.sql("""
-				SELECT count(*) FROM aviso_fcm WHERE id_alerta = :a AND tipo = 'ALERTA_RESUELTA'
+				SELECT count(*) FROM aviso_fcm WHERE id_alerta = :a AND tipo = 'CAMBIO_ESTADO_ALERTA'
 					AND fecha_hora_envio IS NULL AND intentos = 0""")
 				.param("a", alerta).query(Integer.class).single()).isEqualTo(1);
 	}

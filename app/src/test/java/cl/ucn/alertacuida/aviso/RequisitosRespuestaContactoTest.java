@@ -206,9 +206,9 @@ class RequisitosRespuestaContactoTest {
 				.query(String.class).single();
 	}
 
-	/** @return cuántos avisos ALERTA_CONFIRMADA hay para la alerta */
+	/** @return cuántos avisos CAMBIO_ESTADO_ALERTA hay para la alerta */
 	private long avisosConfirmada() {
-		return jdbc.sql("SELECT count(*) FROM aviso_fcm WHERE id_alerta = :a AND tipo = 'ALERTA_CONFIRMADA'")
+		return jdbc.sql("SELECT count(*) FROM aviso_fcm WHERE id_alerta = :a AND tipo = 'CAMBIO_ESTADO_ALERTA'")
 				.param("a", alerta).query(Long.class).single();
 	}
 

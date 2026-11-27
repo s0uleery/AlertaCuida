@@ -6,13 +6,16 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
 /**
- * Pasos de la oficina PRLAC en el enlace del correo (alertacuida.oficina.* en application.properties).
+ * Pasos de la oficina PRLAC (alertacuida.oficina.* en application.properties).
  *
- * @param recordatorioLlegada tiempo desde "Personal asignado" sin "Ya llegó" tras el que se envía el correo
- *                            recordatorio (N1-08) y la página muestra "Sigue en camino"
- * @param intervalo           cada cuánto corre la tarea del recordatorio; lo lee directamente TareasProgramadas
+ * @param recordatorioLlegada      tiempo desde "Personal asignado" sin "Ya llegó" tras el que se envía el correo
+ *                                 recordatorio (N1-08) y la página muestra "Sigue en camino"
+ * @param intervalo                cada cuánto corre la tarea del recordatorio; lo lee directamente TareasProgramadas
+ * @param encargadoPrincipalCorreo correo del coordinador principal que recibe avisos por WhatsApp (plan B); si está
+ *                                 vacío, se elige el primer coordinador activo con opt-in vigente
  */
 @Validated
 @ConfigurationProperties("alertacuida.oficina")
-public record PropiedadesOficina(@NotNull Duration recordatorioLlegada, @NotNull Duration intervalo) {
+public record PropiedadesOficina(@NotNull Duration recordatorioLlegada, @NotNull Duration intervalo,
+		String encargadoPrincipalCorreo) {
 }

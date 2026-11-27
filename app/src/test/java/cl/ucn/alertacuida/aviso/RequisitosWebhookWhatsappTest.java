@@ -180,7 +180,7 @@ class RequisitosWebhookWhatsappTest {
 				.query(String.class).single()).isEqualTo("VOY_EN_CAMINO");
 		assertThat(jdbc.sql("SELECT estado_contacto FROM alerta_estado WHERE id_alerta = :a").param("a", alerta)
 				.query(String.class).single()).isEqualTo("CONFIRMADA");
-		assertThat(jdbc.sql("SELECT count(*) FROM aviso_fcm WHERE id_alerta = :a AND tipo = 'ALERTA_CONFIRMADA'")
+		assertThat(jdbc.sql("SELECT count(*) FROM aviso_fcm WHERE id_alerta = :a AND tipo = 'CAMBIO_ESTADO_ALERTA'")
 				.param("a", alerta).query(Integer.class).single()).isEqualTo(1);
 	}
 

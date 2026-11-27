@@ -141,7 +141,7 @@ class RequisitosPasosOficinaTest {
 
 		assertThat(estado("estado_atencion")).isEqualTo("EN_ATENCION");
 		assertThat(estado("estado_contacto")).isNotEqualTo("CONFIRMADA");
-		assertThat(avisosAlReloj("ALERTA_CONFIRMADA")).isZero();
+		assertThat(avisosAlReloj("CAMBIO_ESTADO_ALERTA")).isZero();
 	}
 
 	/** R2: la otra coordinadora ve quién la tiene y no puede avanzar. */
@@ -164,14 +164,14 @@ class RequisitosPasosOficinaTest {
 		paso(token, "TOMAR");
 		paso(token, "PACIENTE_BIEN").andExpect(jsonPath("$.oficina.etapa").value("CONFIRMAR_EVENTO"));
 		assertThat(estado("estado_contacto")).isEqualTo("CONFIRMADA");
-		assertThat(avisosAlReloj("ALERTA_CONFIRMADA")).isEqualTo(1);
+		assertThat(avisosAlReloj("CAMBIO_ESTADO_ALERTA")).isEqualTo(1);
 
 		paso(token, "FALSA_ALARMA").andExpect(status().isOk()).andExpect(jsonPath("$.oficina.etapa").value("CERRADA"))
 				.andExpect(jsonPath("$.oficina.clasificacion").value("FALSA_ALARMA"));
 
 		assertThat(estado("estado_atencion")).isEqualTo("RESUELTA");
 		assertThat(clasificacion()).isEqualTo("FALSA_ALARMA");
-		assertThat(avisosAlReloj("ALERTA_RESUELTA")).isEqualTo(1);
+		assertThat(avisosAlReloj("CAMBIO_ESTADO_ALERTA")).isEqualTo(2);
 	}
 
 	/**
@@ -213,7 +213,7 @@ class RequisitosPasosOficinaTest {
 				.andExpect(jsonPath("$.oficina.recordatorio").value(false));
 
 		assertThat(estado("estado_contacto")).isEqualTo("CONFIRMADA");
-		assertThat(avisosAlReloj("ALERTA_CONFIRMADA")).isEqualTo(1);
+		assertThat(avisosAlReloj("CAMBIO_ESTADO_ALERTA")).isEqualTo(1);
 	}
 
 	/** R4: "Sin disponibilidad" no confirma: el reloj sigue y la página lo dice. */
@@ -226,7 +226,7 @@ class RequisitosPasosOficinaTest {
 				.andExpect(jsonPath("$.oficina.etapa").value("SIN_DISPONIBILIDAD"));
 
 		assertThat(estado("estado_contacto")).isNotEqualTo("CONFIRMADA");
-		assertThat(avisosAlReloj("ALERTA_CONFIRMADA")).isZero();
+		assertThat(avisosAlReloj("CAMBIO_ESTADO_ALERTA")).isZero();
 		assertThat(estado("estado_atencion")).isEqualTo("EN_ATENCION");
 	}
 
