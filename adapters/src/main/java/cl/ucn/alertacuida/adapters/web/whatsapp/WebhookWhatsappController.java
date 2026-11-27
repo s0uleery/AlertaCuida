@@ -22,12 +22,12 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Webhook de WhatsApp de Meta, según su guía "create webhook endpoint" (24-11-2026). Es público (ver
- * ConfiguracionSeguridad): lo autorizan el Verify token en la verificación y la firma en cada aviso.
+ * Webhook de WhatsApp de Meta, según su guía "create webhook endpoint". Es público (ver ConfiguracionSeguridad):
+ * lo autorizan el Verify token en la verificación y la firma HMAC-SHA256 en cada aviso.
  * <ul>
  * <li>GET: la verificación que hace Meta al guardar la Callback URL en el panel.</li>
- * <li>POST: estados de entrega y botones presionados. La firma se revisa sobre los bytes tal como llegan; si
- * es válida responde 200 (Meta reintenta todo lo que no sea 200).</li>
+ * <li>POST: estados de entrega y botones presionados (plantillas e interactivos). La firma se revisa sobre los
+ * bytes tal como llegan; si es válida responde 200 (Meta reintenta todo lo que no sea 200).</li>
  * </ul>
  */
 @RestController
@@ -91,11 +91,15 @@ public class WebhookWhatsappController {
 		return ResponseEntity.ok().build();
 	}
 
-	/** @return los estados y botones de todas las entradas, en orden */
+	/** @return los estados y botones de todas las entradas de campo "messages", en orden */
 	static List<EventoWhatsapp> eventos(JsonNode raiz) {
 		List<EventoWhatsapp> eventos = new ArrayList<>();
 		for (JsonNode entrada : raiz.path("entry")) {
 			for (JsonNode cambio : entrada.path("changes")) {
+				String campo = cambio.path("field").asString("");
+				if (!campo.isEmpty() && !"messages".equals(campo)) {
+					continue;
+				}
 				JsonNode valor = cambio.path("value");
 				for (JsonNode estado : valor.path("statuses")) {
 					eventos.add(new EventoWhatsapp.Estado(estado.path("id").asString(""),
@@ -104,8 +108,12 @@ public class WebhookWhatsappController {
 				for (JsonNode mensaje : valor.path("messages")) {
 					String boton = valorDelBoton(mensaje);
 					if (boton != null) {
-						eventos.add(new EventoWhatsapp.Boton(mensaje.path("context").path("id").asString(null),
-								boton));
+						eventos.add(new EventoWhatsapp.Boton(
+								textoOpcional(mensaje.path("id")),
+								textoOpcional(mensaje.path("from")),
+								textoOpcional(mensaje.path("context").path("id")),
+								boton,
+								fecha(mensaje.path("timestamp"))));
 					}
 				}
 			}
@@ -122,12 +130,20 @@ public class WebhookWhatsappController {
 		if ("button".equals(tipo)) {
 			JsonNode boton = mensaje.path("button");
 			String payload = boton.path("payload").asString("");
-			return payload.isBlank() ? boton.path("text").asString(null) : payload;
+			return payload.isBlank() ? textoOpcional(boton.path("text")) : payload;
 		}
 		if ("interactive".equals(tipo)) {
-			return mensaje.path("interactive").path("button_reply").path("id").asString(null);
+			JsonNode interactivo = mensaje.path("interactive");
+			String id = textoOpcional(interactivo.path("button_reply").path("id"));
+			return id != null ? id : textoOpcional(interactivo.path("list_reply").path("id"));
 		}
 		return null;
+	}
+
+	/** @return texto no vacío del nodo, o null */
+	private static String textoOpcional(JsonNode nodo) {
+		String texto = nodo.asString("");
+		return texto.isBlank() ? null : texto;
 	}
 
 	/** @return "código título" del primer error de un "failed"; null si no trae */

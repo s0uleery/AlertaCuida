@@ -168,8 +168,8 @@ class RequisitosLlamadaYLlegadaTest {
 				SELECT fecha_hora_cierre = :l AND id_usuario_resolutor IS NULL AND clasificacion IS NULL
 				FROM atencion_alerta WHERE id_alerta = :a""")
 				.param("l", Timestamp.from(llegada)).param("a", alerta).query(Boolean.class).single()).isTrue();
-		assertThat(jdbc.sql("SELECT count(*) FROM aviso_fcm WHERE id_alerta = :a AND tipo = 'ALERTA_RESUELTA'")
-				.param("a", alerta).query(Integer.class).single()).isEqualTo(1);
+		assertThat(jdbc.sql("SELECT count(*) FROM aviso_fcm WHERE id_alerta = :a AND tipo = 'CAMBIO_ESTADO_ALERTA'")
+				.param("a", alerta).query(Integer.class).single()).isEqualTo(2);
 
 		ficha(sesion()).andExpect(status().isOk())
 				.andExpect(jsonPath("$.lineaTiempo[*].tipo", hasItem("LLAMADA_PACIENTE")))

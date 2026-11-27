@@ -133,6 +133,19 @@ class RequisitosAvisoOficinaTest {
 		assertThat(avisos(alerta, "CORREO", "AVISO")).containsExactlyInAnyOrder("whatsapp", "sin-optin", "revocado");
 	}
 
+	/** Plan B (26-11-2026): con dos coordinadores con opt-in, solo uno recibe WhatsApp y ambos reciben correo. */
+	@Test
+	void conVariosCoordinadoresConOptInSoloElPrincipalRecibeWhatsapp() {
+		cuenta("COORDINADOR", "segundo-wa", true, true, false);
+		UUID alerta = alerta("CAIDA", "MEDIA", false, AHORA.minus(Duration.ofMinutes(5)));
+
+		avisar(AHORA);
+
+		assertThat(avisos(alerta, "WHATSAPP", "AVISO")).hasSize(1);
+		assertThat(avisos(alerta, "CORREO", "AVISO")).containsExactlyInAnyOrder("whatsapp", "segundo-wa",
+				"sin-optin", "revocado");
+	}
+
 	/** R3: una leve también se avisa; una técnica no va a la oficina. */
 	@Test
 	void avisaTodasLasGravedadesPeroNoLasTecnicas() {

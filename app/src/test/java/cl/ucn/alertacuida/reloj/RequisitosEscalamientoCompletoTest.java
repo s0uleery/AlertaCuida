@@ -190,8 +190,8 @@ class RequisitosEscalamientoCompletoTest {
 		estado().andExpect(jsonPath("$.estado").value("CONFIRMADA"))
 				.andExpect(jsonPath("$.detenerEscalamiento").value(true))
 				.andExpect(jsonPath("$.confirmadaPor.idContacto").value(coordinador.toString()));
-		assertThat(bandejaReloj.sinAcusar(3)).filteredOn(a -> a.tipo() == TipoAvisoReloj.ALERTA_CONFIRMADA)
-				.singleElement().satisfies(a -> assertThat(a.idContacto()).isEqualTo(coordinador));
+		assertThat(bandejaReloj.sinAcusar(3)).filteredOn(a -> a.tipo() == TipoAvisoReloj.CAMBIO_ESTADO_ALERTA)
+				.singleElement().satisfies(a -> assertThat(a.eventIdAlerta()).isEqualTo(eventAlerta));
 		pedirAviso(UUID.randomUUID(), escenario.vecino(), 1).andExpect(jsonPath("$.resultado").value("RECHAZADO"))
 				.andExpect(jsonPath("$.motivo").value("ALERTA_TERMINADA"));
 	}

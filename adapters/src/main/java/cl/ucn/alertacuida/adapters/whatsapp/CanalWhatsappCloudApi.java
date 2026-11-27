@@ -3,7 +3,11 @@ package cl.ucn.alertacuida.adapters.whatsapp;
 import cl.ucn.alertacuida.application.aviso.PlantillasWhatsapp;
 import cl.ucn.alertacuida.application.aviso.error.EnvioFallido;
 import cl.ucn.alertacuida.application.aviso.error.EnvioRechazado;
+import cl.ucn.alertacuida.application.aviso.modelo.BotonInteractivo;
+import cl.ucn.alertacuida.application.aviso.modelo.MensajeSesionWhatsapp;
 import cl.ucn.alertacuida.application.aviso.modelo.MensajeWhatsapp;
+import cl.ucn.alertacuida.application.aviso.modelo.ParametroPlantilla;
+import cl.ucn.alertacuida.application.aviso.modelo.UbicacionWhatsapp;
 import cl.ucn.alertacuida.application.aviso.modelo.WhatsappPendiente;
 import cl.ucn.alertacuida.application.aviso.puerto.CanalWhatsapp;
 import java.io.IOException;
@@ -20,13 +24,14 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Envía los WhatsApp con la Cloud API de Meta: {@code POST {base}/{version}/{phone-number-id}/messages}, con el
- * token como {@code Authorization: Bearer}. Siempre manda una plantilla aprobada (los avisos los inicia el
- * servidor, así que Meta no admite texto libre), con sus valores y el payload de cada botón. La misma clase
- * sirve para el simulador de contactos, que imita esa ruta: solo cambia la dirección base.
- *
- * <p>Si Meta está caído, responde 429 o no hay conexión, lanza {@link EnvioFallido} y se reintenta. Si rechaza
- * el mensaje (4xx: número, plantilla o token), lanza {@link EnvioRechazado}: reintentar daría lo mismo.
+ * Envía WhatsApp con la Cloud API de Meta: {@code POST {base}/{version}/{phone-number-id}/messages}, con el token
+ * como {@code Authorization: Bearer}. Soporta:
+ * <ul>
+ * <li>Plantillas aprobadas ({@code type: "template"}), con parámetros {@code NAMED} o {@code POSITIONAL},
+ * encabezado {@code HEADER: LOCATION} y botones {@code quick_reply}.</li>
+ * <li>Mensajes de sesión dentro de la ventana de 24 h ({@code type: "text"} e {@code interactive} de botones).</li>
+ * </ul>
+ * La misma clase sirve para el simulador de contactos: solo cambia la dirección base.
  */
 public final class CanalWhatsappCloudApi implements CanalWhatsapp {
 
@@ -57,15 +62,26 @@ public final class CanalWhatsappCloudApi implements CanalWhatsapp {
 		this.cliente = HttpClient.newBuilder().connectTimeout(PLAZO).build();
 	}
 
-	/** @return el wamid del mensaje, para seguir su entrega por el webhook */
+	/** @return el wamid del mensaje, para seguir su entrega y correlacionar respuestas por el webhook */
 	@Override
 	public String enviar(WhatsappPendiente aviso) {
 		MensajeWhatsapp mensaje = plantillas.armar(aviso);
+		return publicar(cuerpo(mensaje));
+	}
+
+	/** @return el wamid del mensaje de sesión (texto o botones interactivos) */
+	@Override
+	public String enviarSesion(MensajeSesionWhatsapp mensaje) {
+		return publicar(cuerpoSesion(mensaje));
+	}
+
+	/** Publica un cuerpo JSON en /{version}/{phone-number-id}/messages y devuelve su wamid. */
+	private String publicar(Map<String, Object> cuerpoJson) {
 		HttpRequest pedido = HttpRequest.newBuilder(mensajes)
 				.timeout(PLAZO)
 				.header("Authorization", "Bearer " + token)
 				.header("Content-Type", "application/json")
-				.POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(cuerpo(mensaje))))
+				.POST(HttpRequest.BodyPublishers.ofString(json.writeValueAsString(cuerpoJson)))
 				.build();
 		HttpResponse<String> respuesta = mandar(pedido);
 		int estado = respuesta.statusCode();
@@ -79,12 +95,15 @@ public final class CanalWhatsappCloudApi implements CanalWhatsapp {
 		throw new EnvioRechazado(motivo);
 	}
 
-	/** @return el cuerpo del envío de una plantilla, como lo pide la Cloud API */
+	/** @return el cuerpo del envío de una plantilla, como lo pide la Cloud API (NAMED/POSITIONAL + LOCATION) */
 	static Map<String, Object> cuerpo(MensajeWhatsapp mensaje) {
 		List<Map<String, Object>> componentes = new ArrayList<>();
-		if (!mensaje.valores().isEmpty()) {
-			componentes.add(Map.of("type", "body", "parameters", mensaje.valores().stream()
-					.map(valor -> Map.of("type", "text", "text", valor)).toList()));
+		if (mensaje.ubicacion() != null) {
+			componentes.add(componenteUbicacion(mensaje.ubicacion()));
+		}
+		if (!mensaje.parametros().isEmpty()) {
+			componentes.add(Map.of("type", "body", "parameters",
+					mensaje.parametros().stream().map(CanalWhatsappCloudApi::parametroTexto).toList()));
 		}
 		for (int i = 0; i < mensaje.botones().size(); i++) {
 			componentes.add(Map.of("type", "button", "sub_type", "quick_reply", "index", String.valueOf(i),
@@ -93,14 +112,70 @@ public final class CanalWhatsappCloudApi implements CanalWhatsapp {
 		Map<String, Object> plantilla = new LinkedHashMap<>();
 		plantilla.put("name", mensaje.plantilla());
 		plantilla.put("language", Map.of("code", mensaje.idioma()));
-		plantilla.put("components", componentes);
+		if (!componentes.isEmpty()) {
+			plantilla.put("components", componentes);
+		}
 		Map<String, Object> cuerpo = new LinkedHashMap<>();
 		cuerpo.put("messaging_product", "whatsapp");
 		// Meta pide el número con código de país y sin "+"
-		cuerpo.put("to", mensaje.telefono().replaceAll("\\D", ""));
+		cuerpo.put("to", soloDigitos(mensaje.telefono()));
 		cuerpo.put("type", "template");
 		cuerpo.put("template", plantilla);
 		return cuerpo;
+	}
+
+	/** @return el cuerpo de un mensaje de sesión: texto libre o interactivo con botones de respuesta rápida */
+	static Map<String, Object> cuerpoSesion(MensajeSesionWhatsapp mensaje) {
+		Map<String, Object> cuerpo = new LinkedHashMap<>();
+		cuerpo.put("messaging_product", "whatsapp");
+		cuerpo.put("recipient_type", "individual");
+		cuerpo.put("to", soloDigitos(mensaje.telefono()));
+		if (mensaje.botones().isEmpty()) {
+			cuerpo.put("type", "text");
+			cuerpo.put("text", Map.of("body", mensaje.cuerpo()));
+			return cuerpo;
+		}
+		List<Map<String, Object>> botones = mensaje.botones().stream()
+				.map(CanalWhatsappCloudApi::botonInteractivo)
+				.toList();
+		Map<String, Object> interactivo = new LinkedHashMap<>();
+		interactivo.put("type", "button");
+		interactivo.put("body", Map.of("text", mensaje.cuerpo()));
+		interactivo.put("action", Map.of("buttons", botones));
+		cuerpo.put("type", "interactive");
+		cuerpo.put("interactive", interactivo);
+		return cuerpo;
+	}
+
+	/** @return el componente HEADER de tipo LOCATION exigido por Meta */
+	private static Map<String, Object> componenteUbicacion(UbicacionWhatsapp ubicacion) {
+		Map<String, Object> datos = new LinkedHashMap<>();
+		datos.put("latitude", ubicacion.latitud());
+		datos.put("longitude", ubicacion.longitud());
+		datos.put("name", ubicacion.nombre());
+		datos.put("address", ubicacion.direccion());
+		return Map.of("type", "header", "parameters", List.of(Map.of("type", "location", "location", datos)));
+	}
+
+	/** @return un parámetro de cuerpo en formato NAMED (con parameter_name) o POSITIONAL */
+	private static Map<String, Object> parametroTexto(ParametroPlantilla parametro) {
+		Map<String, Object> mapa = new LinkedHashMap<>();
+		mapa.put("type", "text");
+		if (parametro.nombre() != null) {
+			mapa.put("parameter_name", parametro.nombre());
+		}
+		mapa.put("text", parametro.valor());
+		return mapa;
+	}
+
+	/** @return la representación de un botón interactivo en la Cloud API */
+	private static Map<String, Object> botonInteractivo(BotonInteractivo boton) {
+		return Map.of("type", "reply", "reply", Map.of("id", boton.id(), "title", boton.titulo()));
+	}
+
+	/** @return solo los dígitos del número, sin "+" ni espacios */
+	private static String soloDigitos(String telefono) {
+		return telefono.replaceAll("\\D", "");
 	}
 
 	/** @return la respuesta de Meta, o EnvioFallido si no hubo conexión */

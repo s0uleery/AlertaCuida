@@ -306,9 +306,15 @@ enviarlos de verdad con la Cloud API de Meta, y recibir las respuestas y los est
      "https://graph.facebook.com/v23.0/$WHATSAPP_WABA_ID/message_templates?fields=name,language,status,components"
    ```
 
-   Con eso se ajustan en `application.properties` el idioma, las variables y los botones de cada una
-   (`alertacuida.whatsapp.plantillas.*`), y en el `.env` sus nombres (`WHATSAPP_PLANTILLA_LEVE`, `_GRAVE` y
-   `_SIMULACRO`). Ese cambio llega al servidor con un merge a `main`.
+   Con eso se verifican en `application.properties` los parámetros nombrados (`NAMED`), encabezado `LOCATION`,
+   idioma (`es_CL`) y botones de cada plantilla (`alertacuida.whatsapp.plantillas.*`), y en el `.env` sus nombres:
+   `WHATSAPP_PLANTILLA_NIVEL_1_Y_2` (`aviso_inicial_nivel_1_y_2`), `WHATSAPP_PLANTILLA_NIVEL_3_EDAD`
+   (`aviso_inicial_nivel_3_edad`), `WHATSAPP_PLANTILLA_NIVEL_3_RUT` (`aviso_inicial_nivel_3_rut`, opcional con
+   `WHATSAPP_USAR_RUT_CARABINEROS=true`) y `WHATSAPP_PLANTILLA_SIMULACRO` (`simulacro_aviso_inicial`). Cuando se
+   aprueben en Meta las plantillas alternativas sin mapa para pacientes sin GPS, basta completar las variables
+   `WHATSAPP_PLANTILLA_*_SIN_MAPA` en el `.env`. Adicionalmente, `PRLAC_ENCARGADO_CORREO` define el correo del
+   coordinador principal que recibe avisos por WhatsApp (el resto de coordinadores recibe correo). Ese cambio llega
+   al servidor con un merge a `main`.
 3. **Encender el canal:** `WHATSAPP_CANAL=META` en el `.env` y `docker compose up -d backend`. Si falta un dato, el
    backend no arranca y el log dice cuál (`docker compose logs backend`).
 4. **Webhook en el panel de Meta:** App Dashboard → WhatsApp → Configuration (o Use cases → Customize →

@@ -6,6 +6,7 @@ import cl.ucn.alertacuida.application.aviso.modelo.PoliticaReintentos;
 import cl.ucn.alertacuida.application.aviso.modelo.WhatsappPendiente;
 import cl.ucn.alertacuida.application.aviso.puerto.BandejaWhatsapp;
 import cl.ucn.alertacuida.application.aviso.puerto.CanalWhatsapp;
+import cl.ucn.alertacuida.application.aviso.puerto.ConversacionesWhatsapp;
 import cl.ucn.alertacuida.application.aviso.puerto.RegistroEnvios;
 import java.time.Clock;
 import java.time.Instant;
@@ -13,9 +14,7 @@ import java.time.Instant;
 /**
  * Envía los WhatsApp de la bandeja de salida a los que les toca. Si un envío falla, lo reprograma según la
  * política de reintentos y, agotados, lo deja fallido; un WhatsApp fallido lo toma {@link EncolarCorreos}
- * para enviar el correo de respaldo. Si el canal no está configurado (antes de tener las credenciales de
- * Meta) o Meta rechaza el mensaje de forma definitiva, falla de inmediato, sin reintentos, para que el respaldo
- * salga enseguida.
+ * para enviar el correo de respaldo. Al enviarse con éxito, abre la conversación en {@code conversacion_whatsapp}.
  */
 public class EnviarWhatsappPendientes {
 
@@ -26,21 +25,30 @@ public class EnviarWhatsappPendientes {
 	private final CanalWhatsapp canal;
 	private final PoliticaReintentos politica;
 	private final Clock reloj;
+	private final ConversacionesWhatsapp conversaciones;
+
+	/** Constructor sin registro de conversación (pruebas unitarias simples). */
+	public EnviarWhatsappPendientes(BandejaWhatsapp bandeja, RegistroEnvios envios, CanalWhatsapp canal,
+			PoliticaReintentos politica, Clock reloj) {
+		this(bandeja, envios, canal, politica, reloj, null);
+	}
 
 	/**
 	 * Recibe lo que usa; lo arma ConfiguracionEscalamiento.
 	 *
-	 * @param envios   donde queda lo que pasó con cada envío
-	 * @param canal    Meta, el simulador o sin configurar
-	 * @param politica esperas entre reintentos
+	 * @param envios         donde queda lo que pasó con cada envío
+	 * @param canal          Meta, el simulador o sin configurar
+	 * @param politica       esperas entre reintentos
+	 * @param conversaciones opcional; abre la conversación inicial al enviar con éxito
 	 */
 	public EnviarWhatsappPendientes(BandejaWhatsapp bandeja, RegistroEnvios envios, CanalWhatsapp canal,
-			PoliticaReintentos politica, Clock reloj) {
+			PoliticaReintentos politica, Clock reloj, ConversacionesWhatsapp conversaciones) {
 		this.bandeja = bandeja;
 		this.envios = envios;
 		this.canal = canal;
 		this.politica = politica;
 		this.reloj = reloj;
+		this.conversaciones = conversaciones;
 	}
 
 	/** Envía una vez todos los WhatsApp cuyo próximo envío ya llegó. Uno que falla no detiene a los demás. */
@@ -56,7 +64,7 @@ public class EnviarWhatsappPendientes {
 		}
 	}
 
-	/** Envía un WhatsApp y registra el resultado. */
+	/** Envía un WhatsApp y registra el resultado y su conversación inicial. */
 	private void enviarUno(WhatsappPendiente aviso, Instant ahora) {
 		if (aviso.telefono() == null || aviso.telefono().isBlank()) {
 			envios.marcarFallido(aviso.idIntento(), "El contacto ya no tiene número de WhatsApp", ahora);
@@ -74,6 +82,9 @@ public class EnviarWhatsappPendientes {
 			return;
 		}
 		envios.marcarEnviado(aviso.idIntento(), idExterno, ahora);
+		if (conversaciones != null && aviso.idAlerta() != null) {
+			conversaciones.crear(aviso.idIntento(), aviso.idAlerta(), aviso.nivel(), idExterno, ahora);
+		}
 	}
 
 	/** Reprograma el WhatsApp si quedan reintentos; si no, lo deja fallido. */

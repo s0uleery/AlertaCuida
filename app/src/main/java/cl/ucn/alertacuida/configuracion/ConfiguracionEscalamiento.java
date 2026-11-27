@@ -5,13 +5,18 @@ import cl.ucn.alertacuida.adapters.web.whatsapp.TokenVerificacionWebhook;
 import cl.ucn.alertacuida.adapters.whatsapp.CanalWhatsappCloudApi;
 import cl.ucn.alertacuida.adapters.whatsapp.CanalWhatsappNoConfigurado;
 import cl.ucn.alertacuida.application.alerta.puerto.AlertasDelReloj;
+import cl.ucn.alertacuida.application.aviso.EnviarMensajesWhatsapp;
 import cl.ucn.alertacuida.application.aviso.EnviarWhatsappPendientes;
+import cl.ucn.alertacuida.application.aviso.GestionarConversacionWhatsapp;
 import cl.ucn.alertacuida.application.aviso.PlantillasWhatsapp;
 import cl.ucn.alertacuida.application.aviso.RecibirWebhookWhatsapp;
-import cl.ucn.alertacuida.application.aviso.puerto.EstadosWhatsapp;
+import cl.ucn.alertacuida.application.aviso.VigilarConversacionesWhatsapp;
+import cl.ucn.alertacuida.application.aviso.modelo.PoliticaConversacionWhatsapp;
 import cl.ucn.alertacuida.application.aviso.modelo.PoliticaReintentos;
 import cl.ucn.alertacuida.application.aviso.puerto.BandejaWhatsapp;
 import cl.ucn.alertacuida.application.aviso.puerto.CanalWhatsapp;
+import cl.ucn.alertacuida.application.aviso.puerto.ConversacionesWhatsapp;
+import cl.ucn.alertacuida.application.aviso.puerto.EstadosWhatsapp;
 import cl.ucn.alertacuida.application.aviso.puerto.RegistroEnvios;
 import cl.ucn.alertacuida.application.comun.puerto.Transacciones;
 import cl.ucn.alertacuida.application.contacto.puerto.ListaDelPaciente;
@@ -25,6 +30,7 @@ import cl.ucn.alertacuida.application.respuesta.ResponderAviso;
 import cl.ucn.alertacuida.domain.calendario.CalendarioHabil;
 import java.net.URI;
 import java.time.Clock;
+import java.util.concurrent.CompletableFuture;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -86,11 +92,44 @@ public class ConfiguracionEscalamiento {
 		return new TokenVerificacionWebhook(propiedades.verifyToken());
 	}
 
-	/** Estados de entrega y botones que llegan por el webhook; las respuestas siguen las reglas del correo. */
+	/** Política de plazos de llamada y recordatorios de llegada por severidad. */
+	@Bean
+	PoliticaConversacionWhatsapp politicaConversacionWhatsapp(PropiedadesWhatsapp propiedades) {
+		return propiedades.conversacion().politica();
+	}
+
+	/** Máquina de estados de las conversaciones interactivas de WhatsApp. */
+	@Bean
+	GestionarConversacionWhatsapp gestionarConversacionWhatsapp(ConversacionesWhatsapp conversaciones,
+			PoliticaConversacionWhatsapp politica, Clock reloj) {
+		return new GestionarConversacionWhatsapp(conversaciones, politica, reloj);
+	}
+
+	/** Vigilante de vencimientos de llamada y recordatorios de llegada en WhatsApp. */
+	@Bean
+	VigilarConversacionesWhatsapp vigilarConversacionesWhatsapp(ConversacionesWhatsapp conversaciones,
+			PoliticaConversacionWhatsapp politica, Transacciones transacciones, Clock reloj) {
+		return new VigilarConversacionesWhatsapp(conversaciones, politica, transacciones, reloj);
+	}
+
+	/** Envío desacoplado de mensajes de sesión (interactivos y textos dentro de la ventana de 24 h). */
+	@Bean
+	EnviarMensajesWhatsapp enviarMensajesWhatsapp(ConversacionesWhatsapp conversaciones, CanalWhatsapp canalWhatsapp,
+			PropiedadesWhatsapp propiedades, Clock reloj) {
+		return new EnviarMensajesWhatsapp(conversaciones, canalWhatsapp,
+				new PoliticaReintentos(propiedades.reintentos()), reloj);
+	}
+
+	/** Estados de entrega y botones del webhook; despacha respuestas salientes fuera de la transacción HTTP. */
 	@Bean
 	RecibirWebhookWhatsapp recibirWebhookWhatsapp(EstadosWhatsapp estados, ResponderAviso responder,
-			Transacciones transacciones) {
-		return new RecibirWebhookWhatsapp(estados, responder::responderIntento, transacciones);
+			GestionarConversacionWhatsapp conversaciones, EnviarMensajesWhatsapp enviarMensajes,
+			PropiedadesWhatsapp propiedades, Transacciones transacciones) {
+		Runnable alTerminar = propiedades.conversacion().envioInmediato()
+				? () -> CompletableFuture.runAsync(enviarMensajes::enviar)
+				: () -> { };
+		return new RecibirWebhookWhatsapp(estados, responder::responderIntento, conversaciones, alTerminar,
+				transacciones);
 	}
 
 	/** @return el canal de la Cloud API con esa dirección base, después de revisar las credenciales */
@@ -101,8 +140,10 @@ public class ConfiguracionEscalamiento {
 		exigir(propiedades.appSecret(), canal, "WHATSAPP_APP_SECRET");
 		exigir(propiedades.verifyToken(), canal, "WHATSAPP_VERIFY_TOKEN");
 		PropiedadesWhatsapp.Plantillas plantillas = propiedades.plantillas();
-		PlantillasWhatsapp elegidas = new PlantillasWhatsapp(plantillas.leve(), plantillas.grave(),
-				plantillas.simulacro(), propiedades.quienSinAlias());
+		PlantillasWhatsapp elegidas = new PlantillasWhatsapp(plantillas.nivel1Y2(), plantillas.nivel1Y2SinMapa(),
+				plantillas.nivel3Edad(), plantillas.nivel3EdadSinMapa(), plantillas.nivel3Rut(),
+				plantillas.nivel3RutSinMapa(), plantillas.simulacro(), plantillas.simulacroSinMapa(),
+				plantillas.usarPlantillaRutCarabineros(), propiedades.quienSinAlias());
 		return new CanalWhatsappCloudApi(base, propiedades.versionApi(), propiedades.phoneNumberId(),
 				propiedades.token(), elegidas, json);
 	}
@@ -128,9 +169,10 @@ public class ConfiguracionEscalamiento {
 	 */
 	@Bean
 	EnviarWhatsappPendientes enviarWhatsappPendientes(BandejaWhatsapp bandeja, RegistroEnvios envios,
-			CanalWhatsapp canalWhatsapp, PropiedadesWhatsapp propiedades, Clock reloj) {
+			CanalWhatsapp canalWhatsapp, ConversacionesWhatsapp conversaciones, PropiedadesWhatsapp propiedades,
+			Clock reloj) {
 		return new EnviarWhatsappPendientes(bandeja, envios, canalWhatsapp,
-				new PoliticaReintentos(propiedades.reintentos()), reloj);
+				new PoliticaReintentos(propiedades.reintentos()), reloj, conversaciones);
 	}
 
 }

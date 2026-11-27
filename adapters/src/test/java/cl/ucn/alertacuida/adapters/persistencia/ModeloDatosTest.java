@@ -290,20 +290,20 @@ class ModeloDatosTest {
 	private DynamicContainer estructura() {
 		return grupo("1. Estructura de la base (migraciones)",
 			c.vale("Migraciones aplicadas por Flyway", """
-					SELECT count(*) n FROM flyway_schema_history WHERE success AND version IS NOT NULL""", 20),
+					SELECT count(*) n FROM flyway_schema_history WHERE success AND version IS NOT NULL""", 21),
 			c.vale("Cantidad de tablas", """
 					SELECT count(*) n FROM information_schema.tables WHERE table_schema = 'public'
-					AND table_type = 'BASE TABLE' AND table_name <> 'flyway_schema_history'""", 33),
+					AND table_type = 'BASE TABLE' AND table_name <> 'flyway_schema_history'""", 36),
 			c.vale("Cantidad de relaciones (claves foráneas)", """
 					SELECT count(*) n FROM information_schema.table_constraints
-					WHERE table_schema = 'public' AND constraint_type = 'FOREIGN KEY'""", 36),
-			// Sueltas a propósito: emparejamiento_reloj (V15) guarda códigos de minutos, pedidos por un
-			// reloj que todavía no se sabe cuál es ni de quién; al usarse, su token pasa a asignacion_reloj.
-			// horario_habil (V18) tampoco: es la jornada del programa entero, no un dato de alguien
-			c.vale("Tablas sueltas (sin ninguna relación), salvo los códigos de emparejamiento y el horario hábil", """
+					WHERE table_schema = 'public' AND constraint_type = 'FOREIGN KEY'""", 39),
+			// Sueltas a propósito: emparejamiento_reloj (V15), horario_habil (V18) y webhook_whatsapp_procesado (V21),
+			// que deduplica mensajes entrantes de Meta incluso si no corresponden a ningún aviso nuestro
+			c.vale("Tablas sueltas (sin ninguna relación), salvo emparejamiento, horario hábil y dedup webhook", """
 					SELECT count(*) n FROM information_schema.tables t
 					WHERE t.table_schema = 'public' AND t.table_type = 'BASE TABLE'
-					AND t.table_name NOT IN ('flyway_schema_history', 'emparejamiento_reloj', 'horario_habil')
+					AND t.table_name NOT IN ('flyway_schema_history', 'emparejamiento_reloj', 'horario_habil',
+						'webhook_whatsapp_procesado')
 					AND NOT EXISTS (SELECT 1 FROM information_schema.table_constraints k
 						WHERE k.constraint_type = 'FOREIGN KEY' AND k.table_name = t.table_name)
 					AND NOT EXISTS (SELECT 1 FROM information_schema.constraint_column_usage u

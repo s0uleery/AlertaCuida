@@ -10,15 +10,14 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Procesa lo que Meta envía al webhook (guía "create webhook endpoint", decisiones del 24-11-2026):
+ * Procesa lo que Meta envía al webhook (guía "create webhook endpoint", actualizado el 26-11-2026):
  * <ul>
  * <li>Estados: "delivered" y "read" llenan sus fechas en el aviso; "failed" lo deja fallido con el motivo de
- * Meta, y eso dispara el correo de respaldo. "sent" ya quedó al enviar. Un estado repetido o desordenado no
- * cambia nada.</li>
- * <li>Botones: el aviso se encuentra por el wamid del mensaje que tenía el botón, y la respuesta (su payload)
- * se registra con las mismas reglas del enlace del correo.</li>
- * <li>Lo que no es nuestro (un wamid desconocido, otro payload, otros mensajes) se ignora: Meta solo necesita
- * un 200.</li>
+ * Meta, y eso dispara el correo de respaldo.</li>
+ * <li>Botones: si existe una conversación registrada para el {@code context.id}, la maneja
+ * {@link GestionarConversacionWhatsapp}; si no, aplica el respaldo heredado por {@code registro_intento}.</li>
+ * <li>Cada evento se aísla en su propia transacción y los errores de negocio se registran sin devolver 4xx/5xx a
+ * Meta (evitando reintentos en bucle y rollbacks del resto del lote).</li>
  * </ul>
  */
 public class RecibirWebhookWhatsapp {
@@ -27,35 +26,62 @@ public class RecibirWebhookWhatsapp {
 
 	private final EstadosWhatsapp estados;
 	private final RespuestaPorIntento respuestas;
+	private final GestionarConversacionWhatsapp conversaciones;
+	private final Runnable alTerminar;
 	private final Transacciones transacciones;
 
-	/**
-	 * @param estados    estados de entrega por wamid
-	 * @param respuestas registro de la respuesta, el mismo del enlace del correo
-	 */
+	/** Constructor simple sin motor conversacional (pruebas unitarias de estados y botones heredados). */
 	public RecibirWebhookWhatsapp(EstadosWhatsapp estados, RespuestaPorIntento respuestas,
 			Transacciones transacciones) {
+		this(estados, respuestas, null, () -> { }, transacciones);
+	}
+
+	/**
+	 * @param estados        estados de entrega por wamid
+	 * @param respuestas     registro heredado de respuesta simple por intento
+	 * @param conversaciones motor conversacional v3 (opcional)
+	 * @param alTerminar     dispara el envío asíncrono de respuestas encoladas tras el webhook
+	 */
+	public RecibirWebhookWhatsapp(EstadosWhatsapp estados, RespuestaPorIntento respuestas,
+			GestionarConversacionWhatsapp conversaciones, Runnable alTerminar, Transacciones transacciones) {
 		this.estados = estados;
 		this.respuestas = respuestas;
+		this.conversaciones = conversaciones;
+		this.alTerminar = alTerminar == null ? () -> { } : alTerminar;
 		this.transacciones = transacciones;
 	}
 
 	/**
-	 * Procesa los eventos de un webhook en una transacción: si la base falla, no queda nada a medias y Meta lo
-	 * reintenta.
+	 * Procesa cada evento del webhook de forma aislada: un fallo puntual no revierte los demás estados del lote
+	 * ni provoca reintentos infinitos de Meta.
 	 *
 	 * @param eventos todos los de un mismo POST, en orden
 	 */
 	public void procesar(List<EventoWhatsapp> eventos) {
-		transacciones.ejecutar(() -> {
-			for (EventoWhatsapp evento : eventos) {
-				switch (evento) {
-					case EventoWhatsapp.Estado estado -> registrar(estado);
-					case EventoWhatsapp.Boton boton -> responder(boton);
-				}
+		boolean huboBoton = false;
+		for (EventoWhatsapp evento : eventos) {
+			try {
+				boolean esBoton = transacciones.ejecutar(() -> {
+					switch (evento) {
+						case EventoWhatsapp.Estado estado -> {
+							registrar(estado);
+							return false;
+						}
+						case EventoWhatsapp.Boton boton -> {
+							responder(boton);
+							return true;
+						}
+					}
+				});
+				huboBoton = huboBoton || esBoton;
+			} catch (RuntimeException falla) {
+				LOG.log(System.Logger.Level.WARNING, "Evento de webhook de WhatsApp descartado por error: "
+						+ falla.getMessage(), falla);
 			}
-			return null;
-		});
+		}
+		if (huboBoton) {
+			alTerminar.run();
+		}
 	}
 
 	/** Guarda la fecha que corresponde al estado. */
@@ -71,8 +97,11 @@ public class RecibirWebhookWhatsapp {
 		}
 	}
 
-	/** Registra el botón como respuesta, si es nuestro. */
+	/** Enruta el botón al motor conversacional o, si no existe conversación, al registro heredado por intento. */
 	private void responder(EventoWhatsapp.Boton boton) {
+		if (conversaciones != null && conversaciones.procesarBoton(boton)) {
+			return;
+		}
 		Optional<RespuestaContacto> respuesta = respuestaDe(boton.valor());
 		Optional<UUID> intento = boton.idMensajeOriginal() == null ? Optional.empty()
 				: estados.intentoPorIdExterno(boton.idMensajeOriginal());
@@ -83,7 +112,7 @@ public class RecibirWebhookWhatsapp {
 		respuestas.responder(intento.get(), respuesta.get());
 	}
 
-	/** @return la respuesta de ese payload; vacía si no es uno de los nuestros */
+	/** @return la respuesta heredada de ese payload; vacía si no es uno de los nuestros */
 	private static Optional<RespuestaContacto> respuestaDe(String valor) {
 		try {
 			return Optional.of(RespuestaContacto.valueOf(valor));
